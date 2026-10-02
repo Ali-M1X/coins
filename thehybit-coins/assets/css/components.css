@@ -1,0 +1,349 @@
+/* ==========================================================================
+   TheHybit — Reusable components
+   --------------------------------------------------------------------------
+   Section-agnostic pieces used across the whole coin page. Anything specific
+   to one section belongs in coin-page.css instead.
+
+   Every selector is scoped under .thb-coin (see base.css for why).
+   ========================================================================== */
+
+/* --- Container --------------------------------------------------------- */
+.thb-coin .thb-container {
+  max-width: var(--thb-maxw);
+  margin-inline: auto;
+  padding-inline: var(--thb-gutter);
+}
+
+/* --- Card -------------------------------------------------------------- */
+.thb-coin .thb-card {
+  background: var(--thb-surface);
+  border: 1px solid var(--thb-border);
+  border-radius: var(--thb-r);
+  box-shadow: var(--thb-shadow);
+}
+
+.thb-coin .thb-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thb-s3);
+  padding: var(--thb-s5) var(--thb-s5) 0;
+}
+
+.thb-coin .thb-card__title {
+  font-size: var(--thb-fs-lg);
+  font-weight: var(--thb-fw-semi);
+}
+
+.thb-coin .thb-card__body {
+  padding: var(--thb-s5);
+}
+
+/* Provenance label in a card's corner ("منبع: DefiLlama"). */
+.thb-coin .thb-source {
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+}
+
+.thb-coin .thb-source a { color: var(--thb-brand); }
+.thb-coin .thb-source a:hover { text-decoration: underline; }
+
+/* --- Breadcrumb -------------------------------------------------------- */
+.thb-coin .thb-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--thb-s2);
+  padding-block: var(--thb-s5);
+  font-size: var(--thb-fs-sm);
+  color: var(--thb-muted);
+}
+
+/* Padding lifts these from 23x22 to 29x28, clearing the 24x24 minimum target
+   size. The negative inline margin cancels the horizontal padding's effect on
+   layout, so the target grows while the row looks exactly as before. */
+.thb-coin .thb-breadcrumb a {
+  padding-block: 3px;
+  padding-inline: 3px;
+  margin-inline: -3px;
+  border-radius: var(--thb-r-sm);
+}
+
+.thb-coin .thb-breadcrumb a:hover { color: var(--thb-text); }
+
+/* Drawn as an SVG chevron rather than a "‹" character on purpose: angle
+   quotation marks are bidi-MIRRORED, so the glyph silently flips direction
+   depending on surrounding text. An SVG path always points where we drew it. */
+.thb-coin .thb-breadcrumb__sep {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: var(--thb-border-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.thb-coin .thb-breadcrumb [aria-current="page"] { color: var(--thb-text); }
+
+/* --- Badge / chip ------------------------------------------------------ */
+.thb-coin .thb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--thb-s1);
+  padding: 3px var(--thb-s3);
+  border-radius: var(--thb-r-pill);
+  font-size: var(--thb-fs-xs);
+  font-weight: var(--thb-fw-semi);
+  background: var(--thb-neutral-soft);
+  color: var(--thb-text-2);
+  white-space: nowrap;
+}
+
+.thb-coin .thb-badge--brand {
+  background: var(--thb-brand-soft);
+  color: var(--thb-brand);
+}
+
+.thb-coin .thb-badge--outline {
+  background: transparent;
+  border: 1px solid var(--thb-border-strong);
+  color: var(--thb-text-2);
+  font-weight: var(--thb-fw-normal);
+}
+
+/* --- Change value (▲ +2.45%) ------------------------------------------ */
+/* Colour never carries the meaning alone — the arrow glyph is always
+   present, so the direction survives greyscale and colour-blindness. */
+.thb-coin .thb-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: var(--thb-fw-semi);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.thb-coin .thb-change__arrow { font-size: .75em; line-height: 1; }
+
+.thb-coin .thb-change[data-dir="up"]   { color: var(--thb-up); }
+.thb-coin .thb-change[data-dir="down"] { color: var(--thb-down); }
+.thb-coin .thb-change[data-dir="flat"] { color: var(--thb-muted); }
+
+/* Filled variant, used next to the big header price. */
+.thb-coin .thb-change--pill {
+  padding: 3px var(--thb-s2);
+  border-radius: var(--thb-r-pill);
+  font-size: var(--thb-fs-sm);
+}
+
+.thb-coin .thb-change--pill[data-dir="up"]   { background: var(--thb-up-soft); }
+.thb-coin .thb-change--pill[data-dir="down"] { background: var(--thb-down-soft); }
+.thb-coin .thb-change--pill[data-dir="flat"] { background: var(--thb-neutral-soft); }
+
+/* --- Buttons ----------------------------------------------------------- */
+.thb-coin .thb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--thb-s2);
+  padding: var(--thb-s2) var(--thb-s4);
+  border-radius: var(--thb-r-sm);
+  border: 1px solid var(--thb-border-strong);
+  background: var(--thb-surface);
+  color: var(--thb-text-2);
+  font-size: var(--thb-fs-sm);
+  font-weight: var(--thb-fw-semi);
+  white-space: nowrap;
+  transition: background var(--thb-t), border-color var(--thb-t), color var(--thb-t);
+}
+
+.thb-coin .thb-btn:hover {
+  background: var(--thb-surface-hover);
+  color: var(--thb-text);
+}
+
+.thb-coin .thb-btn__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Watchlist toggle. aria-pressed carries the state; CSS only reflects it. */
+.thb-coin .thb-btn--watch[aria-pressed="true"] {
+  background: var(--thb-brand-soft);
+  border-color: transparent;
+  color: var(--thb-brand);
+}
+
+.thb-coin .thb-btn--watch[aria-pressed="true"] .thb-btn__icon {
+  fill: currentColor;
+}
+
+/* Icon-only button (copy address, etc.) */
+.thb-coin .thb-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--thb-r-sm);
+  color: var(--thb-muted);
+  transition: background var(--thb-t), color var(--thb-t);
+}
+
+.thb-coin .thb-icon-btn:hover {
+  background: var(--thb-surface-hover);
+  color: var(--thb-text);
+}
+
+/* --- Segmented control (chart periods, price/mcap) --------------------- */
+.thb-coin .thb-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--thb-surface-3);
+  border-radius: var(--thb-r-pill);
+}
+
+.thb-coin .thb-segmented button {
+  padding: 5px var(--thb-s3);
+  border-radius: var(--thb-r-pill);
+  font-size: var(--thb-fs-sm);
+  font-weight: var(--thb-fw-semi);
+  color: var(--thb-muted);
+  white-space: nowrap;
+  transition: background var(--thb-t), color var(--thb-t);
+}
+
+.thb-coin .thb-segmented button:hover { color: var(--thb-text); }
+
+.thb-coin .thb-segmented button[aria-pressed="true"] {
+  background: var(--thb-brand);
+  color: var(--thb-brand-on);
+}
+
+/* Period labels (24H, 7D…) are Latin and must not be bidi-reordered. */
+.thb-coin .thb-segmented--ltr { direction: ltr; }
+
+/* --- Stat ------------------------------------------------------------- */
+/* The workhorse: a label above a value, with an optional change beneath. */
+.thb-coin .thb-stat__label {
+  display: block;
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+  margin-block-end: 5px;
+}
+
+/* The BOX keeps the page's direction so `text-align: start` resolves to the
+   right edge in RTL. LTR isolation belongs on the inline numeral inside it
+   (wrap the value in .thb-num), never on the block — putting `direction: ltr`
+   here makes `start` mean LEFT and every value drifts off its own label. */
+.thb-coin .thb-stat__value {
+  display: block;
+  font-size: var(--thb-fs-lg);
+  font-weight: var(--thb-fw-semi);
+  line-height: var(--thb-lh-tight);
+  text-align: start;
+}
+
+.thb-coin .thb-stat__sub {
+  display: block;
+  margin-block-start: 5px;
+  font-size: var(--thb-fs-xs);
+}
+
+/* --- Definition rows (label ... value) --------------------------------- */
+.thb-coin .thb-rows { display: grid; gap: var(--thb-s3); }
+
+.thb-coin .thb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thb-s4);
+  font-size: var(--thb-fs);
+}
+
+.thb-coin .thb-row__label {
+  color: var(--thb-muted);
+  flex: none;
+}
+
+.thb-coin .thb-row__value {
+  font-weight: var(--thb-fw-semi);
+  text-align: end;
+  min-width: 0;
+}
+
+/* --- Links ------------------------------------------------------------- */
+.thb-coin .thb-link {
+  color: var(--thb-brand);
+  display: inline-block;
+  padding-block: 2px;
+  border-radius: 4px;
+}
+.thb-coin .thb-link:hover { text-decoration: underline; }
+
+/* --- Series colour ----------------------------------------------------- */
+/* Every chart carries .thb-series--up / --down on its root and reads the
+   colour from this one custom property. Deliberately NOT an inline
+   `var()` inside a presentation attribute: Chromium resolves those, but
+   support is not universal and the failure mode is an invisible line. */
+.thb-coin .thb-series--up    { --thb-series: var(--thb-up); }
+.thb-coin .thb-series--down  { --thb-series: var(--thb-down); }
+.thb-coin .thb-series--brand { --thb-series: var(--thb-brand); }
+
+/* --- Sparkline --------------------------------------------------------- */
+.thb-coin .thb-sparkline {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.thb-coin .thb-sparkline__line {
+  fill: none;
+  stroke: var(--thb-series);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.thb-coin .thb-sparkline__area { stroke: none; }
+.thb-coin .thb-sparkline__stop-from { stop-color: var(--thb-series); stop-opacity: .22; }
+.thb-coin .thb-sparkline__stop-to   { stop-color: var(--thb-series); stop-opacity: 0; }
+
+/* --- Touch targets ----------------------------------------------------- */
+/* The icon-only controls are 28-32px, which reads correctly at desktop but is
+   tight for a thumb. On coarse pointers a transparent pseudo-element grows the
+   HIT area to 44px without touching the visual size or the layout around it. */
+@media (pointer: coarse) {
+  .thb-coin .thb-icon-btn,
+  .thb-coin .thb-social {
+    position: relative;
+  }
+
+  .thb-coin .thb-icon-btn::after,
+  .thb-coin .thb-social::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    translate: 50% -50%;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* --- Divider ----------------------------------------------------------- */
+.thb-coin .thb-divider {
+  border: 0;
+  border-block-start: 1px solid var(--thb-border);
+  margin: 0;
+}

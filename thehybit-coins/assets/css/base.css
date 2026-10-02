@@ -1,0 +1,199 @@
+/* ==========================================================================
+   TheHybit — Scoped base / reset
+   --------------------------------------------------------------------------
+   IMPORTANT: this is a SCOPED reset, not a global one. Every rule is nested
+   under `.thb-coin` so that dropping this page into the Harika theme cannot
+   restyle the rest of the site, and so Elementor's own reset cannot bleed in.
+
+   Rules we hold ourselves to:
+     - No bare element selectors at the top level (`p {}`, `a {}`, ...).
+     - No `!important`, with exactly one documented exception at the bottom of
+       this file (the prefers-reduced-motion reset, which must outrank authored
+       component transitions or it does nothing at all).
+     - Directional CSS uses LOGICAL properties (inline-start/end), never
+       left/right, so an LTR build is free later.
+   ========================================================================== */
+
+/* --- Fonts ------------------------------------------------------------- */
+/* Subset to Latin + Arabic/Persian ranges: ~33KB per weight.
+   In WordPress, check whether Harika already loads a Persian face and reuse
+   it rather than shipping these twice. */
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn/Vazirmatn-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn/Vazirmatn-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/vazirmatn/Vazirmatn-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Page canvas ------------------------------------------------------- */
+/* The only two non-scoped rules in the project. Both are dropped at the
+   WordPress port, where the theme owns <body>. */
+html.thb-demo,
+html.thb-demo body {
+  margin: 0;
+  padding: 0;
+  background: var(--thb-bg);
+}
+
+/* --- Scoped reset ------------------------------------------------------ */
+.thb-coin {
+  box-sizing: border-box;
+  font-family: var(--thb-font);
+  font-size: var(--thb-fs);
+  line-height: var(--thb-lh);
+  color: var(--thb-text);
+  background: var(--thb-bg);
+  text-align: start;
+  /* Persian renders better without synthetic bolding on top of real weights */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.thb-coin *,
+.thb-coin *::before,
+.thb-coin *::after {
+  box-sizing: inherit;
+}
+
+.thb-coin h1,
+.thb-coin h2,
+.thb-coin h3,
+.thb-coin h4,
+.thb-coin p,
+.thb-coin figure,
+.thb-coin ul,
+.thb-coin ol,
+.thb-coin dl,
+.thb-coin dd {
+  margin: 0;
+  padding: 0;
+}
+
+.thb-coin ul,
+.thb-coin ol {
+  list-style: none;
+}
+
+.thb-coin h1,
+.thb-coin h2,
+.thb-coin h3,
+.thb-coin h4 {
+  font-size: inherit;
+  font-weight: var(--thb-fw-semi);
+  line-height: var(--thb-lh-tight);
+}
+
+.thb-coin a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.thb-coin img,
+.thb-coin svg {
+  display: block;
+  max-width: 100%;
+}
+
+.thb-coin button {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.thb-coin table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* --- Focus ------------------------------------------------------------- */
+.thb-coin :focus-visible {
+  outline: 2px solid var(--thb-brand);
+  outline-offset: 2px;
+  border-radius: var(--thb-r-sm);
+}
+
+/* --- Numerals ---------------------------------------------------------- */
+/* Every metric value carries .thb-num.
+   Two jobs:
+   1. Tabular figures keep columns of prices and percentages vertically
+      aligned, which matters a lot on a page that is mostly numbers.
+   2. LTR isolation. A value like "+2.45%" or "$3,245.67" is an LTR run made
+      largely of bidi-NEUTRAL characters ($ + − % ,). Dropped unisolated into
+      an RTL paragraph, those neutrals resolve to the paragraph direction and
+      the string renders reordered — e.g. "%2.45+". Isolating each numeral
+      fixes it while leaving the surrounding Persian text in RTL flow. */
+.thb-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* --- Bidi -------------------------------------------------------------- */
+/* Mandatory for mixed Persian/Latin content. Without isolation, a hex
+   contract address or a URL sitting next to Persian text gets visually
+   reordered by the bidi algorithm — the single most common RTL bug. */
+.thb-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+/* Use on inline runs (addresses, tickers, URLs) inside Persian sentences. */
+.thb-coin bdi {
+  unicode-bidi: isolate;
+}
+
+/* --- Utilities --------------------------------------------------------- */
+.thb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.thb-up    { color: var(--thb-up); }
+.thb-down  { color: var(--thb-down); }
+.thb-muted { color: var(--thb-muted); }
+
+/* --- Motion ------------------------------------------------------------ */
+/* The one sanctioned use of !important in this codebase.
+   `.thb-coin *` has specificity (0,1,0) and every component rule is at least
+   `.thb-coin .thb-btn` (0,2,0), so without it the component transitions simply
+   win and the whole reduced-motion reset does nothing — which is exactly what
+   happened before this comment existed. A user's motion preference must beat
+   authored style, so this is the correct exception rather than a shortcut. */
+@media (prefers-reduced-motion: reduce) {
+  .thb-coin *,
+  .thb-coin *::before,
+  .thb-coin *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

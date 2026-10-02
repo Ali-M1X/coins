@@ -1,0 +1,1095 @@
+/* ==========================================================================
+   TheHybit — Coin page layout
+   --------------------------------------------------------------------------
+   Page grid plus section-specific layout. Reusable pieces live in
+   components.css.
+
+   Breakpoints (min-width, mobile first):
+     —      < 768px   single column
+     768px  – 1119px  two columns
+     1120px +         full 12-column grid
+   ========================================================================== */
+
+.thb-coin .thb-page {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--thb-gap);
+  padding-block-end: var(--thb-s12);
+}
+
+/* Every direct section spans the full width until a breakpoint says otherwise. */
+.thb-coin .thb-page > * { grid-column: 1 / -1; }
+
+/* ==========================================================================
+   §1–2  Coin header + market summary
+   ==========================================================================
+   One card, two bands:
+     band 1 — identity and actions (start) | price and trend (end)
+     band 2 — the five market-summary stats
+   The reference packs the stats alongside the price; splitting them into their
+   own band gives the numbers room to breathe and makes the mobile stack
+   trivial. */
+
+.thb-coin .thb-header__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--thb-s6);
+  padding: var(--thb-s6);
+}
+
+/* --- Identity ---------------------------------------------------------- */
+.thb-coin .thb-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--thb-s4);
+  min-width: 0;
+}
+
+.thb-coin .thb-identity__logo {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--thb-surface-2);
+  border: 1px solid var(--thb-border);
+  padding: 12px;
+  object-fit: contain;
+}
+
+.thb-coin .thb-identity__names {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--thb-s2);
+}
+
+.thb-coin .thb-identity__name {
+  font-size: var(--thb-fs-xl);
+  font-weight: var(--thb-fw-bold);
+}
+
+.thb-coin .thb-identity__symbol {
+  font-size: var(--thb-fs-lg);
+  font-weight: var(--thb-fw-semi);
+  color: var(--thb-muted);
+}
+
+.thb-coin .thb-identity__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--thb-s2);
+  margin-block-start: var(--thb-s3);
+}
+
+/* --- Price block ------------------------------------------------------- */
+.thb-coin .thb-price {
+  display: flex;
+  align-items: center;
+  gap: var(--thb-s6);
+  /* Sits at the end of the header band on wide screens. */
+  margin-inline-start: auto;
+}
+
+.thb-coin .thb-price__figures { min-width: 0; }
+
+/* Box stays RTL so it aligns with the change row beneath it; the numeral
+   inside carries .thb-num for LTR isolation. See .thb-stat__value. */
+.thb-coin .thb-price__value {
+  font-size: var(--thb-fs-3xl);
+  font-weight: var(--thb-fw-bold);
+  line-height: 1.15;
+  text-align: start;
+}
+
+.thb-coin .thb-price__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--thb-s2);
+  margin-block-start: var(--thb-s2);
+}
+
+.thb-coin .thb-price__window {
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+}
+
+/* Toman line. The numeral is LTR-isolated (.thb-num) while "تومان" stays in
+   RTL flow — that separation is why format.toman() returns the numeral only. */
+.thb-coin .thb-price__toman {
+  margin-block-start: var(--thb-s2);
+  font-size: var(--thb-fs-sm);
+  color: var(--thb-muted);
+}
+
+.thb-coin .thb-price__spark {
+  width: 148px;
+  height: 52px;
+  flex: none;
+}
+
+/* --- Actions ----------------------------------------------------------- */
+.thb-coin .thb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--thb-s2);
+  padding: 0 var(--thb-s6) var(--thb-s6);
+}
+
+/* --- Market summary (§2) ----------------------------------------------- */
+.thb-coin .thb-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--thb-s5);
+  padding: var(--thb-s5) var(--thb-s6);
+  border-block-start: 1px solid var(--thb-border);
+}
+
+/* Vertical rules between stats. Logical inline-start, so it flips with the
+   writing direction for free; the first item in each row opts out. */
+.thb-coin .thb-summary__item {
+  padding-inline-start: var(--thb-s5);
+  border-inline-start: 1px solid var(--thb-border);
+}
+
+.thb-coin .thb-summary__item:nth-child(2n + 1) {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+@media (min-width: 768px) {
+  .thb-coin .thb-summary { grid-template-columns: repeat(3, 1fr); }
+
+  .thb-coin .thb-summary__item:nth-child(2n + 1) {
+    padding-inline-start: var(--thb-s5);
+    border-inline-start: 1px solid var(--thb-border);
+  }
+  .thb-coin .thb-summary__item:nth-child(3n + 1) {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+}
+
+@media (min-width: 1120px) {
+  .thb-coin .thb-summary { grid-template-columns: repeat(5, 1fr); }
+
+  .thb-coin .thb-summary__item:nth-child(3n + 1) {
+    padding-inline-start: var(--thb-s5);
+    border-inline-start: 1px solid var(--thb-border);
+  }
+  .thb-coin .thb-summary__item:first-child {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+}
+
+/* --- Mobile adjustments ------------------------------------------------ */
+@media (max-width: 767px) {
+  .thb-coin .thb-header__main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--thb-s5);
+    padding: var(--thb-s5);
+  }
+
+  /* Price block drops below identity and takes the full width. */
+  .thb-coin .thb-price {
+    margin-inline-start: 0;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .thb-coin .thb-price__value { font-size: var(--thb-fs-2xl); }
+
+  .thb-coin .thb-price__spark { width: 96px; height: 40px; }
+
+  .thb-coin .thb-actions { padding: 0 var(--thb-s5) var(--thb-s5); }
+
+  .thb-coin .thb-identity__logo { width: 48px; height: 48px; padding: 10px; }
+
+  .thb-coin .thb-summary { padding: var(--thb-s5); }
+
+  /* Action buttons wrap onto a second row rather than scrolling sideways.
+     A scroller pushed the watchlist button — the only one that does anything
+     — off-screen with no affordance that it was there. */
+  .thb-coin .thb-actions > * { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ==========================================================================
+   §3  Price chart
+   ========================================================================== */
+
+.thb-coin .thb-chart-card .thb-card__head {
+  flex-wrap: wrap;
+  gap: var(--thb-s3);
+  padding-block-end: var(--thb-s4);
+}
+
+/* The chart is an LTR island: time runs left→right and the value axis sits on
+   the left, as on every financial site. Only the tooltip flips back to RTL. */
+.thb-coin .thb-chart {
+  position: relative;
+  height: 340px;
+  padding-inline: var(--thb-s2);
+  padding-block-end: var(--thb-s4);
+  direction: ltr;
+}
+
+.thb-coin .thb-chart__svg {
+  display: block;
+  overflow: visible;
+  touch-action: pan-y; /* let the page scroll vertically over the chart */
+}
+
+/* Loading state. The chart is drawn by JS, so between first paint and the
+   first frame there is an empty 340px box. `:empty` is true only in that
+   window — createPriceChart() appends the tooltip immediately — so the
+   skeleton disappears on its own with no state flag to manage. */
+.thb-coin .thb-chart:empty {
+  border-radius: var(--thb-r-sm);
+  background:
+    linear-gradient(90deg,
+      var(--thb-surface) 0%,
+      var(--thb-surface-2) 40%,
+      var(--thb-surface-2) 60%,
+      var(--thb-surface) 100%);
+  background-size: 300% 100%;
+  animation: thb-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes thb-shimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thb-coin .thb-chart:empty { animation: none; background: var(--thb-surface-2); }
+}
+
+/* --- Axes and grid ----------------------------------------------------- */
+.thb-coin .thb-chart__grid {
+  stroke: var(--thb-grid);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.thb-coin .thb-chart__axis-y,
+.thb-coin .thb-chart__axis-x {
+  fill: var(--thb-axis);
+  font-family: var(--thb-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Series ------------------------------------------------------------ */
+.thb-coin .thb-chart__line {
+  fill: none;
+  stroke: var(--thb-series);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.thb-coin .thb-chart__area { stroke: none; }
+.thb-coin .thb-chart__stop-from { stop-color: var(--thb-series); stop-opacity: .20; }
+.thb-coin .thb-chart__stop-to   { stop-color: var(--thb-series); stop-opacity: 0; }
+
+.thb-coin .thb-chart__vol { fill: var(--thb-volume); }
+
+/* --- Last value -------------------------------------------------------- */
+.thb-coin .thb-chart__last-dot {
+  fill: var(--thb-series);
+  stroke: var(--thb-surface);
+  stroke-width: 2;
+}
+
+.thb-coin .thb-chart__pill rect { fill: var(--thb-series); }
+
+.thb-coin .thb-chart__pill text {
+  fill: #fff;
+  font-family: var(--thb-font);
+  font-size: 11.5px;
+  font-weight: var(--thb-fw-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Crosshair --------------------------------------------------------- */
+/* The UA stylesheet's `[hidden] { display: none }` targets HTML elements, so
+   an SVG <g hidden> still paints — which showed up as a stray dashed line and
+   dot pinned at the chart's origin. This rule makes the attribute mean what it
+   looks like it means. */
+.thb-coin .thb-chart__cross[hidden] { display: none; }
+
+.thb-coin .thb-chart__cross-line {
+  stroke: var(--thb-crosshair);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.thb-coin .thb-chart__cross-dot {
+  fill: var(--thb-series);
+  stroke: var(--thb-surface);
+  stroke-width: 2.5;
+}
+
+.thb-coin .thb-chart__surface { cursor: crosshair; }
+
+/* --- Tooltip ----------------------------------------------------------- */
+/* Back to RTL: the labels are Persian. Numerals inside carry .thb-num. */
+.thb-coin .thb-chart__tooltip {
+  position: absolute;
+  z-index: 2;
+  direction: rtl;
+  min-width: 132px;
+  padding: var(--thb-s2) var(--thb-s3);
+  border: 1px solid var(--thb-border);
+  border-radius: var(--thb-r-sm);
+  background: var(--thb-surface);
+  box-shadow: var(--thb-shadow-lg);
+  font-size: var(--thb-fs-xs);
+  pointer-events: none;
+}
+
+.thb-coin .thb-chart__tt-time {
+  color: var(--thb-muted);
+  margin-block-end: 5px;
+  padding-block-end: 5px;
+  border-block-end: 1px solid var(--thb-border);
+}
+
+.thb-coin .thb-chart__tt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thb-s4);
+  line-height: 1.9;
+}
+
+.thb-coin .thb-chart__tt-row span { color: var(--thb-muted); }
+
+/* --- Responsive -------------------------------------------------------- */
+@media (min-width: 1120px) {
+  /* Performance (§4) takes the remaining 4 columns in Step 5. */
+  .thb-coin .thb-chart-card { grid-column: span 8; }
+}
+
+@media (max-width: 767px) {
+  .thb-coin .thb-chart {
+    height: 240px;
+    padding-inline: 0;
+  }
+
+  .thb-coin .thb-chart-card .thb-card__head {
+    padding-inline: var(--thb-s4);
+  }
+
+  /* Period pills scroll inside their own row rather than widening the page. */
+  .thb-coin .thb-chart-card .thb-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .thb-coin .thb-chart-card .thb-segmented::-webkit-scrollbar { display: none; }
+}
+
+/* ==========================================================================
+   §4  Performance
+   ========================================================================== */
+
+.thb-coin .thb-perf__rows { display: grid; gap: var(--thb-s3); }
+
+.thb-coin .thb-perf__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thb-s4);
+  font-size: var(--thb-fs);
+}
+
+.thb-coin .thb-perf__label { color: var(--thb-muted); }
+
+/* The plain-value counterpart to .thb-change, for rows whose figure carries no
+   direction — a volatility percentage or a supply count is not up or down. Same
+   weight and colour as a stat value so the two row kinds align. */
+.thb-coin .thb-perf__value {
+  font-weight: var(--thb-fw-semi);
+  color: var(--thb-text);
+}
+
+.thb-coin .thb-perf hr { margin-block: var(--thb-s5); }
+
+/* Metric cards borrow the performance rows for their secondary figures. */
+.thb-coin .thb-metric-card hr { margin-block: var(--thb-s5); }
+
+/* All-time high / low. Value on the end edge, date and change beneath it. */
+.thb-coin .thb-extreme + .thb-extreme { margin-block-start: var(--thb-s4); }
+
+.thb-coin .thb-extreme__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--thb-s3);
+}
+
+.thb-coin .thb-extreme__label {
+  color: var(--thb-muted);
+  font-size: var(--thb-fs-sm);
+}
+
+.thb-coin .thb-extreme__value {
+  font-weight: var(--thb-fw-semi);
+  font-size: var(--thb-fs-md);
+}
+
+.thb-coin .thb-extreme__sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thb-s3);
+  margin-block-start: 3px;
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+}
+
+@media (min-width: 1120px) {
+  /* Sits beside the chart, which takes the other 8 columns. */
+  .thb-coin .thb-perf { grid-column: span 4; }
+}
+
+/* ==========================================================================
+   §5  About
+   ==========================================================================
+   Full width, split into prose and a metadata list. On the reference this is a
+   narrow third column; at full width a single column would leave the
+   description as one very long line. */
+
+.thb-coin .thb-about__grid {
+  display: grid;
+  gap: var(--thb-s6);
+}
+
+@media (min-width: 768px) {
+  .thb-coin .thb-about__grid {
+    grid-template-columns: 1.15fr 1fr;
+    gap: var(--thb-s10);
+  }
+}
+
+.thb-coin .thb-about__text {
+  color: var(--thb-text-2);
+  line-height: var(--thb-lh);
+}
+
+/* Persian prose reads well justified, but only in a column wide enough to
+   absorb it. Below ~768px the lines are too short and justification tears
+   visible rivers of whitespace between words, so it stays ragged there. */
+@media (min-width: 768px) {
+  .thb-coin .thb-about__text {
+    text-align: justify;
+    text-justify: inter-word;
+  }
+}
+
+.thb-coin .thb-about__rows { display: grid; gap: var(--thb-s4); }
+
+/* At full width six stacked rows run far taller than the description beside
+   them, leaving a conspicuous void in the card. Splitting them into two
+   columns evens the two halves out. */
+@media (min-width: 1120px) {
+  .thb-coin .thb-about__rows {
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--thb-s8);
+  }
+
+  /* Each column's last row loses its rule, not just the last row overall. */
+  .thb-coin .thb-about__row:nth-last-child(-n + 2) {
+    padding-block-end: 0;
+    border-block-end: 0;
+  }
+}
+
+.thb-coin .thb-about__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--thb-s4);
+  font-size: var(--thb-fs-sm);
+  padding-block-end: var(--thb-s4);
+  border-block-end: 1px solid var(--thb-border);
+}
+
+.thb-coin .thb-about__row:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.thb-coin .thb-about__label { color: var(--thb-muted); flex: none; }
+
+.thb-coin .thb-about__value {
+  font-weight: var(--thb-fw-semi);
+  text-align: end;
+  min-width: 0;
+}
+
+/* --- Social links ------------------------------------------------------ */
+.thb-coin .thb-socials { display: flex; gap: var(--thb-s2); }
+
+.thb-coin .thb-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--thb-r-sm);
+  background: var(--thb-surface-2);
+  color: var(--thb-muted);
+  transition: background var(--thb-t), color var(--thb-t);
+}
+
+.thb-coin .thb-social:hover {
+  background: var(--thb-brand-soft);
+  color: var(--thb-brand);
+}
+
+.thb-coin .thb-social svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* --- Contract address -------------------------------------------------- */
+/* The address is Latin inside Persian text. Without bidi isolation the
+   surrounding RTL context reorders its segments and the address renders
+   wrong — silently, and in a way that is easy to miss in review. */
+.thb-coin .thb-contract {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--thb-s2);
+  padding: 5px var(--thb-s2) 5px var(--thb-s3);
+  border: 1px solid var(--thb-border);
+  border-radius: var(--thb-r-pill);
+  background: var(--thb-surface-2);
+  max-width: 100%;
+}
+
+.thb-coin .thb-contract__addr {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--thb-fs-xs);
+  direction: ltr;
+  unicode-bidi: isolate;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thb-coin .thb-contract__net {
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+  display: block;
+  margin-block-start: var(--thb-s2);
+}
+
+.thb-coin .thb-icon-btn[data-copied="true"] {
+  background: var(--thb-up-soft);
+  color: var(--thb-up);
+}
+
+/* ==========================================================================
+   §6 DeFi  ·  §7 On-chain
+   ==========================================================================
+   One shared card shape: three metric tiles plus a trend line. Both cards show
+   RAW provider figures only — cross-provider ratios belong to the analytics
+   section, which is what keeps "what DefiLlama said" separate from "what we
+   concluded". */
+
+.thb-coin .thb-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--thb-s4);
+}
+
+.thb-coin .thb-metric:not(:first-child) {
+  padding-inline-start: var(--thb-s4);
+  border-inline-start: 1px solid var(--thb-border);
+}
+
+.thb-coin .thb-metric__label {
+  display: block;
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+  margin-block-end: 6px;
+  /* Two-word Persian labels wrap; a min-height keeps the three values on one
+     baseline whether a label wraps or not. */
+  min-height: 2.4em;
+}
+
+.thb-coin .thb-metric__value {
+  display: block;
+  font-size: var(--thb-fs-lg);
+  font-weight: var(--thb-fw-semi);
+  line-height: var(--thb-lh-tight);
+}
+
+.thb-coin .thb-metric__change {
+  display: block;
+  margin-block-start: 5px;
+  font-size: var(--thb-fs-xs);
+}
+
+/* --- Trend line -------------------------------------------------------- */
+.thb-coin .thb-trend {
+  height: 54px;
+  margin-block-start: var(--thb-s5);
+}
+
+.thb-coin .thb-trend__caption {
+  display: block;
+  margin-block-start: var(--thb-s2);
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+}
+
+@media (min-width: 1120px) {
+  /* Two up, so the pair reads as a row without becoming a dashboard. */
+  .thb-coin .thb-metric-card { grid-column: span 6; }
+
+  /* An ODD number of these cards leaves the last one alone in its row with a
+     conspicuous empty half beside it. Ethereum hits this: DeFi + on-chain fill
+     one row, DEX sits alone, and L2 is absent by design. The template marks
+     that last card --wide so it takes the full row instead of trailing a hole.
+     In PHP: count the visible metric sections, and if the count is odd add the
+     modifier to the last one. */
+  .thb-coin .thb-metric-card--wide { grid-column: 1 / -1; }
+
+  /* Full width would otherwise stretch three tiles across 1280px. Cap them and
+     let the remaining space read as padding inside the card rather than a gap
+     in the grid. */
+  .thb-coin .thb-metric-card--wide .thb-metrics {
+    grid-template-columns: repeat(3, minmax(0, 260px));
+    justify-content: start;
+  }
+}
+
+@media (max-width: 767px) {
+  .thb-coin .thb-metrics { gap: var(--thb-s2); }
+  .thb-coin .thb-metric:not(:first-child) { padding-inline-start: var(--thb-s2); }
+  .thb-coin .thb-metric__value { font-size: var(--thb-fs-md); }
+  .thb-coin .thb-metric__label { font-size: 11px; }
+}
+
+/* ==========================================================================
+   §10  TheHybit analytics
+   ==========================================================================
+   This card must NOT read as another provider panel. Everything in it is ours:
+   computed by derive.js from raw data, then scored. The brand tint, the badge
+   and the per-tile provenance line ("DefiLlama × CoinGecko") all exist to make
+   that distinction visible rather than assumed. */
+
+.thb-coin .thb-analytics {
+  border-color: var(--thb-brand-soft);
+  /* A hairline of brand along the block start edge, in place of a heavier
+     coloured header. Logical edge, so it flips with direction for free. */
+  box-shadow: var(--thb-shadow), inset 0 3px 0 0 var(--thb-brand);
+}
+
+.thb-coin .thb-analytics__badges {
+  display: flex;
+  align-items: center;
+  gap: var(--thb-s2);
+  flex-wrap: wrap;
+}
+
+.thb-coin .thb-badge--warn {
+  background: var(--thb-warn-soft);
+  color: var(--thb-warn);
+}
+
+/* --- Score + insight --------------------------------------------------- */
+.thb-coin .thb-analytics__top {
+  display: flex;
+  align-items: center;
+  gap: var(--thb-s6);
+  padding-block-end: var(--thb-s5);
+  margin-block-end: var(--thb-s5);
+  border-block-end: 1px solid var(--thb-border);
+}
+
+.thb-coin .thb-score {
+  position: relative;
+  flex: none;
+  width: 96px;
+  height: 96px;
+}
+
+.thb-coin .thb-gauge__track { stroke: var(--thb-surface-3); }
+.thb-coin .thb-gauge__value { stroke: var(--thb-series); }
+
+/* Centred inside the ring. */
+.thb-coin .thb-score__readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.thb-coin .thb-score__value {
+  font-size: var(--thb-fs-xl);
+  font-weight: var(--thb-fw-bold);
+  line-height: 1;
+}
+
+.thb-coin .thb-score__max {
+  font-size: 10px;
+  color: var(--thb-muted);
+}
+
+.thb-coin .thb-score__band {
+  display: block;
+  margin-block-start: var(--thb-s2);
+  text-align: center;
+  font-size: var(--thb-fs-xs);
+  font-weight: var(--thb-fw-semi);
+}
+
+.thb-coin .thb-score__band[data-tone="up"]   { color: var(--thb-up); }
+.thb-coin .thb-score__band[data-tone="warn"] { color: var(--thb-warn); }
+.thb-coin .thb-score__band[data-tone="down"] { color: var(--thb-down); }
+
+.thb-coin .thb-analytics__insight {
+  color: var(--thb-text-2);
+  line-height: var(--thb-lh);
+  font-size: var(--thb-fs-md);
+}
+
+/* --- Derived metric tiles ---------------------------------------------- */
+/* Flex, not grid, because there are FIVE tiles and five never divides evenly
+   into a column count. On grid, any width fitting four per row stranded the
+   fifth in a row of its own with three empty cells beside it — the same hole
+   the DEX card had. Flex lets the trailing row size itself; the max-width stops
+   a lone tile from stretching across the whole card, so the leftover space
+   reads as padding rather than a gap. */
+.thb-coin .thb-dmetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--thb-s4);
+}
+
+.thb-coin .thb-dmetric {
+  flex: 1 1 148px;
+  max-width: 260px;
+  padding: var(--thb-s4);
+  border-radius: var(--thb-r-sm);
+  background: var(--thb-surface-2);
+}
+
+.thb-coin .thb-dmetric__label {
+  display: block;
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+  /* Exactly two lines at this size and leading (12px x 1.7). Sized so one-
+     and two-line labels occupy identical height and every tile's value lands
+     on the same baseline. */
+  min-height: 3.4em;
+  margin-block-end: var(--thb-s2);
+}
+
+.thb-coin .thb-dmetric__value {
+  display: block;
+  font-size: var(--thb-fs-lg);
+  font-weight: var(--thb-fw-semi);
+  line-height: var(--thb-lh-tight);
+}
+
+.thb-coin .thb-dmetric__band {
+  display: inline-block;
+  margin-block-start: var(--thb-s2);
+  font-size: var(--thb-fs-xs);
+  font-weight: var(--thb-fw-semi);
+}
+
+.thb-coin .thb-dmetric__band[data-tone="up"]   { color: var(--thb-up); }
+.thb-coin .thb-dmetric__band[data-tone="warn"] { color: var(--thb-warn); }
+.thb-coin .thb-dmetric__band[data-tone="down"] { color: var(--thb-down); }
+
+/* Provenance: the visible marker that this figure is a combination we made,
+   not a number a provider handed us. */
+.thb-coin .thb-dmetric__src {
+  display: block;
+  margin-block-start: var(--thb-s3);
+  padding-block-start: var(--thb-s2);
+  border-block-start: 1px solid var(--thb-border);
+  font-size: 10px;
+  color: var(--thb-muted);
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: end;
+}
+
+/* --- Provisional-model note -------------------------------------------- */
+.thb-coin .thb-analytics__note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--thb-s2);
+  margin-block-start: var(--thb-s5);
+  padding: var(--thb-s3) var(--thb-s4);
+  border-radius: var(--thb-r-sm);
+  background: var(--thb-warn-soft);
+  color: var(--thb-text-2);
+  font-size: var(--thb-fs-xs);
+  line-height: 1.8;
+}
+
+.thb-coin .thb-analytics__note svg { flex: none; margin-block-start: 3px; }
+
+@media (min-width: 1120px) {
+  /* News (§11) takes the remaining 4 columns in the next step. */
+  .thb-coin .thb-analytics { grid-column: span 8; }
+}
+
+@media (max-width: 767px) {
+  .thb-coin .thb-analytics__top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--thb-s4);
+  }
+  .thb-coin .thb-score { align-self: center; }
+  .thb-coin .thb-analytics__insight { text-align: center; }
+  /* Two per row, and the odd fifth grows to fill its own row rather than
+     leaving half the width empty on a narrow screen. */
+  .thb-coin .thb-dmetric {
+    flex-basis: calc(50% - var(--thb-s4) / 2);
+    max-width: none;
+  }
+}
+
+/* ==========================================================================
+   §11  Related articles (TheHybit's own WordPress)
+   ==========================================================================
+   Compact list, not cards: this sits beside the analytics section and must not
+   lengthen the page. Title, date and an optional thumbnail — no excerpts, so
+   four articles cost about 260px. */
+
+/* The card is a grid item beside the taller analytics section, so it stretches.
+   Making the body a column lets the "all articles" link sit at the bottom edge
+   as a footer instead of floating in the middle of the leftover space. */
+.thb-coin .thb-news { display: flex; flex-direction: column; }
+.thb-coin .thb-news .thb-card__body { display: flex; flex-direction: column; flex: 1; }
+
+.thb-coin .thb-news__list { display: grid; }
+
+.thb-coin .thb-news__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--thb-s3);
+  padding-block: var(--thb-s4);
+  border-block-start: 1px solid var(--thb-border);
+  transition: opacity var(--thb-t);
+  /* So the focus ring hugs the row rather than cutting its corners. */
+  border-radius: var(--thb-r-sm);
+}
+
+.thb-coin .thb-news__item:first-child {
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+.thb-coin .thb-news__item:hover { opacity: .82; }
+
+/* Thumbnail is optional; the row must look deliberate without one, so the
+   text column simply takes the full width rather than leaving a hole. */
+.thb-coin .thb-news__thumb {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: var(--thb-r-sm);
+  object-fit: cover;
+  background: var(--thb-surface-2);
+}
+
+.thb-coin .thb-news__body { min-width: 0; }
+
+.thb-coin .thb-news__title {
+  font-size: var(--thb-fs-sm);
+  font-weight: var(--thb-fw-semi);
+  line-height: 1.7;
+  /* Two lines maximum: a long Persian headline must not push the card taller
+     than the analytics section it sits beside. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.thb-coin .thb-news__item:hover .thb-news__title { color: var(--thb-brand); }
+
+.thb-coin .thb-news__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--thb-s2);
+  margin-block-start: var(--thb-s2);
+  font-size: var(--thb-fs-xs);
+  color: var(--thb-muted);
+}
+
+.thb-coin .thb-news__cat {
+  padding: 1px var(--thb-s2);
+  border-radius: var(--thb-r-pill);
+  background: var(--thb-surface-3);
+  color: var(--thb-text-2);
+}
+
+.thb-coin .thb-news__all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--thb-s1);
+  /* auto, not a fixed gap: the card stretches to match the analytics section
+     beside it, so this pins to the bottom edge as a footer. */
+  margin-block-start: auto;
+  padding-block-start: var(--thb-s4);
+  border-block-start: 1px solid var(--thb-border);
+  width: 100%;
+  font-size: var(--thb-fs-xs);
+  font-weight: var(--thb-fw-semi);
+  color: var(--thb-brand);
+}
+
+.thb-coin .thb-news__all:hover { text-decoration: underline; }
+
+@media (min-width: 1120px) {
+  /* The remaining 4 columns beside the analytics section. */
+  .thb-coin .thb-news { grid-column: span 4; }
+}
+
+/* ==========================================================================
+   No-JavaScript
+   ==========================================================================
+   Every headline figure on this page is server-rendered and needs no scripts.
+   The chart genuinely does — so rather than leaving a 340px blank box under a
+   row of dead period buttons, the interactive part is hidden and a <noscript>
+   line explains why. `thb-no-js` is set in the markup and removed by the inline
+   head script, so this styles the real no-JS case rather than a slow one. */
+
+.thb-no-js .thb-chart-card__interactive { display: none; }
+
+.thb-coin .thb-noscript {
+  padding: var(--thb-s6) var(--thb-s5);
+  color: var(--thb-muted);
+  font-size: var(--thb-fs-sm);
+  text-align: center;
+}
+
+/* --- Fixture notice ---------------------------------------------------- */
+/* Visible reminder that these are placeholder numbers. Removed once the page
+   is fed by real providers. */
+.thb-coin .thb-fixture-note {
+  display: flex;
+  align-items: center;
+  gap: var(--thb-s2);
+  margin-block-end: var(--thb-gap);
+  padding: var(--thb-s3) var(--thb-s4);
+  border: 1px dashed var(--thb-border-strong);
+  border-radius: var(--thb-r-sm);
+  background: var(--thb-surface-2);
+  color: var(--thb-muted);
+  font-size: var(--thb-fs-xs);
+}
+
+/* ===========================================================================
+   §4b/§7b/§9  Stat cards — dense grids of small figures
+   ===========================================================================
+
+   THE PROBLEM THESE SOLVE. The metric cards render three large tiles, which is
+   right for a section whose job is three headline numbers and wrong for the
+   Group A sections, which carry six to ten small ones. The previous audit found
+   the DEX and DeFi cards roughly half empty for exactly this reason: a card
+   sized by its container rather than by its content.
+
+   The fix is not tighter margins. It is `auto-fill`, which lets the number of
+   columns fall out of how many figures there are and how much width exists.
+   Four figures make one tidy row, ten make three, and nothing has to be
+   re-specified when a metric is added or a provider goes quiet. There is no
+   fixed row count, so there is no hole for a missing value to leave. */
+
+.thb-coin .thb-statcard .thb-card__body {
+  display: grid;
+  gap: var(--thb-s4);
+}
+
+.thb-coin .thb-statgrid {
+  display: grid;
+  /* 168px holds the longest Persian label in this set on two lines without
+     breaking a word. Below that the grid drops to a single column rather than
+     wrapping labels awkwardly. */
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--thb-s3);
+}
+
+.thb-coin .thb-stat {
+  display: grid;
+  gap: var(--thb-s1);
+  align-content: start;
+  padding: var(--thb-s3) var(--thb-s4);
+  background: var(--thb-surface-2);
+  border: 1px solid var(--thb-border);
+  border-radius: var(--thb-r-sm);
+  /* Rows must not stretch to match the tallest cell in their track: a figure
+     with no meta line should be short, not padded out to look like one that
+     has. Uneven heights are the honest rendering here. */
+  min-inline-size: 0;
+}
+
+.thb-coin .thb-stat__label {
+  font-size: var(--thb-fs-xs, 12px);
+  color: var(--thb-muted);
+  line-height: 1.45;
+}
+
+.thb-coin .thb-stat__value {
+  font-size: var(--thb-fs-lg, 17px);
+  font-weight: 600;
+  color: var(--thb-text);
+  font-variant-numeric: tabular-nums;
+  /* Long venue names and pair symbols must not push the grid wider than its
+     column — the page may never scroll horizontally. */
+  overflow-wrap: anywhere;
+}
+
+.thb-coin .thb-stat__meta {
+  font-size: var(--thb-fs-xs, 12px);
+  color: var(--thb-muted);
+  line-height: 1.45;
+}
+
+/* Availability states. A missing value is never a zero, and the four ways a
+   value can be missing do not read alike — see stat-grid.php. */
+.thb-coin .thb-datastate {
+  margin: 0;
+  padding: var(--thb-s4);
+  border-radius: var(--thb-r-sm);
+  background: var(--thb-surface-2);
+  border: 1px dashed var(--thb-border-strong);
+  color: var(--thb-muted);
+  font-size: var(--thb-fs-sm, 14px);
+  line-height: var(--thb-lh);
+}
+
+.thb-coin .thb-datastate--stale {
+  border-style: solid;
+  padding: var(--thb-s2) var(--thb-s3);
+  font-size: var(--thb-fs-xs, 12px);
+}
+
+.thb-coin .thb-statcard__note {
+  color: var(--thb-muted);
+  font-size: var(--thb-fs-xs, 12px);
+  line-height: 1.5;
+}
+
+/* Column spans, for sections that should sit side by side on wide screens.
+   Everything in .thb-page is full width by default; these opt out. */
+@media (min-width: 1120px) {
+  .thb-coin .thb-span-6 { grid-column: span 6; }
+  .thb-coin .thb-span-8 { grid-column: span 8; }
+  .thb-coin .thb-span-4 { grid-column: span 4; }
+}

@@ -1,0 +1,424 @@
+{
+    "key": "group_thb_coin",
+    "title": "پیکربندی ارز",
+    "fields": [
+        {
+            "key": "field_thb_tab_identity",
+            "label": "شناسه‌ها",
+            "name": "",
+            "type": "tab",
+            "placement": "top"
+        },
+        {
+            "key": "field_thb_symbol",
+            "label": "نماد (Symbol)",
+            "name": "thb_symbol",
+            "type": "text",
+            "instructions": "مثل ETH یا BTC. با اسلاگ و شناسه CoinGecko یکی نیست.",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_name_fa",
+            "label": "نام فارسی",
+            "name": "thb_name_fa",
+            "type": "text",
+            "instructions": "مثل «اتریوم».",
+            "required": 0,
+            "wrapper": {
+                "width": "37"
+            }
+        },
+        {
+            "key": "field_thb_name_en",
+            "label": "نام انگلیسی",
+            "name": "thb_name_en",
+            "type": "text",
+            "instructions": "مثل «Ethereum».",
+            "required": 0,
+            "wrapper": {
+                "width": "38"
+            }
+        },
+        {
+            "key": "field_thb_coingecko_id",
+            "label": "شناسه CoinGecko",
+            "name": "thb_coingecko_id",
+            "type": "text",
+            "instructions": "شناسه دقیق CoinGecko. همیشه با اسلاگ وردپرس یکسان نیست (مثلاً binancecoin). قابل تغییر مستقل.",
+            "required": 0,
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
+            "key": "field_thb_news_category_slug",
+            "label": "اسلاگ دسته اخبار",
+            "name": "thb_news_category_slug",
+            "type": "text",
+            "instructions": "دسته وردپرسی این ارز زیر /category/news/ — مثل ethereum-news. هرگز از اسلاگ ارز ساخته نمی‌شود؛ صریح وارد کنید.",
+            "required": 0,
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
+            "key": "field_thb_tab_about",
+            "label": "معرفی",
+            "name": "",
+            "type": "tab",
+            "placement": "top"
+        },
+        {
+            "key": "field_thb_description",
+            "label": "توضیحات",
+            "name": "thb_description",
+            "type": "textarea",
+            "instructions": "توضیح فارسی. بر توضیح انگلیسی CoinGecko اولویت دارد.",
+            "required": 0,
+            "wrapper": {
+                "width": ""
+            },
+            "rows": 5
+        },
+        {
+            "key": "field_thb_founder",
+            "label": "بنیان‌گذار / سازمان",
+            "name": "thb_founder",
+            "type": "text",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "33"
+            }
+        },
+        {
+            "key": "field_thb_launch_date",
+            "label": "تاریخ راه‌اندازی",
+            "name": "thb_launch_date",
+            "type": "date_picker",
+            "instructions": "اگر خالی بماند از CoinGecko گرفته می‌شود.",
+            "required": 0,
+            "wrapper": {
+                "width": "33"
+            },
+            "display_format": "d/m/Y",
+            "return_format": "Y-m-d"
+        },
+        {
+            "key": "field_thb_consensus",
+            "label": "مکانیزم اجماع",
+            "name": "thb_consensus",
+            "type": "text",
+            "instructions": "مثل «اثبات سهام (PoS)».",
+            "required": 0,
+            "wrapper": {
+                "width": "34"
+            }
+        },
+        {
+            "key": "field_thb_tags",
+            "label": "برچسب‌ها",
+            "name": "thb_tags",
+            "type": "text",
+            "instructions": "با کاما جدا کنید. مثل: بلاکچین, پلتفرم قرارداد هوشمند",
+            "required": 0,
+            "wrapper": {
+                "width": ""
+            }
+        },
+        {
+            "key": "field_thb_tab_links",
+            "label": "پیوندها",
+            "name": "",
+            "type": "tab",
+            "placement": "top"
+        },
+        {
+            "key": "field_thb_website",
+            "label": "وب‌سایت",
+            "name": "thb_website",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "33"
+            }
+        },
+        {
+            "key": "field_thb_whitepaper",
+            "label": "سفیدنامه",
+            "name": "thb_whitepaper",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "33"
+            }
+        },
+        {
+            "key": "field_thb_explorer",
+            "label": "کاوشگر بلاکچین",
+            "name": "thb_explorer",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "34"
+            }
+        },
+        {
+            "key": "field_thb_social_twitter",
+            "label": "X / توییتر",
+            "name": "thb_social_twitter",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_social_github",
+            "label": "گیت‌هاب",
+            "name": "thb_social_github",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_social_discord",
+            "label": "دیسکورد",
+            "name": "thb_social_discord",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_social_telegram",
+            "label": "تلگرام",
+            "name": "thb_social_telegram",
+            "type": "url",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_contract_address",
+            "label": "نشانی قرارداد",
+            "name": "thb_contract_address",
+            "type": "text",
+            "instructions": "اختیاری. دارایی‌های بومی قرارداد ندارند.",
+            "required": 0,
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
+            "key": "field_thb_contract_network",
+            "label": "شبکه قرارداد",
+            "name": "thb_contract_network",
+            "type": "text",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_contract_network_fa",
+            "label": "شبکه (فارسی)",
+            "name": "thb_contract_network_fa",
+            "type": "text",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            }
+        },
+        {
+            "key": "field_thb_tab_providers",
+            "label": "منابع داده",
+            "name": "",
+            "type": "tab",
+            "placement": "top"
+        },
+        {
+            "key": "field_thb_enable_defi",
+            "label": "بخش دیفای (DefiLlama)",
+            "name": "thb_enable_defi",
+            "type": "true_false",
+            "instructions": "برای شبکه‌هایی که دیفای معنادار دارند. بیت‌کوین معمولاً خاموش است.",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "ui": 1,
+            "default_value": 1
+        },
+        {
+            "key": "field_thb_enable_dex",
+            "label": "بخش DEX (DexScreener)",
+            "name": "thb_enable_dex",
+            "type": "true_false",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "ui": 1,
+            "default_value": 1
+        },
+        {
+            "key": "field_thb_enable_onchain",
+            "label": "بخش آنچین",
+            "name": "thb_enable_onchain",
+            "type": "true_false",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "ui": 1,
+            "default_value": 0
+        },
+        {
+            "key": "field_thb_enable_l2",
+            "label": "بخش لایه ۲ (L2BEAT)",
+            "name": "thb_enable_l2",
+            "type": "true_false",
+            "instructions": "فقط برای دارایی‌هایی که خودشان یک شبکه لایه ۲ هستند.",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "ui": 1,
+            "default_value": 0
+        },
+        {
+            "key": "field_thb_defillama_chain",
+            "label": "نام زنجیره در DefiLlama",
+            "name": "thb_defillama_chain",
+            "type": "text",
+            "instructions": "نام نمایشی DefiLlama — شناسه پنجم و مستقل. مثل Ethereum.",
+            "required": 0,
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
+            "key": "field_thb_dex_token_address",
+            "label": "نشانی توکن برای DexScreener",
+            "name": "thb_dex_token_address",
+            "type": "text",
+            "instructions": "اختیاری ولی توصیه‌شده. نشانی قرارداد توکن (برای دارایی‌های بومی، نسخه wrapped مثل WETH). با نشانی، بازارها دقیق و بدون ابهام نماد پیدا می‌شوند؛ بدون آن جست‌وجوی نمادی انجام می‌شود.",
+            "required": 0,
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
+            "key": "field_thb_dex_symbols",
+            "label": "نمادهای معادل در DEX",
+            "name": "thb_dex_symbols",
+            "type": "text",
+            "instructions": "اختیاری. نمادهای دیگری که همین دارایی را نشان می‌دهند، جدا شده با کاما. نسخه wrapped (مثل WETH) به‌صورت خودکار پذیرفته می‌شود.",
+            "required": 0,
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
+            "key": "field_thb_tab_overrides",
+            "label": "بازنویسی دستی",
+            "name": "",
+            "type": "tab",
+            "placement": "top"
+        },
+        {
+            "key": "field_thb_override_notice",
+            "label": "",
+            "name": "",
+            "type": "message",
+            "message": "مقادیر زیر فقط بر نمایش اثر می‌گذارند. داده خام ارائه‌دهنده و تاریخچه ذخیره‌شده دست‌نخورده باقی می‌ماند؛ با خالی کردن هر فیلد، مقدار API دوباره نمایش داده می‌شود.",
+            "new_lines": "wpautop",
+            "esc_html": 0
+        },
+        {
+            "key": "field_thb_override_price",
+            "label": "قیمت (دلار)",
+            "name": "thb_override_price",
+            "type": "number",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "step": "any"
+        },
+        {
+            "key": "field_thb_override_market_cap",
+            "label": "ارزش بازار (دلار)",
+            "name": "thb_override_market_cap",
+            "type": "number",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "step": "any"
+        },
+        {
+            "key": "field_thb_override_tvl",
+            "label": "TVL (دلار)",
+            "name": "thb_override_tvl",
+            "type": "number",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "step": "any"
+        },
+        {
+            "key": "field_thb_override_rank",
+            "label": "رتبه بازار",
+            "name": "thb_override_rank",
+            "type": "number",
+            "instructions": "",
+            "required": 0,
+            "wrapper": {
+                "width": "25"
+            },
+            "step": "1"
+        }
+    ],
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "thb_coin"
+            }
+        ]
+    ],
+    "menu_order": 0,
+    "position": "normal",
+    "style": "default",
+    "label_placement": "top",
+    "instruction_placement": "label",
+    "active": true,
+    "description": "پیکربندی هر ارز. شناسه‌ها عمداً از هم جدا هستند: اسلاگ وردپرس، نماد، شناسه CoinGecko و اسلاگ دسته اخبار.",
+    "show_in_rest": 0,
+    "modified": 1786000000
+}

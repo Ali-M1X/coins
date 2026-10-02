@@ -1,0 +1,187 @@
+/* ==========================================================================
+   TheHybit — Design tokens
+   --------------------------------------------------------------------------
+   Every colour, space, radius and type step lives here as a custom property.
+   Rules:
+     - All names are prefixed `--thb-` so nothing can collide with the Harika
+       theme or Elementor once this is ported into WordPress.
+     - Light values sit on bare `:root`. Dark values are declared TWICE:
+       once for an explicit `data-theme="dark"` and once for the OS preference
+       (guarded so an explicit `data-theme="light"` always wins).
+     - Charts read these same tokens through var() inside SVG, so switching
+       theme recolours every chart with no JS and no re-render.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* --- Surfaces ------------------------------------------------------- */
+  --thb-bg:             #F6F7F9;
+  --thb-surface:        #FFFFFF;
+  --thb-surface-2:      #F9FAFB;   /* inner tiles inside a card */
+  --thb-surface-3:      #F1F3F7;   /* pill/segmented-control track */
+  --thb-surface-hover:  #F3F4F6;
+
+  /* --- Lines ---------------------------------------------------------- */
+  --thb-border:         #EDEFF3;
+  --thb-border-strong:  #E1E5EB;
+
+  /* --- Text ----------------------------------------------------------- */
+  --thb-text:           #0F1729;
+  --thb-text-2:         #4B5563;
+  --thb-muted:          #6B7280;
+
+  /* --- Brand ---------------------------------------------------------- */
+  --thb-brand:          #6D5EF8;
+  --thb-brand-hover:    #5B4BE8;
+  --thb-brand-on:       #FFFFFF;
+  --thb-brand-soft:     #EEEBFE;
+
+  /* --- Semantic: market direction ------------------------------------- */
+  --thb-up:             #16A34A;
+  --thb-up-soft:        #E7F6EC;
+  --thb-down:           #DC2626;
+  --thb-down-soft:      #FDECEC;
+  --thb-warn:           #D97706;
+  --thb-warn-soft:      #FDF3E3;
+  --thb-neutral:        #6B7280;
+  --thb-neutral-soft:   #F1F3F7;
+
+  /* --- Charts --------------------------------------------------------- */
+  --thb-grid:           #EFF1F5;
+  --thb-axis:           #9CA3AF;
+  --thb-volume:         #D9DEE7;
+  --thb-crosshair:      #9CA3AF;
+
+  /* --- Elevation ------------------------------------------------------ */
+  --thb-shadow-sm: 0 1px 2px rgba(16, 24, 40, .04);
+  --thb-shadow:    0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
+  --thb-shadow-lg: 0 4px 12px rgba(16, 24, 40, .08), 0 2px 4px rgba(16, 24, 40, .04);
+
+  /* --- Spacing scale -------------------------------------------------- */
+  --thb-s1:  4px;
+  --thb-s2:  8px;
+  --thb-s3:  12px;
+  --thb-s4:  16px;
+  --thb-s5:  20px;
+  --thb-s6:  24px;
+  --thb-s8:  32px;
+  --thb-s10: 40px;
+  --thb-s12: 48px;
+
+  /* --- Radii ---------------------------------------------------------- */
+  --thb-r-sm:   8px;
+  --thb-r:      14px;
+  --thb-r-lg:   18px;
+  --thb-r-pill: 999px;
+
+  /* --- Type ----------------------------------------------------------- */
+  --thb-font: "Vazirmatn", "Segoe UI", Tahoma, system-ui, -apple-system, sans-serif;
+  --thb-fs-xs:  12px;
+  --thb-fs-sm:  13px;
+  --thb-fs:     14px;
+  --thb-fs-md:  15px;
+  --thb-fs-lg:  18px;
+  --thb-fs-xl:  22px;
+  --thb-fs-2xl: 28px;
+  --thb-fs-3xl: 36px;
+
+  --thb-fw-normal: 400;
+  --thb-fw-semi:   600;
+  --thb-fw-bold:   700;
+
+  --thb-lh-tight: 1.3;
+  --thb-lh:       1.7;   /* Persian text needs more leading than Latin */
+
+  /* --- Layout --------------------------------------------------------- */
+  --thb-maxw:   1320px;
+  --thb-gutter: 20px;
+  --thb-gap:    16px;
+
+  /* --- Motion --------------------------------------------------------- */
+  --thb-t: 140ms ease;
+}
+
+/* Dark theme — explicit opt-in (this is what WordPress will set on <html>) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --thb-bg:             #0B0E14;
+  --thb-surface:        #131722;
+  --thb-surface-2:      #191E2B;
+  --thb-surface-3:      #212636;
+  --thb-surface-hover:  #1D2231;
+
+  --thb-border:         #212636;
+  --thb-border-strong:  #2C3348;
+
+  --thb-text:           #E6E8EF;
+  --thb-text-2:         #B4BAC8;
+  --thb-muted:          #9AA3B2;
+
+  --thb-brand:          #8B7CFF;
+  --thb-brand-hover:    #9C90FF;
+  --thb-brand-on:       #12101F;
+  --thb-brand-soft:     #241F45;
+
+  --thb-up:             #22C55E;
+  --thb-up-soft:        #11291B;
+  --thb-down:           #F05252;
+  --thb-down-soft:      #2C1517;
+  --thb-warn:           #F59E0B;
+  --thb-warn-soft:      #2A1F0C;
+  --thb-neutral:        #9AA3B2;
+  --thb-neutral-soft:   #1E2434;
+
+  --thb-grid:           #1D2331;
+  --thb-axis:           #6B7280;
+  --thb-volume:         #2A3145;
+  --thb-crosshair:      #6B7280;
+
+  --thb-shadow-sm: 0 1px 2px rgba(0, 0, 0, .28);
+  --thb-shadow:    0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .22);
+  --thb-shadow-lg: 0 4px 14px rgba(0, 0, 0, .4), 0 2px 4px rgba(0, 0, 0, .25);
+}
+
+/* Dark theme — OS preference. Guarded so `data-theme="light"` still wins. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --thb-bg:             #0B0E14;
+    --thb-surface:        #131722;
+    --thb-surface-2:      #191E2B;
+    --thb-surface-3:      #212636;
+    --thb-surface-hover:  #1D2231;
+
+    --thb-border:         #212636;
+    --thb-border-strong:  #2C3348;
+
+    --thb-text:           #E6E8EF;
+    --thb-text-2:         #B4BAC8;
+    --thb-muted:          #9AA3B2;
+
+    --thb-brand:          #8B7CFF;
+    --thb-brand-hover:    #9C90FF;
+    --thb-brand-on:       #12101F;
+    --thb-brand-soft:     #241F45;
+
+    --thb-up:             #22C55E;
+    --thb-up-soft:        #11291B;
+    --thb-down:           #F05252;
+    --thb-down-soft:      #2C1517;
+    --thb-warn:           #F59E0B;
+    --thb-warn-soft:      #2A1F0C;
+    --thb-neutral:        #9AA3B2;
+    --thb-neutral-soft:   #1E2434;
+
+    --thb-grid:           #1D2331;
+    --thb-axis:           #6B7280;
+    --thb-volume:         #2A3145;
+    --thb-crosshair:      #6B7280;
+
+    --thb-shadow-sm: 0 1px 2px rgba(0, 0, 0, .28);
+    --thb-shadow:    0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .22);
+    --thb-shadow-lg: 0 4px 14px rgba(0, 0, 0, .4), 0 2px 4px rgba(0, 0, 0, .25);
+  }
+}
