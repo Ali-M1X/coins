@@ -258,6 +258,47 @@ foreach ($imgs[0] as $img) {
 }
 ok($missingAlt === 0, 'every <img> carries alt text (' . count($imgs[0]) . ' images checked)');
 
+/* =====================================================================
+ * 6. The classic design is FROZEN
+ *
+ * The v2 design is being built beside the classic one, and the brief is
+ * explicit that the classic templates, CSS and JS must not change. Asserting
+ * that a few sections are present would let a changed class name, a moved
+ * figure or a restyled card through. So the whole rendered page is compared
+ * byte for byte with a snapshot taken before the v2 work began, and every
+ * classic template, stylesheet and script is pinned by hash.
+ *
+ * To deliberately change the classic design later, regenerate with
+ * THB_UPDATE_GOLDEN=1 and review the diff in the commit.
+ * ================================================================== */
+section('classic design frozen');
+
+require_once __DIR__ . '/golden-normalize.php';
+$goldenPath = __DIR__ . '/golden/classic.html';
+$current = thb_golden_normalize($html);
+
+if (getenv('THB_UPDATE_GOLDEN')) {
+    file_put_contents($goldenPath, $current);
+    echo "  (golden updated)\n";
+}
+$golden = (string) file_get_contents($goldenPath);
+ok($current === $golden,
+   'the classic page renders BYTE-IDENTICAL to the pre-v2 snapshot (' . number_format(strlen($golden)) . ' bytes)'
+   . ($current === $golden ? '' : ' — first difference near byte ' . strspn($current ^ $golden, "\0")));
+
+$manifest = file(__DIR__ . '/golden/classic-files.sha256', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+$changed = [];
+foreach ($manifest as $row) {
+    [$hash, $file] = preg_split('/\s+/', trim($row), 2);
+    $path = __DIR__ . '/../thehybit-coins/' . $file;
+    if (!is_file($path) || hash_file('sha256', $path) !== $hash) {
+        $changed[] = $file;
+    }
+}
+ok(count($manifest) > 20, 'the classic file manifest pins ' . count($manifest) . ' templates, stylesheets and scripts');
+ok($changed === [], 'none of them has changed' . ($changed ? ': ' . implode(', ', $changed) : ''));
+
+
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);
 }
