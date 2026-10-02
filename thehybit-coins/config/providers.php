@@ -78,6 +78,17 @@ return [
         'staking'     => 30 * MINUTE_IN_SECONDS,
         'supply'      => HOUR_IN_SECONDS,
         'development' => 6 * HOUR_IN_SECONDS,
+
+        /* v2 design. None of these reaches the classic page: they are read by
+           includes/V2/Model.php straight from the cache, and the classic view
+           model never sees them.
+
+           Peers move with the market but feed a comparison, not a ticker;
+           protocol fees are daily totals; the multi-year price history is
+           weekly points, so asking more than daily cannot change it. */
+        'peers'       => 30 * MINUTE_IN_SECONDS,
+        'protocols'   => HOUR_IN_SECONDS,
+        'longchart'   => DAY_IN_SECONDS,
     ],
 
     /* ------------------------------------------------------------------
@@ -197,7 +208,28 @@ return [
         'network'     => ['provider' => 'blockchair',  'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
         'staking'     => ['provider' => 'beaconchain', 'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
         'development' => ['provider' => 'github',      'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
+
+        /* ---- v2 design ---------------------------------------------------
+         *
+         * Cache-only like Group A and B, so the v2 page costs exactly what the
+         * classic page costs to render. `peers` is ONE /coins/markets request
+         * for the whole comparison list, site-wide; `protocols` is the fee
+         * breakdown DefiLlama publishes per chain; `longchart` is the weekly
+         * price since launch, which CoinGecko's free tier no longer serves
+         * beyond 365 days. */
+        'peers'       => ['provider' => 'coingecko',   'scope' => 'site',  'priority' => 4, 'render' => 'cache'],
+        'protocols'   => ['provider' => 'defillama',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
+        'longchart'   => ['provider' => 'llamaprices', 'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
     ],
+
+    /* ------------------------------------------------------------------
+     * Peer comparison (v2). CoinGecko ids, in display order.
+     *
+     * Configuration, not code: which coins a reader compares against is an
+     * editorial choice. One /coins/markets request returns all of them, so
+     * the list can grow to 250 without costing a second request.
+     * ---------------------------------------------------------------- */
+    'peers' => ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'cardano', 'avalanche-2', 'tron', 'sui'],
 
     /* ------------------------------------------------------------------
      * SCHEDULER — bounded work per tick.
@@ -333,7 +365,7 @@ return [
                the limit; the cache serves its last good data meanwhile. A
                Retry-After header, when sent, wins over this default. */
             'cooldown'  => 5 * MINUTE_IN_SECONDS,
-            'datasets'  => ['market', 'chart', 'metadata', 'historical', 'global', 'categories', 'structure'],
+            'datasets'  => ['market', 'chart', 'metadata', 'historical', 'global', 'categories', 'structure', 'peers'],
         ],
 
         'defillama' => [
@@ -346,7 +378,7 @@ return [
             /* NOT MEASURED. A conservative placeholder until the provider
                probe reports this host's real behaviour for it. */
             'budget'   => ['per_minute' => 30, 'per_hour' => 1200, 'per_day' => 20000],
-            'datasets' => ['defi', 'chains', 'stablecoins', 'bridges'],
+            'datasets' => ['defi', 'chains', 'stablecoins', 'bridges', 'protocols'],
 
             /* DefiLlama is several APIs on several hostnames. The TVL and fee
                endpoints live on api.llama.fi; stablecoins and bridges do not,
@@ -515,6 +547,23 @@ return [
                seven. See Coin.php. */
             'slugs'    => ['Ethereum' => 'ethereum', 'Bitcoin' => 'bitcoin'],
             'datasets' => ['network'],
+        ],
+
+        /* v2's price-since-launch chart. DefiLlama's price API, as its own
+           provider so a coin's DeFi switch (off for Bitcoin) cannot take the
+           price history down with it. Keyless. One request per coin per day. */
+        'llamaprices' => [
+            'label'    => 'DefiLlama Prices',
+            'enabled'  => true,
+            'base'     => 'https://coins.llama.fi',
+            'timeout'  => 12,
+            'headers'  => [],
+            'min_interval' => 1,
+            /* NOT MEASURED. A conservative placeholder until the provider
+               probe reports this host's real behaviour for it. */
+            'budget'   => ['per_minute' => 6, 'per_hour' => 60, 'per_day' => 600],
+            'cooldown' => 5 * MINUTE_IN_SECONDS,
+            'datasets' => ['longchart'],
         ],
 
         'github' => [

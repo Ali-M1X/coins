@@ -1,0 +1,103 @@
+<?php
+/**
+ * Screen 9 — supply & real risk. Reference: 10.png.
+ *
+ * WHAT IS MEASURED: the staked share and the cumulative burn (Etherscan's
+ * supply endpoint), the staking APR (beaconcha.in), distance from the
+ * all-time high, 30-day volatility and the 90-day correlation with Bitcoin
+ * (CoinGecko series), venue concentration (CoinGecko tickers).
+ *
+ * WHAT IS NOT: how much sits on exchanges, in DeFi contracts, in bridges or in
+ * long-term wallets. Those need labelled-address datasets that are sold, not
+ * published. They are listed by name as unavailable. Real yield needs an
+ * inflation rate, which needs two supply readings far enough apart; until the
+ * history table has them, only the APR is shown.
+ */
+use TheHybit\Coins\Format;
+use TheHybit\Coins\V2\View;
+defined('ABSPATH') || exit;
+
+$s = $v['supply'];
+$c = $v['coin'];
+?>
+<section class="v2-section v2-supply" id="supply" aria-labelledby="supply-title">
+  <?= View::heading('supply', 'تامین و ریسک واقعی', 'چه بخشی از عرضه کجاست، و این دارایی امروز چقدر پرریسک است') ?>
+
+  <div class="v2-supply__grid">
+    <div class="v2-card v2-dist">
+      <h3 class="v2-card__title">توزیع عرضه</h3>
+      <?php if ($s['slices'] !== []) : ?>
+        <ul class="v2-dist__bars">
+          <?php foreach ($s['slices'] as $sl) : ?>
+            <li>
+              <span class="v2-dist__label"><?= esc_html($sl['label']) ?></span>
+              <span class="v2-dist__track"><span class="v2-dist__fill v2-t--<?= esc_attr($sl['tone']) ?>" style="--w: <?= round(min(100, max(0.5, $sl['pct'])), 2) ?>%"></span></span>
+              <span class="v2-dist__pct"><?= View::n(Format::pct($sl['pct'], false, 1)) ?></span>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php else : ?>
+        <?= View::na($s['state'], $s['state'] === 'disabled' ? 'کلید Etherscan در تنظیمات افزونه وارد نشده است' : null) ?>
+      <?php endif; ?>
+      <ul class="v2-dist__missing">
+        <?php foreach ($s['missing'] as $m) : ?>
+          <li><span><?= esc_html($m) ?></span> <?= View::na('unavailable') ?></li>
+        <?php endforeach; ?>
+      </ul>
+      <p class="v2-muted">سهم دارایی روی صرافی‌ها، در دیفای، در پل‌ها و در کیف پول‌های بلندمدت به داده برچسب‌دار آدرس‌ها نیاز دارد که منبع رایگانی ندارد.</p>
+    </div>
+
+    <div class="v2-card v2-yield">
+      <h3 class="v2-card__title">بازده واقعی</h3>
+      <?php if ($s['apr'] !== null) : ?>
+        <p class="v2-yield__eq">بازده استیکینگ (APR) <?= View::n(Format::pct($s['apr'], false, 2)) ?> − تورم عرضه <span class="v2-muted">؟</span></p>
+        <p class="v2-yield__big"><?= View::n(Format::pct($s['apr'], false, 2)) ?></p>
+        <p class="v2-muted">بازده اسمی استیکینگ<?= $s['validators'] ? ' · ' . View::n(Format::num((float) $s['validators'], 0)) . ' اعتبارسنج' : '' ?></p>
+        <?= View::na('unavailable', 'بازده واقعی = APR منهای تورم. نرخ تورم به دو اندازه‌گیری عرضه با فاصله زمانی نیاز دارد که هنوز در تاریخچه افزونه جمع نشده است.') ?>
+        <?= View::source('beaconcha.in') ?>
+      <?php else : ?>
+        <?= View::na($s['aprState'], $s['aprState'] === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : ($s['aprState'] === 'disabled' ? 'کلید beaconcha.in در تنظیمات افزونه وارد نشده است' : null)) ?>
+      <?php endif; ?>
+    </div>
+
+    <div class="v2-card v2-cockpit">
+      <h3 class="v2-card__title">کابین ریسک</h3>
+      <ul class="v2-cockpit__list">
+        <?php foreach ($s['risk'] as $r) : ?>
+          <li>
+            <div>
+              <span class="v2-cockpit__label"><?= esc_html($r['label']) ?></span>
+              <?php if ($r['value'] !== null) : ?>
+                <span class="v2-cockpit__value"><?= View::n($r['value']) ?></span>
+              <?php else : ?>
+                <?= View::na('unavailable', $r['note']) ?>
+              <?php endif; ?>
+            </div>
+            <?php if ($r['toneFa']) : ?><span class="v2-pill v2-pill--<?= esc_attr($r['tone']) ?>"><?= esc_html($r['toneFa']) ?></span><?php endif; ?>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+  </div>
+
+  <div class="v2-card v2-audience">
+    <h3 class="v2-card__title">این کوین برای کیست؟</h3>
+    <?php if ($s['audience'] !== []) : ?>
+      <ul class="v2-audience__list">
+        <?php foreach ($s['audience'] as $i => $a) : ?>
+          <li>
+            <span class="v2-audience__icon v2-t--<?= ['amber', 'blue', 'teal'][$i % 3] ?>" aria-hidden="true"><?= esc_html(mb_substr($a['who'], 0, 1)) ?></span>
+            <div>
+              <h4><?= esc_html($a['who']) ?></h4>
+              <p>تناسب: <strong><?= esc_html($a['fit']) ?></strong></p>
+              <?php if ($a['text'] !== '') : ?><p class="v2-muted"><?= esc_html($a['text']) ?></p><?php endif; ?>
+            </div>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+      <p class="v2-muted">نظر تحریریه <?= esc_html($v['brand']) ?>؛ بر پایه داده نیست و توصیه سرمایه‌گذاری هم نیست.</p>
+    <?php else : ?>
+      <?= View::na('unavailable', 'این بخش هنوز توسط تحریریه نوشته نشده است') ?>
+    <?php endif; ?>
+  </div>
+</section>

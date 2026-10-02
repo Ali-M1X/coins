@@ -302,6 +302,36 @@ final class ProviderProbe
                 'expects'  => ['0.sha', '0.commit.author.date'],
             ],
 
+            /* ---------------- v2 design ---------------- */
+            [
+                'provider' => 'coingecko',
+                'label'    => 'peer comparison (in use — v2 peers)',
+                'url'      => 'https://api.coingecko.com/api/v3/coins/markets',
+                'query'    => [
+                    'vs_currency' => 'usd', 'ids' => 'bitcoin,ethereum,solana',
+                    'sparkline' => 'true', 'price_change_percentage' => '24h,7d,30d,1y',
+                ],
+                'needsKey' => false,
+                'expects'  => ['0.market_cap', '0.total_volume', '0.price_change_percentage_30d_in_currency', '0.sparkline_in_7d.price'],
+            ],
+            [
+                'provider' => 'defillama',
+                'label'    => 'fees by protocol (in use — v2 protocols)',
+                'url'      => 'https://api.llama.fi/overview/fees/Ethereum',
+                'query'    => ['excludeTotalDataChart' => 'true', 'excludeTotalDataChartBreakdown' => 'true'],
+                'needsKey' => false,
+                'expects'  => ['protocols.0.name', 'protocols.0.category', 'protocols.0.total24h'],
+            ],
+            [
+                'provider' => 'llamaprices',
+                'label'    => 'weekly price since launch (in use — v2 longchart)',
+                'url'      => 'https://coins.llama.fi/chart/coingecko:ethereum',
+                'query'    => ['start' => '1438387200', 'span' => '520', 'period' => '1w'],
+                'needsKey' => false,
+                'expects'  => ['coins.coingecko:ethereum.prices.0.timestamp', 'coins.coingecko:ethereum.prices.0.price'],
+                'note'     => 'confirms how many weekly points one request may return (span is capped at 600 in the collector)',
+            ],
+
             /* ---------------- alternative.me ---------------- */
             [
                 'provider' => 'alternative',

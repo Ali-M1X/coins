@@ -82,9 +82,15 @@ THB_DUMP_HTML="$PWD/classic.html" \
   run "Template render — the classic page" \
       php tools/template-render.test.php
 
+THB_DUMP_HTML="$PWD/v2.html" \
+  run "Design v2 — switch, screens, no invented figures, request cost" \
+      php tools/v2-render.test.php
+
 if [ -f node_modules/playwright/package.json ]; then
   run "Browser — RTL, responsive, progressive enhancement" \
       node tools/dom.test.mjs
+  run "Browser — v2 at 1440/1120/768/390/360, interactions" \
+      node tools/dom-v2.test.mjs
 else
   echo
   echo "  SKIPPED: browser tests (run 'npm install playwright' first)"

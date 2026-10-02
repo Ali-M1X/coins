@@ -18,7 +18,7 @@ final class DefiLlama extends Collector
 {
     public function id(): string { return 'defillama'; }
 
-    public function datasets(): array { return ['defi', 'chains', 'stablecoins', 'bridges']; }
+    public function datasets(): array { return ['defi', 'chains', 'stablecoins', 'bridges', 'protocols']; }
 
     public function fetch(Coin $coin, string $dataset): ?array
     {
@@ -27,6 +27,7 @@ final class DefiLlama extends Collector
             'chains'      => $this->chains(),
             'stablecoins' => $this->stablecoins(),
             'bridges'     => $this->bridges($coin),
+            'protocols'   => $this->protocols($coin),
             default       => null,
         };
     }
@@ -299,6 +300,77 @@ final class DefiLlama extends Collector
             'revenue7d'        => $num('totalRevenue7d'),
             'revenue30d'       => $num('totalRevenue30d'),
         ];
+    }
+
+    /* ------------------------------------------------------------------
+     * v2 design. Neither dataset reaches the classic view model.
+     * ---------------------------------------------------------------- */
+
+    /**
+     * Which protocols earn the fees on this chain, and the chain's weekly TVL.
+     *
+     * The fee overview is the SAME endpoint fees() calls, asked to keep its
+     * per-protocol rows — the classic dataset discards them, and changing what
+     * it stores would change the classic page. A separate, slower dataset keeps
+     * the two apart. Fees rather than TVL rank the ecosystem graph because
+     * they are what users actually paid in the last day: a measure of use, not
+     * of parked capital.
+     */
+    private function protocols(Coin $coin): ?array
+    {
+        $chain = self::chainOf($coin);
+
+        $d = $this->get('/overview/fees/' . rawurlencode($chain), [
+            'excludeTotalDataChart'          => 'true',
+            'excludeTotalDataChartBreakdown' => 'true',
+        ]);
+        $rows = is_array($d['protocols'] ?? null) ? $d['protocols'] : [];
+
+        $protocols = [];
+        foreach ($rows as $r) {
+            if (!is_array($r) || !isset($r['total24h']) || !is_numeric($r['total24h']) || (float) $r['total24h'] <= 0) {
+                continue;   // no fee figure, nothing to place on the graph
+            }
+            $name = (string) ($r['displayName'] ?? $r['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $protocols[] = [
+                'name'     => $name,
+                'slug'     => (string) ($r['slug'] ?? $r['module'] ?? ''),
+                'category' => (string) ($r['category'] ?? ''),
+                'fees24h'  => (float) $r['total24h'],
+                'fees7d'   => isset($r['total7d']) && is_numeric($r['total7d']) ? (float) $r['total7d'] : null,
+                'change1d' => isset($r['change_1d']) && is_numeric($r['change_1d']) ? (float) $r['change_1d'] : null,
+                'logo'     => is_string($r['logo'] ?? null) ? $r['logo'] : null,
+            ];
+        }
+        usort($protocols, static fn($a, $b) => $b['fees24h'] <=> $a['fees24h']);
+        $protocols = array_slice($protocols, 0, 30);
+
+        /* Weekly TVL since launch: the same daily history defi() reads, kept at
+           one point in seven. It is the TVL layer of the price-as-story chart. */
+        $weekly = [];
+        try {
+            $series = $this->get('/v2/historicalChainTvl/' . rawurlencode($chain));
+            if (is_array($series)) {
+                $series = array_values($series);
+                $n = count($series);
+                for ($i = ($n - 1) % 7; $i < $n; $i += 7) {
+                    $p = $series[$i];
+                    if (isset($p['date'], $p['tvl']) && is_numeric($p['tvl'])) {
+                        $weekly[] = [(int) $p['date'], round((float) $p['tvl'])];
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // The protocol list still stands on its own.
+        }
+
+        if ($protocols === [] && $weekly === []) {
+            return null;
+        }
+        return ['protocols' => $protocols, 'tvlWeekly' => $weekly];
     }
 
     private static function tail(array $series, int $n): array

@@ -21,7 +21,7 @@ final class CoinGecko extends Collector
 
     public function datasets(): array
     {
-        return ['market', 'chart', 'metadata', 'historical', 'global', 'categories', 'structure'];
+        return ['market', 'chart', 'metadata', 'historical', 'global', 'categories', 'structure', 'peers'];
     }
 
     public function fetch(Coin $coin, string $dataset): ?array
@@ -40,6 +40,7 @@ final class CoinGecko extends Collector
             'global'     => $this->globalMarket(),
             'categories' => $this->categories(),
             'structure'  => $this->structure($coin),
+            'peers'      => $this->peers(),
             default      => null,
         };
     }
@@ -372,6 +373,76 @@ final class CoinGecko extends Collector
                 // 90d is absent here too; Pipeline fills it from chart.90d.
             ],
         ];
+    }
+
+    /**
+     * The v2 peer comparison — every configured peer in ONE request, site-wide.
+     *
+     * The same /coins/markets endpoint the batched price refresh uses, asked for
+     * a fixed list from config rather than for the site's own coins, so a peer
+     * the site has no page for (Solana, say) can still be compared against.
+     *
+     * The 7-day sparkline is kept, thinned to 42 points: it is what the page's
+     * volatility column is computed from, and 168 hourly points per peer would
+     * be most of the payload for a figure that needs a few dozen.
+     */
+    private function peers(): ?array
+    {
+        $ids = array_values(array_filter(array_map('strval', (array) ($this->config['peers'] ?? []))));
+        if ($ids === []) {
+            return null;
+        }
+
+        $rows = $this->get('/coins/markets', [
+            'vs_currency'             => 'usd',
+            'ids'                     => implode(',', $ids),
+            'sparkline'               => 'true',
+            'price_change_percentage' => '24h,7d,30d,1y',
+            'per_page'                => (string) min(250, count($ids)),
+            'page'                    => '1',
+        ]);
+        if (!is_array($rows)) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r) || empty($r['id']) || !isset($r['market_cap']) || !is_numeric($r['market_cap'])) {
+                continue;   // a peer with no market cap cannot be placed on the chart
+            }
+            $num = static fn(string $key): ?float =>
+                isset($r[$key]) && is_numeric($r[$key]) ? (float) $r[$key] : null;
+
+            $spark = array_values(array_filter(
+                (array) ($r['sparkline_in_7d']['price'] ?? []),
+                'is_numeric'
+            ));
+            $step = max(1, (int) floor(count($spark) / 42));
+            $thin = [];
+            for ($i = 0; $i < count($spark); $i += $step) {
+                $thin[] = round((float) $spark[$i], 8);
+            }
+
+            $out[] = [
+                'id'        => (string) $r['id'],
+                'symbol'    => strtoupper((string) ($r['symbol'] ?? '')),
+                'name'      => (string) ($r['name'] ?? $r['id']),
+                'image'     => is_string($r['image'] ?? null) ? $r['image'] : null,
+                'rank'      => isset($r['market_cap_rank']) && is_numeric($r['market_cap_rank'])
+                    ? (int) $r['market_cap_rank'] : null,
+                'price'     => $num('current_price'),
+                'marketCap' => $num('market_cap'),
+                'volume24h' => $num('total_volume'),
+                'change24h' => $num('price_change_percentage_24h_in_currency') ?? $num('price_change_percentage_24h'),
+                'change7d'  => $num('price_change_percentage_7d_in_currency'),
+                'change30d' => $num('price_change_percentage_30d_in_currency'),
+                'change1y'  => $num('price_change_percentage_1y_in_currency'),
+                'athChange' => $num('ath_change_percentage'),
+                'sparkline' => $thin,
+            ];
+        }
+
+        return $out === [] ? null : ['peers' => $out];
     }
 
     /** Per-request memo of /coins/{id}, keyed by CoinGecko id. */

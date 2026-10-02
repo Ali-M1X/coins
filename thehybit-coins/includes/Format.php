@@ -142,6 +142,23 @@ final class Format
         return self::jalali($iso, false);
     }
 
+    /** Jalali with the year, "10 مهر 1405" — the v2 daily pulse's dateline. */
+    public static function jalaliLong(?string $iso): string
+    {
+        return self::jalali($iso, true);
+    }
+
+    /** Wall-clock time in Tehran, "07:15" — when a figure was fetched. */
+    public static function tehranTime(?string $iso): string
+    {
+        $ts = self::stamp($iso);
+        if ($ts === null) {
+            return self::EMPTY;
+        }
+        $d = (new \DateTimeImmutable('@' . $ts))->setTimezone(new \DateTimeZone('Asia/Tehran'));
+        return self::digits($d->format('H:i'));
+    }
+
     /** Gregorian in Persian script, "30 ژوئیه 2015" — historical records. */
     public static function gregorianFa(?string $iso): string
     {

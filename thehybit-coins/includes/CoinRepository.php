@@ -57,6 +57,14 @@ final class CoinRepository
         'thb_dex_symbols'         => 'meta.dexSymbols',
         'thb_github_repo'         => 'meta.githubRepo',
 
+        // v2 editorial content — written by an editor, never fetched. Each is
+        // plain text with one entry per line; includes/V2/Model.php parses it.
+        'thb_tagline'             => 'meta.tagline',
+        'thb_timeline'            => 'meta.timeline',
+        'thb_learn'               => 'meta.learn',
+        'thb_audience'            => 'meta.audience',
+        'thb_faq'                 => 'meta.faq',
+
         // per-coin provider toggles
         'thb_enable_defi'         => 'flags.defillama',
         'thb_enable_dex'          => 'flags.dexscreener',

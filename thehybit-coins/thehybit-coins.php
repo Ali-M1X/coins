@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     1.9.0
+ * Version:     2.0.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '1.9.0');
+define('THB_COINS_VERSION', '2.0.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -47,6 +47,7 @@ require_once THB_COINS_DIR . 'includes/ProviderProbe.php';
 require_once THB_COINS_DIR . 'includes/Diagnostics.php';
 require_once THB_COINS_DIR . 'includes/V2/Svg.php';
 require_once THB_COINS_DIR . 'includes/V2/Model.php';
+require_once THB_COINS_DIR . 'includes/V2/View.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Collector.php';
 require_once THB_COINS_DIR . 'includes/Collectors/CoinGecko.php';
 require_once THB_COINS_DIR . 'includes/Collectors/DefiLlama.php';
@@ -59,6 +60,7 @@ require_once THB_COINS_DIR . 'includes/Collectors/Etherscan.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Blockchair.php';
 require_once THB_COINS_DIR . 'includes/Collectors/BeaconChain.php';
 require_once THB_COINS_DIR . 'includes/Collectors/GitHub.php';
+require_once THB_COINS_DIR . 'includes/Collectors/LlamaPrices.php';
 
 final class Plugin
 {
@@ -100,6 +102,7 @@ final class Plugin
             Collectors\Blockchair::class,
             Collectors\BeaconChain::class,
             Collectors\GitHub::class,
+            Collectors\LlamaPrices::class,
         ] as $class) {
             $this->pipeline->register(new $class($this->config));
         }

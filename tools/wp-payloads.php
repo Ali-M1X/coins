@@ -37,6 +37,15 @@ function probe_payload(string $url): array
         return (array) $GLOBALS['thb_probe_override'];
     }
 
+    /* The SHOWCASE scenario, used only to take design screenshots: series with
+       a shape a human can judge a chart by. Never used by an assertion. */
+    if (($GLOBALS['thb_probe_scenario'] ?? '') === 'showcase' && function_exists('showcase_payload')) {
+        $shown = showcase_payload($url);
+        if ($shown !== null) {
+            return $shown;
+        }
+    }
+
     $path = parse_url($url, PHP_URL_PATH) ?: '';
     parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
 
@@ -237,7 +246,31 @@ function probe_payload(string $url): array
             'total24h' => 1.26e7, 'total7d' => 8.9e7, 'total30d' => 3.6e8,
             'change_1d' => 15.3, 'change_7d' => -4.2, 'change_1m' => 9.1,
             'totalRevenue24h' => 4.1e6, 'totalRevenue7d' => 2.8e7, 'totalRevenue30d' => 1.1e8,
+            /* Per-protocol rows. The classic `defi` dataset ignores them; the v2
+               `protocols` dataset keeps them. Two must be discarded: one with no
+               fee figure and one with no name. */
+            'protocols' => [
+                ['name' => 'uniswap', 'displayName' => 'Uniswap V3', 'slug' => 'uniswap-v3', 'category' => 'Dexs', 'total24h' => 2.1e6, 'total7d' => 1.4e7, 'change_1d' => 4.2, 'logo' => 'https://icons.llama.fi/uniswap.png'],
+                ['name' => 'lido', 'displayName' => 'Lido', 'slug' => 'lido', 'category' => 'Liquid Staking', 'total24h' => 1.9e6, 'total7d' => 1.3e7, 'change_1d' => 0.4],
+                ['name' => 'aave', 'displayName' => 'Aave V3', 'slug' => 'aave-v3', 'category' => 'Lending', 'total24h' => 1.2e6, 'total7d' => 8.1e6, 'change_1d' => -2.1],
+                ['name' => 'opensea', 'displayName' => 'OpenSea', 'slug' => 'opensea', 'category' => 'NFT Marketplace', 'total24h' => 2.4e5, 'change_1d' => 7.5],
+                ['name' => 'arbitrum', 'displayName' => 'Arbitrum', 'slug' => 'arbitrum', 'category' => 'Rollup', 'total24h' => 1.6e5, 'change_1d' => 1.0],
+                ['name' => 'nofee', 'displayName' => 'No Fee', 'category' => 'Dexs', 'total24h' => null],
+                ['name' => '', 'category' => 'Dexs', 'total24h' => 5.0e4],
+            ],
         ];
+    }
+
+    /* ---- DefiLlama prices: weekly history since `start` ---- */
+    if (str_contains($path, '/chart/coingecko')) {
+        $key = rawurldecode(substr($path, strpos($path, '/chart/') + 7));
+        $start = (int) ($q['start'] ?? 0);
+        $span = (int) ($q['span'] ?? 0);
+        $prices = [];
+        for ($i = 0; $i < $span; $i++) {
+            $prices[] = ['timestamp' => $start + $i * 604800, 'price' => 100 + $i * 5];
+        }
+        return ['coins' => [$key => ['symbol' => 'X', 'confidence' => 0.99, 'prices' => $prices]]];
     }
 
     if (str_contains($path, '/v2/chains')) {

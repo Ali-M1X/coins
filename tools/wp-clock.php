@@ -44,6 +44,10 @@ namespace TheHybit\Coins {
     function time(): int { return \Clock::$now; }
 }
 
+namespace TheHybit\Coins\V2 {
+    function time(): int { return \Clock::$now; }
+}
+
 namespace TheHybit\Coins\Collectors {
     function time(): int { return \Clock::$now; }
 

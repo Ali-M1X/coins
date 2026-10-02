@@ -351,6 +351,62 @@
             }
         },
         {
+            "key": "field_thb_tab_v2",
+            "label": "طراحی جدید (v2)",
+            "name": "",
+            "type": "tab",
+            "placement": "top"
+        },
+        {
+            "key": "field_thb_tagline",
+            "label": "شعار کوتاه",
+            "name": "thb_tagline",
+            "type": "text",
+            "instructions": "یک جمله زیر نام ارز در طراحی جدید. خالی = نمایش داده نمی‌شود.",
+            "required": 0,
+            "maxlength": 90
+        },
+        {
+            "key": "field_thb_timeline",
+            "label": "داستان (رویدادها)",
+            "name": "thb_timeline",
+            "type": "textarea",
+            "instructions": "هر خط یک رویداد: «تاریخ | عنوان | توضیح». تاریخ به شکل 2015 یا 2015-07-30 باشد. رویدادهایی که روز کامل دارند روی نمودار «قیمت به‌روایت» هم علامت می‌خورند.",
+            "required": 0,
+            "rows": 8,
+            "new_lines": ""
+        },
+        {
+            "key": "field_thb_learn",
+            "label": "یادگیری در ۶۰ ثانیه",
+            "name": "thb_learn",
+            "type": "textarea",
+            "instructions": "هر خط یک کارت: «عنوان | توضیح کوتاه». حداکثر پنج کارت نمایش داده می‌شود.",
+            "required": 0,
+            "rows": 6,
+            "new_lines": ""
+        },
+        {
+            "key": "field_thb_audience",
+            "label": "این کوین برای کیست",
+            "name": "thb_audience",
+            "type": "textarea",
+            "instructions": "هر خط: «مخاطب | میزان تناسب | توضیح». میزان تناسب متن آزاد است (مثلاً «زیاد»). این بخش نظر تحریریه است و روی صفحه همین را می‌گوید.",
+            "required": 0,
+            "rows": 4,
+            "new_lines": ""
+        },
+        {
+            "key": "field_thb_faq",
+            "label": "پرسش‌های متداول",
+            "name": "thb_faq",
+            "type": "textarea",
+            "instructions": "هر خط: «پرسش | پاسخ». در صفحه و در داده ساختاریافته FAQPage استفاده می‌شود.",
+            "required": 0,
+            "rows": 8,
+            "new_lines": ""
+        },
+        {
             "key": "field_thb_tab_overrides",
             "label": "بازنویسی دستی",
             "name": "",
@@ -432,5 +488,5 @@
     "active": true,
     "description": "پیکربندی هر ارز. شناسه‌ها عمداً از هم جدا هستند: اسلاگ وردپرس، نماد، شناسه CoinGecko و اسلاگ دسته اخبار.",
     "show_in_rest": 0,
-    "modified": 1786000001
+    "modified": 1786000002
 }

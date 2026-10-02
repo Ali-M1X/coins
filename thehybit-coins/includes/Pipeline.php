@@ -66,6 +66,20 @@ final class Pipeline
         'development' => 'github',
     ];
 
+    /**
+     * Datasets only the v2 design reads.
+     *
+     * Kept OUT of DATASETS on purpose: build() walks that list to assemble the
+     * classic view model, and the classic page must not change by a byte. The
+     * scheduler still warms these through warm(), and includes/V2/Model.php
+     * reads them straight from the cache.
+     */
+    public const V2_DATASETS = [
+        'peers'     => 'coingecko',
+        'protocols' => 'defillama',
+        'longchart' => 'llamaprices',
+    ];
+
     /** @var Collector[] keyed by provider id */
     private array $collectors = [];
 
@@ -149,7 +163,7 @@ final class Pipeline
             return;
         }
 
-        $providerId = self::DATASETS[$dataset] ?? null;
+        $providerId = self::DATASETS[$dataset] ?? self::V2_DATASETS[$dataset] ?? null;
         if ($providerId === null) {
             return;
         }
