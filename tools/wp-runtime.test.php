@@ -728,6 +728,9 @@ $gas = (new C\Etherscan($config))->fetch($eth, 'gas');
 ok($gas['safe'] === 12.0 && $gas['propose'] === 14.0 && $gas['fast'] === 16.0,
    'gas: the three tiers a wallet shows, passed through rather than averaged');
 ok(abs((float) $gas['baseFee'] - 11.913) < 1e-9, 'and the base fee');
+ok(Probe::count('etherscan.io/v2/api?chainid=1&') === 1,
+   'requested from the V2 multichain API with chainid=1 — V1 was deprecated by Etherscan');
+ok(Probe::count('etherscan.io/api?') === 0, 'and never from the old V1 path');
 
 freeBudget($config);
 $supply = (new C\Etherscan($config))->fetch($eth, 'supply');

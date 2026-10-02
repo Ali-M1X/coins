@@ -45,11 +45,24 @@ final class Etherscan extends Collector
 
     public function fetch(Coin $coin, string $dataset): ?array
     {
+        $chainId = $this->chainIdFor($coin);
+        if ($chainId === null) {
+            return null;   // a chain this explorer does not serve: never asked
+        }
+
         return match ($dataset) {
-            'gas'    => $this->gas(),
-            'supply' => $this->supply(),
+            'gas'    => $this->gas($chainId),
+            'supply' => $this->supply($chainId),
             default  => null,
         };
+    }
+
+    /** Etherscan's numeric id for the coin's chain, from configuration. */
+    private function chainIdFor(Coin $coin): ?int
+    {
+        $map = (array) ($this->settings()['chainids'] ?? []);
+        $chain = (string) $coin->meta('defillamaChain', '');
+        return isset($map[$chain]) ? (int) $map[$chain] : null;
     }
 
     /**
@@ -59,9 +72,9 @@ final class Etherscan extends Collector
      * they are passed through as they come rather than averaged into one
      * number that matches nothing anybody else displays.
      */
-    private function gas(): ?array
+    private function gas(int $chainId): ?array
     {
-        $d = $this->result($this->get('/api', ['module' => 'gastracker', 'action' => 'gasoracle']));
+        $d = $this->result($this->get('/api', ['chainid' => $chainId, 'module' => 'gastracker', 'action' => 'gasoracle']));
         if (!is_array($d)) {
             return null;
         }
@@ -91,9 +104,15 @@ final class Etherscan extends Collector
      * long-term wallets) needs labelled-address data that only paid providers
      * sell, so the page reports those as unavailable rather than estimating.
      */
-    private function supply(): ?array
+    private function supply(int $chainId): ?array
     {
-        $d = $this->result($this->get('/api', ['module' => 'stats', 'action' => 'ethsupply2']));
+        /* ethsupply2 is Ethereum-specific — burn and beacon-chain staking are
+           Ethereum concepts — so it is asked only for chain id 1 even if more
+           EVM chains are later mapped for gas. */
+        if ($chainId !== 1) {
+            return null;
+        }
+        $d = $this->result($this->get('/api', ['chainid' => $chainId, 'module' => 'stats', 'action' => 'ethsupply2']));
         if (!is_array($d)) {
             return null;
         }

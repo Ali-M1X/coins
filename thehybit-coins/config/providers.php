@@ -452,7 +452,12 @@ return [
         'etherscan' => [
             'label'    => 'Etherscan',
             'enabled'  => true,
-            'base'     => 'https://api.etherscan.io',
+            /* The V2 MULTICHAIN API. V1 (`/api` with no chain id) was deprecated
+               by Etherscan, so a key may be refused there. V2 takes the same
+               module/action parameters plus a `chainid`, which comes from the
+               map below — adding another EVM chain is a line here, not code. */
+            'base'     => 'https://api.etherscan.io/v2',
+            'chainids' => ['Ethereum' => 1],
             'timeout'  => 10,
             'headers'  => [],
             'min_interval' => 1,
