@@ -581,6 +581,7 @@ function absint($v): int { return abs((int) $v); }
 function number_format_i18n($n, int $decimals = 0): string { return number_format((float) $n, $decimals); }
 function size_format($bytes, $decimals = 0) { return round(((int) $bytes) / 1024) . ' KB'; }
 function home_url(string $p = '/'): string { return 'https://thehybit.com' . $p; }
+function get_bloginfo(string $show = ''): string { return $show === 'name' ? ($GLOBALS['thb_blogname'] ?? 'های‌بیت') : ''; }
 function site_url(string $p = ''): string { return 'https://thehybit.com/' . ltrim($p, '/'); }
 function admin_url(string $p = ''): string { return 'https://thehybit.com/wp-admin/' . ltrim($p, '/'); }
 function add_query_arg(array $args, string $url = ''): string

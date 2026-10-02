@@ -204,6 +204,26 @@ final class Settings
             $stored[$setting] = preg_replace('/[^A-Za-z0-9_\-]/', '', $submitted) ?? '';
         }
 
+        /* ---- display options ---- */
+        if (isset($_POST['design'])) {
+            $design = sanitize_key(wp_unslash((string) $_POST['design']));
+            if (isset(Design::choices()[$design])) {
+                $stored['design'] = $design;
+            }
+        }
+
+        if (isset($_POST['trade_url'])) {
+            $trade = trim((string) wp_unslash($_POST['trade_url']));
+            /* https only, and only the two placeholders documented on the
+               screen. Anything else is dropped rather than half-trusted: this
+               URL becomes a button on every coin page. */
+            if ($trade === '') {
+                unset($stored['trade_url']);
+            } elseif (preg_match('#^https://[^\s"\'<>]+$#', $trade)) {
+                $stored['trade_url'] = $trade;
+            }
+        }
+
         update_option(self::OPTION, $stored, false);
 
         wp_safe_redirect(add_query_arg(
@@ -228,6 +248,40 @@ final class Settings
         printf('<form method="post" action="%s">', esc_url(admin_url('admin-post.php')));
         wp_nonce_field('thb_save_settings');
         echo '<input type="hidden" name="action" value="thb_save_settings">';
+
+        /* ---- display ---- */
+        echo '<h2>نمایش صفحه ارز</h2>';
+        echo '<table class="form-table" role="presentation"><tbody>';
+
+        echo '<tr><th scope="row"><label for="thb-design">طراحی صفحه ارز</label></th><td>';
+        echo '<select id="thb-design" name="design">';
+        foreach (Design::choices() as $value => $label) {
+            printf(
+                '<option value="%s"%s>%s</option>',
+                esc_attr($value),
+                Design::setting() === $value ? ' selected' : '',
+                esc_html($label)
+            );
+        }
+        echo '</select>';
+        printf(
+            '<p class="description">پیش‌فرض «کلاسیک» است. برای دیدن طراحی جدید بدون تغییر سایت، '
+            . 'به انتهای نشانی هر صفحه ارز <code dir="ltr">?%s=v2</code> اضافه کنید — فقط برای همان بازدید. '
+            . 'این نشانی‌ها noindex هستند تا موتورهای جست‌وجو آن‌ها را نسخه تکراری ثبت نکنند.</p>',
+            esc_html(Design::PARAM)
+        );
+        echo '</td></tr>';
+
+        printf(
+            '<tr><th scope="row"><label for="thb-trade-url">نشانی دکمه «معامله»</label></th><td>'
+            . '<input type="url" dir="ltr" class="regular-text" id="thb-trade-url" name="trade_url" value="%s" placeholder="https://…">'
+            . '<p class="description">در طراحی جدید. می‌توانید از <code>{symbol}</code> و <code>{slug}</code> استفاده کنید، '
+            . 'مثلاً <code dir="ltr">https://example.com/trade/{symbol}-usdt</code>. خالی = دکمه نمایش داده نمی‌شود.</p>'
+            . '</td></tr>',
+            esc_attr((string) self::get('trade_url', ''))
+        );
+
+        echo '</tbody></table>';
 
         echo '<h2>کلیدهای API</h2>';
         echo '<p class="description">کلیدها در پایگاه‌داده ذخیره می‌شوند و هرگز در کد یا مخزن قرار نمی‌گیرند. '

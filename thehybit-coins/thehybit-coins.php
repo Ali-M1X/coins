@@ -28,6 +28,7 @@ require_once THB_COINS_DIR . 'includes/Seeder.php';
 require_once THB_COINS_DIR . 'includes/AdminSetup.php';
 require_once THB_COINS_DIR . 'includes/CoinRepository.php';
 require_once THB_COINS_DIR . 'includes/Settings.php';
+require_once THB_COINS_DIR . 'includes/Design.php';
 require_once THB_COINS_DIR . 'includes/Datasets.php';
 require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';
@@ -44,6 +45,8 @@ require_once THB_COINS_DIR . 'includes/Seo.php';
 require_once THB_COINS_DIR . 'includes/Schema.php';
 require_once THB_COINS_DIR . 'includes/ProviderProbe.php';
 require_once THB_COINS_DIR . 'includes/Diagnostics.php';
+require_once THB_COINS_DIR . 'includes/V2/Svg.php';
+require_once THB_COINS_DIR . 'includes/V2/Model.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Collector.php';
 require_once THB_COINS_DIR . 'includes/Collectors/CoinGecko.php';
 require_once THB_COINS_DIR . 'includes/Collectors/DefiLlama.php';
@@ -123,8 +126,11 @@ final class Plugin
            nothing once setup is finished. See includes/AdminSetup.php. */
         (new AdminSetup($this->coins))->register();
 
-        /* Settings — API keys, and later the design selector. */
+        /* Settings — API keys and the design selector. */
         (new Settings())->register();
+
+        /* noindex for ?thb_design= previews; see includes/Design.php. */
+        (new Design())->register();
 
         /* Admin-only provider diagnostics. Adds nothing to the front-end
            request path — see includes/Diagnostics.php. */
@@ -141,6 +147,14 @@ final class Plugin
     public function assets(): void
     {
         if (!is_singular(CoinRepository::POST_TYPE)) {
+            return;
+        }
+
+        /* The v2 design has its own stylesheet, script and data island and
+           loads NONE of the classic files; the classic branch below is the
+           v1.8.0 code, unchanged. */
+        if (Design::isV2()) {
+            $this->assetsV2();
             return;
         }
 
@@ -189,7 +203,7 @@ final class Plugin
      */
     public static function moduleTag(string $tag, string $handle, string $src): string
     {
-        if ($handle !== 'thb-coin') {
+        if ($handle !== 'thb-coin' && $handle !== 'thb-coin-v2') {
             return $tag;
         }
 
@@ -214,9 +228,50 @@ final class Plugin
         if (!is_singular(CoinRepository::POST_TYPE)) {
             return $template;
         }
+
+        if (Design::isV2()) {
+            $theme = locate_template(['thehybit/v2/single-coin.php']);
+            return $theme ?: THB_COINS_DIR . 'templates/v2/single-coin.php';
+        }
+
         // A child theme copy wins over the plugin's.
         $theme = locate_template(['thehybit/single-coin.php']);
         return $theme ?: THB_COINS_DIR . 'templates/single-coin.php';
+    }
+
+    /** @var array<string, array> per-request v2 view models, keyed by coin slug */
+    private array $v2Memo = [];
+
+    /**
+     * The v2 view model — built once per request and shared by the template
+     * and the data island, exactly as viewModel() is for the classic page.
+     * Reads the cache only; it never makes a provider request.
+     */
+    public function v2(Coin $coin): array
+    {
+        return $this->v2Memo[$coin->slug] ??= (new V2\Model($this->config, $this->cache))
+            ->build($coin, $this->pipeline->viewModel($coin));
+    }
+
+    private function assetsV2(): void
+    {
+        $base = THB_COINS_URL . 'assets/v2';
+        wp_enqueue_style('thb-v2', "$base/v2.css", [], THB_COINS_VERSION);
+        wp_enqueue_script('thb-coin-v2', "$base/v2.js", [], THB_COINS_VERSION, true);
+
+        $coin = $this->coins->find(get_the_ID());
+        if ($coin) {
+            /* Only what the scripts need to redraw on interaction — every
+               figure on the page is already in the server-rendered HTML. */
+            wp_add_inline_script(
+                'thb-coin-v2',
+                'window.__THB_V2__ = ' . wp_json_encode(
+                    V2\Model::client($this->v2($coin)),
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                ) . ';',
+                'before'
+            );
+        }
     }
 }
 
