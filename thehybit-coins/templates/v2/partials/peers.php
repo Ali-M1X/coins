@@ -36,7 +36,7 @@ $plot = array_values(array_filter($p['rows'], static fn($r) => $r['marketCap'] !
           </select>
         </label>
       </div>
-      <div class="v2-xscroll" style="--min: 560px">
+      <div class="v2-xscroll" style="--min: 560px" data-v2-center>
         <svg viewBox="0 0 700 480" role="img" aria-label="نمودار حبابی: ارزش بازار در برابر <?= $p['hasTvl'] ? 'ارزش قفل‌شده' : 'حجم معاملات' ?>؛ اندازه حباب حجم ۲۴ ساعته">
         <line class="v2-axisline" x1="50" y1="440" x2="680" y2="440"/>
         <line class="v2-axisline" x1="50" y1="20" x2="50" y2="440"/>

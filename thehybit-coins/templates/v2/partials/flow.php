@@ -30,7 +30,7 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
   <div class="v2-flow__grid">
     <div class="v2-card v2-flow__sankey">
       <?php if ($f['state'] === 'ok') : ?>
-        <div class="v2-xscroll" style="--min: 700px">
+        <div class="v2-xscroll" style="--min: 0px">
         <svg viewBox="-20 0 1100 400" role="img" aria-label="نمودار جریان کارمزد <?= esc_attr($c['name']) ?>: مجموع <?= esc_attr(Format::usdCompact($f['fees'])) ?> در ۲۴ ساعت">
           <?php foreach ($f['ribbonsLeft'] as $i => $r) : ?>
             <path class="v2-ribbon v2-t--<?= $tones[$i % 5] ?>" d="<?= esc_attr($r['d']) ?>"/>
@@ -51,6 +51,19 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
           <text class="v2-flow__total" x="500" y="236" text-anchor="middle"><?= esc_html(Format::usdCompact($f['fees'], 1)) ?></text>
           <text class="v2-flow__sub v2-fa" x="500" y="256" text-anchor="middle">کارمزد ۲۴ ساعته</text>
         </svg>
+        </div>
+        <?php /* Phone layout: the diagram fits the card and its labels move into
+           this list, where they can be read at full size. */ ?>
+        <div class="v2-flow__mobile">
+          <?php foreach ([['از کجا آمد', $f['left'], $tones], ['به کجا رفت', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
+            <h3 class="v2-flow__mtitle"><?= esc_html($title) ?></h3>
+            <ul class="v2-flow__mlist">
+              <?php foreach ($nodes as $i => $node) : ?>
+                <li><span class="v2-swatch v2-t--<?= esc_attr($tn[$i % count($tn)]) ?>" aria-hidden="true"></span><?= esc_html($node['label']) ?>
+                  <?= View::n(Format::pct($node['share'] * 100, false, 1)) ?></li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endforeach; ?>
         </div>
         <div class="v2-flow__legend">
           <span>چپ: کارمزد بر اساس نوع پروتکل</span>

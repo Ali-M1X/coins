@@ -50,6 +50,13 @@ get_header();
 ?>
 
 <div class="thb-v2" data-thb-design="v2">
+  <?php /* Runs as soon as it is parsed, before this section paints, so there
+     is no narrow first frame. Sets the exact viewport width (100vw would
+     include the scrollbar and cause a sideways scroll) and pins the page's
+     edges to the viewport's even when the theme's box is off-centre. The
+     ResizeObserver catches the scrollbar appearing after fonts and images
+     load, which fires no resize event. CSS alone handles the no-JS case. */ ?>
+  <script>(function(){var e=document.currentScript.parentNode,d=document.documentElement;function f(){var w=d.clientWidth,b=e.parentNode,p=b.getBoundingClientRect(),c=getComputedStyle(b),l=p.left+parseFloat(c.paddingLeft)+parseFloat(c.borderLeftWidth),r=p.right-parseFloat(c.paddingRight)-parseFloat(c.borderRightWidth);e.style.setProperty('--v2-vw',w+'px');e.style.marginLeft=(-l)+'px';e.style.marginRight=(r-w)+'px';}f();window.ResizeObserver?new ResizeObserver(f).observe(d):addEventListener('resize',f);})();</script>
   <div class="v2-wrap">
 
     <?php require $parts . 'breadcrumb.php'; ?>

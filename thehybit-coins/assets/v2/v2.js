@@ -248,8 +248,22 @@ function initTimeline() {
   box.scrollBy({ left: (i.left + i.width / 2) - (b.left + b.width / 2) });
 }
 
+/* On a phone, wide charts scroll inside their card. Graphs organised around
+   a centre (ecosystem, fee flow, peers) open on their centre; the price
+   history keeps its RTL start, which is the newest end of the time axis. */
+function initCentred() {
+  $$('[data-v2-center]').forEach((box) => {
+    const over = box.scrollWidth - box.clientWidth;
+    if (over <= 0) return;
+    const b = box.getBoundingClientRect();
+    const inner = box.firstElementChild.getBoundingClientRect();
+    box.scrollBy({ left: (inner.left + inner.width / 2) - (b.left + b.width / 2) });
+  });
+}
+
 initChart();
 initTimeline();
+initCentred();
 initWatchlist();
 initEcosystem();
 initPriceStory();

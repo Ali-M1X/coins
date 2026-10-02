@@ -39,7 +39,7 @@ $first = $nodes[0] ?? null;
 
   <div class="v2-eco__grid">
     <div class="v2-card v2-eco__map" data-v2-eco-map>
-      <div class="v2-xscroll" style="--min: 680px">
+      <div class="v2-xscroll" style="--min: 680px" data-v2-center>
         <svg viewBox="0 0 1000 600" role="img" aria-label="نقشه پروتکل‌های <?= esc_attr($c['name']) ?> بر اساس کارمزد ۲۴ ساعته">
         <defs>
           <radialGradient id="v2-core" cx="50%" cy="50%" r="50%">
@@ -74,21 +74,21 @@ $first = $nodes[0] ?? null;
     </div>
 
     <div class="v2-card v2-eco__list" data-v2-eco-list hidden>
-      <table class="v2-table">
+      <div class="v2-scroll"><table class="v2-table">
         <caption class="v2-sr">پروتکل‌ها بر اساس کارمزد ۲۴ ساعته</caption>
-        <thead><tr><th scope="col">پروتکل</th><th scope="col">دسته</th><th scope="col">کارمزد ۲۴ساعته</th><th scope="col">سهم</th><th scope="col">تغییر ۱ روزه</th></tr></thead>
+        <thead><tr><th scope="col">پروتکل</th><th scope="col" class="v2-hide-sm">دسته</th><th scope="col">کارمزد ۲۴ساعته</th><th scope="col" class="v2-hide-sm">سهم</th><th scope="col">تغییر ۱ روزه</th></tr></thead>
         <tbody>
           <?php foreach ($nodes as $nd) : ?>
             <tr data-group="<?= esc_attr($nd['group']) ?>">
               <th scope="row"><bdi><?= esc_html($nd['name']) ?></bdi></th>
-              <td><?= esc_html($nd['categoryFa']) ?></td>
+              <td class="v2-hide-sm"><?= esc_html($nd['categoryFa']) ?></td>
               <td><?= View::n(Format::usdCompact($nd['fees'])) ?></td>
-              <td><?= View::n($nd['share'] !== null ? Format::pct($nd['share'], false, 1) : null) ?></td>
+              <td class="v2-hide-sm"><?= View::n($nd['share'] !== null ? Format::pct($nd['share'], false, 1) : null) ?></td>
               <td class="v2-delta--<?= View::dir($nd['change']) ?>"><?= View::n(Format::pct($nd['change'], true, 1)) ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     <aside class="v2-eco__side">

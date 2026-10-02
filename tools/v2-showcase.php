@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/showcase-payloads.php';
 $GLOBALS['thb_probe_scenario'] = 'showcase';
+$GLOBALS['thb_theme_boxed'] = true;   // render inside a narrow theme box, as on the live site
 require_once __DIR__ . '/v2-bootstrap.php';
 
 Probe::reset();

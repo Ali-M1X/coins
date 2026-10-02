@@ -30,8 +30,27 @@ if (!existsSync(join(ROOT, 'v2.html'))) {
   process.exit(1);
 }
 
+/* THEME LAYOUTS. The live theme wraps a single post in a narrow box, and a
+   v2 that sized itself from the window rather than from its real width
+   rendered a squeezed desktop grid inside it. These variants wrap the same
+   page the way themes do, so the breakout is tested, not assumed. */
+const THEMES = {
+  'v2-boxed.html':   ['<div id="page" style="max-width:480px;margin:0 auto;padding:0 14px;border:1px solid #ccc;background:#fff">', '</div>'],
+  'v2-sidebar.html': ['<div style="display:flex;gap:30px;max-width:1100px;margin:0 auto"><main style="flex:1;min-width:0">', '</main><aside style="width:300px;flex:none">sidebar</aside></div>'],
+  'v2-shrink.html':  ['<div style="display:flex;flex-direction:column;align-items:center"><div class="site">', '</div></div>'],
+};
+
 const server = createServer(async (req, res) => {
   try {
+    const name = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
+    if (THEMES[name]) {
+      const [open, close] = THEMES[name];
+      const html = (await readFile(join(ROOT, 'v2.html'), 'utf8'))
+        .replace('<body>', '<body>' + open).replace('</body>', close + '</body>');
+      res.writeHead(200, { 'Content-Type': TYPES['.html'] });
+      res.end(html);
+      return;
+    }
     const path = join(ROOT, normalize(decodeURIComponent(req.url.split('?')[0])));
     const body = await readFile(path);
     res.writeHead(200, { 'Content-Type': TYPES[extname(path)] ?? 'application/octet-stream' });
@@ -68,6 +87,33 @@ for (const width of [1440, 1120, 768, 390, 360]) {
   ok(offsite.length === 0, `${width}px: no request leaves the site` + (offsite.length ? ': ' + offsite[0] : ''));
   ok(errors.length === 0, `${width}px: no script errors` + (errors.length ? ': ' + errors[0] : ''));
   await page.close();
+}
+
+/* ---- inside a theme's box: the page still takes the whole viewport ---- */
+const columns = (page, sel) => page.$eval(sel, (el) => getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length);
+for (const file of Object.keys(THEMES)) {
+  for (const width of [1440, 390]) {
+    const p = await browser.newPage({ viewport: { width, height: 900 } });
+    await p.goto(`http://localhost:${PORT}/${file}`, { waitUntil: 'networkidle' });
+    const box = await p.$eval('.thb-v2', (el) => {
+      const r = el.getBoundingClientRect();
+      return { left: Math.round(r.left), width: Math.round(r.width), vw: document.documentElement.clientWidth,
+               overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    });
+    ok(box.left === 0 && box.width === box.vw && box.overflow <= 0,
+       `${file} at ${width}px: v2 spans the full viewport (left ${box.left}, ${box.width}/${box.vw}px, overflow ${box.overflow})`);
+    if (width === 1440) {
+      ok(await columns(p, '.v2-overview') === 3, `${file} at 1440px: the hero is the 3-column desktop layout`);
+      ok(await columns(p, '.v2-dna__grid') === 3 && await columns(p, '.v2-story__grid') === 3 && await columns(p, '.v2-supply__grid') === 3,
+         `${file} at 1440px: story, DNA and supply are 3-column`);
+      ok(await columns(p, '.v2-eco__grid') === 2 && await columns(p, '.v2-flow__grid') === 2 && await columns(p, '.v2-peers__grid') === 2,
+         `${file} at 1440px: ecosystem, chain flow and peers have their side panel beside them`);
+    } else {
+      ok(await columns(p, '.v2-overview') === 1 && await columns(p, '.v2-dna__grid') === 1 && await columns(p, '.v2-eco__grid') === 1,
+         `${file} at 390px: single-column mobile layout`);
+    }
+    await p.close();
+  }
 }
 
 /* ---- interactions, desktop ---- */
