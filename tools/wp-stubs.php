@@ -596,5 +596,17 @@ function wp_nonce_field(string $a, string $n = '_wpnonce', bool $referer = true,
     return $html;
 }
 function wp_die($msg = '', $title = '', $args = []) { throw new RuntimeException('wp_die: ' . (string) $msg); }
-function wp_safe_redirect(string $l, int $status = 302): bool { $GLOBALS['thb_redirect'] = $l; return true; }
+/**
+ * Admin handlers end with `wp_safe_redirect(...); exit;`. A stub that returned
+ * would let execution reach that `exit` and end the whole test run silently —
+ * every assertion after it simply never happens, and the suite still reports
+ * the ones before it as passing. Throwing stops the handler exactly where a
+ * real redirect would, and the caller catches it.
+ */
+final class ThbRedirect extends RuntimeException {}
+function wp_safe_redirect(string $l, int $status = 302): bool
+{
+    $GLOBALS['thb_redirect'] = $l;
+    throw new ThbRedirect($l);
+}
 function register_shutdown_function_stub(): void {}

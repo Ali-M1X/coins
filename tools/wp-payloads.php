@@ -113,6 +113,98 @@ function probe_payload(string $url): array
         return $rows;
     }
 
+    /* ---- Etherscan ----
+     *
+     * Every Etherscan reply is an envelope, and a FAILURE arrives as HTTP 200
+     * with status "0" — an invalid key, an exhausted quota, a bad request. The
+     * `thb_probe_etherscan_error` switch reproduces that, because a parser that
+     * trusted the status code would cache "Invalid API Key" as a gas price. */
+    if (str_contains((string) parse_url($url, PHP_URL_HOST), 'etherscan.io')) {
+        if (!empty($GLOBALS['thb_probe_etherscan_error'])) {
+            return ['status' => '0', 'message' => 'NOTOK', 'result' => (string) $GLOBALS['thb_probe_etherscan_error']];
+        }
+        if (($q['module'] ?? '') === 'gastracker') {
+            return ['status' => '1', 'message' => 'OK', 'result' => [
+                'LastBlock' => '21000000', 'SafeGasPrice' => '12', 'ProposeGasPrice' => '14',
+                'FastGasPrice' => '16', 'suggestBaseFee' => '11.913', 'gasUsedRatio' => '0.4,0.6',
+            ]];
+        }
+        if (($q['action'] ?? '') === 'ethsupply2') {
+            /* Wei, as decimal STRINGS far beyond PHP_INT_MAX — the shape that
+               breaks a parser which casts to int. */
+            return ['status' => '1', 'message' => 'OK', 'result' => [
+                'EthSupply'      => '120530000000000000000000000',
+                'Eth2Staking'    => '34000000000000000000000000',
+                'BurntFees'      => '4400000000000000000000000',
+                'WithdrawnTotal' => '4100000000000000000000000',
+            ]];
+        }
+    }
+
+    /* ---- Blockchair ----
+     *
+     * Ethereum reports NO hashrate (proof of stake since the Merge); Bitcoin
+     * does. A parser that rendered Ethereum's zero as "0 H/s" would be making a
+     * false statement, so the fixture carries exactly that zero. */
+    if (preg_match('#^/(ethereum|bitcoin)/stats$#', $path, $m)) {
+        $isBtc = $m[1] === 'bitcoin';
+        return ['data' => [
+            'blocks'                          => $isBtc ? 865000 : 21000000,
+            'blocks_24h'                      => $isBtc ? 144 : 7180,
+            'transactions_24h'                => $isBtc ? 560000 : 1210000,
+            'mempool_transactions'            => $isBtc ? 42000 : 2843,
+            'average_transaction_fee_usd_24h' => $isBtc ? 1.92 : 0.87,
+            'median_transaction_fee_usd_24h'  => $isBtc ? 0.95 : 0.31,
+            'difficulty'                      => $isBtc ? 9.2e13 : 0,
+            'hashrate_24h'                    => $isBtc ? '6.5e20' : '0',
+            'nodes'                           => $isBtc ? 18000 : null,
+        ], 'context' => ['code' => 200]];
+    }
+
+    /* ---- beaconcha.in ----
+     *
+     * Participation arrives as a FRACTION and APR may too. Rendering 0.0312 as
+     * "0.03%" would understate a staking yield a hundredfold. */
+    if (str_contains($path, '/epoch/latest')) {
+        return ['status' => 'OK', 'data' => [
+            'epoch'                   => 330000,
+            'validatorscount'         => 1062000,
+            'totalvalidatorbalance'   => 34200000000000000,   // gwei
+            'finalized'               => true,
+            'globalparticipationrate' => 0.995,
+        ]];
+    }
+    if (str_contains($path, '/ethstore/')) {
+        if (!empty($GLOBALS['thb_probe_ethstore_down'])) {
+            return ['status' => 'ERROR', 'data' => 'endpoint not available'];
+        }
+        return ['status' => 'OK', 'data' => ['day' => 1100, 'apr' => 0.0312]];
+    }
+
+    /* ---- GitHub ----
+     *
+     * One commit has a NULL `author` — what GitHub returns when the commit
+     * email matches no account. Counting contributors by `author.login` alone
+     * would fold every such person into one null bucket. */
+    if (preg_match('#^/repos/([^/]+/[^/]+)/commits$#', $path)) {
+        $rows = [];
+        foreach (['alice', 'bob', 'alice', 'carol', null] as $i => $login) {
+            $rows[] = [
+                'sha'    => str_repeat((string) $i, 40),
+                'author' => $login === null ? null : ['login' => $login],
+                'commit' => ['author' => ['name' => $login ?? 'Dana Unlinked', 'date' => gmdate('c', Clock::$now - $i * 3600)]],
+            ];
+        }
+        return $rows;
+    }
+    if (preg_match('#^/repos/([^/]+/[^/]+)$#', $path, $m)) {
+        return [
+            'full_name' => $m[1], 'html_url' => 'https://github.com/' . $m[1],
+            'stargazers_count' => 48100, 'forks_count' => 20300, 'open_issues_count' => 310,
+            'language' => 'Go', 'pushed_at' => gmdate('c', Clock::$now - 7200),
+        ];
+    }
+
     /* ---- CoinGecko: coin detail. Guarded so the two routes above win. ---- */
     if (preg_match('#/coins/(?!markets$|categories$)[^/]+$#', $path)) {
         return coin_detail_payload(($q['tickers'] ?? 'false') === 'true');

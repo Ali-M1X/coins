@@ -56,6 +56,14 @@ final class Pipeline
         'chains'      => 'defillama',
         'stablecoins' => 'defillama',
         'bridges'     => 'defillama',
+
+        /* Group B — network and on-chain. Also cache-only on render, so the
+           cold-render cost stays at seven. */
+        'gas'         => 'etherscan',
+        'supply'      => 'etherscan',
+        'network'     => 'blockchair',
+        'staking'     => 'beaconchain',
+        'development' => 'github',
     ];
 
     /** @var Collector[] keyed by provider id */
@@ -144,6 +152,10 @@ final class Pipeline
         $providerId = self::DATASETS[$dataset] ?? null;
         if ($providerId === null) {
             return;
+        }
+
+        if ($dataset === 'development') {
+            $coin = $this->withRepository($coin);
         }
 
         // Through the cache, NOT around it. A tick that arrives while the entry
@@ -276,6 +288,15 @@ final class Pipeline
         if (!$collector || !$collector->isEnabled() || !$coin->usesProvider($providerId, $this->config)
             || !$sets->isEnabled($dataset)) {
             return ['data' => null, 'fetchedAt' => 0, 'stale' => false, 'source' => 'disabled'];
+        }
+
+        /* Bitcoin has no validators and no gas market. That is not a missing
+           figure or a failed provider, and the page must not say "not yet
+           received" for something that will never arrive — so a provider that
+           does not serve this coin's chain reports NOT APPLICABLE, and is never
+           asked. */
+        if (!$sets->servesChain($providerId, $coin)) {
+            return ['data' => null, 'fetchedAt' => 0, 'stale' => false, 'source' => 'not_applicable'];
         }
 
         /* CACHE-ONLY DATASETS.
@@ -535,6 +556,13 @@ final class Pipeline
             'structure'    => self::state($raw['structure'], 'CoinGecko'),
             'categories'   => self::state($raw['categories'], 'CoinGecko'),
 
+            /* Group B — on-chain and network. Same five-state contract. */
+            'network'      => self::state($raw['network'], 'Blockchair'),
+            'gas'          => self::state($raw['gas'], 'Etherscan'),
+            'supplyChain'  => self::state($raw['supply'], 'Etherscan'),
+            'staking'      => self::state($raw['staking'], 'beaconcha.in'),
+            'development'  => self::state($raw['development'], 'GitHub'),
+
             'defi'    => self::withSource($raw['defi'], 'DefiLlama', 'defillama', $coin, $this->history),
             'onchain' => self::withSource($raw['onchain'], 'Dune / Alchemy', 'dune', $coin, $this->history),
             'dex'     => self::withSource($raw['dex'], 'DexScreener', 'dexscreener', $coin, $this->history),
@@ -614,6 +642,36 @@ final class Pipeline
     }
 
     /**
+     * The coin, with its GitHub repository filled in from cached metadata.
+     *
+     * The repository is not guessed from the slug — github.com/bitcoin/bitcoin
+     * and github.com/ethereum/go-ethereum follow no rule. An editor's ACF value
+     * wins; otherwise the link CoinGecko already returned in the coin-detail
+     * response is used. Read with peek(), so warming developer activity never
+     * triggers a CoinGecko request of its own.
+     */
+    private function withRepository(Coin $coin): Coin
+    {
+        if ((string) $coin->meta('githubRepo', '') !== '' || (string) $coin->meta('social.github', '') !== '') {
+            return $coin;
+        }
+
+        $meta = $this->cache->peek('metadata', $this->cache->keyFor('metadata', $coin))['data'] ?? null;
+        $github = is_array($meta) ? (string) ($meta['github'] ?? '') : '';
+        if ($github === '') {
+            return $coin;
+        }
+
+        return new Coin(
+            postId: $coin->postId, slug: $coin->slug, symbol: $coin->symbol,
+            name: $coin->name, nameEn: $coin->nameEn, coingeckoId: $coin->coingeckoId,
+            newsCategorySlug: $coin->newsCategorySlug,
+            meta: $coin->meta + ['githubRepo' => $github],
+            overrides: $coin->overrides, flags: $coin->flags
+        );
+    }
+
+    /**
      * A dataset plus WHY it has no data, when it has none.
      *
      * The requirement this exists for: never show a fake zero, and never let
@@ -640,9 +698,10 @@ final class Pipeline
             return [
                 'available' => false,
                 'state'     => match ($source) {
-                    'pending'  => 'pending',
-                    'disabled' => 'disabled',
-                    default    => 'unavailable',
+                    'pending'        => 'pending',
+                    'disabled'       => 'disabled',
+                    'not_applicable' => 'not_applicable',
+                    default          => 'unavailable',
                 },
                 'data'      => null,
                 'source'    => $label,

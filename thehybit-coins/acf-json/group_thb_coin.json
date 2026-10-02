@@ -339,6 +339,18 @@
             }
         },
         {
+            "key": "field_thb_github_repo",
+            "label": "مخزن GitHub (owner/repo)",
+            "name": "thb_github_repo",
+            "type": "text",
+            "instructions": "برای فعالیت توسعه‌دهندگان. خالی بگذارید تا پیوند GitHub از CoinGecko استفاده شود. نمونه: ethereum/go-ethereum",
+            "required": 0,
+            "placeholder": "ethereum/go-ethereum",
+            "wrapper": {
+                "width": "50"
+            }
+        },
+        {
             "key": "field_thb_tab_overrides",
             "label": "بازنویسی دستی",
             "name": "",
@@ -420,5 +432,5 @@
     "active": true,
     "description": "پیکربندی هر ارز. شناسه‌ها عمداً از هم جدا هستند: اسلاگ وردپرس، نماد، شناسه CoinGecko و اسلاگ دسته اخبار.",
     "show_in_rest": 0,
-    "modified": 1786000000
+    "modified": 1786000001
 }

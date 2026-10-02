@@ -55,6 +55,7 @@ final class CoinRepository
         'thb_defillama_chain'     => 'meta.defillamaChain',
         'thb_dex_token_address'   => 'meta.dexTokenAddress',
         'thb_dex_symbols'         => 'meta.dexSymbols',
+        'thb_github_repo'         => 'meta.githubRepo',
 
         // per-coin provider toggles
         'thb_enable_defi'         => 'flags.defillama',

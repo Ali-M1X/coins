@@ -69,6 +69,12 @@ final class Scheduler
     /** The last time a tick declined to start because another held the lock. */
     public const OPTION_LAST_SKIP = 'thb_warm_last_skip';
 
+    /** Where the next tick's coin-scoped candidate window starts. */
+    public const OPTION_COIN_OFFSET = 'thb_warm_coin_offset';
+
+    /** Where the last queue() call's coin window stopped; tick() persists it. */
+    private int $windowEnd = 0;
+
     private Datasets $datasets;
     private Budget $budget;
     private Lock $lock;
@@ -421,8 +427,16 @@ final class Scheduler
          * cannot run away — and the budget still refuses it like anything else.
          */
         $done = 0;
+
+        /* Built ONCE. Shared and coin-scoped entries do not affect each other's
+           due-ness, so splitting one queue is equivalent to building two — and
+           at a hundred coins the shared scan walks every coin, which is worth
+           doing once per tick, not twice. */
+        $all = $this->queue($coins);
+        update_option(self::OPTION_COIN_OFFSET, $this->windowEnd, false);
+
         $shared = array_values(array_filter(
-            $this->queue($coins),
+            $all,
             fn(array $item): bool => $this->reach($item['dataset']) < 2
         ));
 
@@ -465,7 +479,7 @@ final class Scheduler
 
         /* ---- 3. The per-coin queue, most valuable first ---- */
         $queue = array_values(array_filter(
-            $this->queue($coins),
+            $all,
             fn(array $item): bool => $this->reach($item['dataset']) === 2
         ));
         $total = count($queue);
@@ -587,42 +601,67 @@ final class Scheduler
      * @param Coin[] $coins
      * @return array<int, array{coin:Coin, dataset:string, priority:int, overdue:float}>
      */
-    public function queue(array $coins): array
+    public function queue(array $coins, ?int $offset = null): array
     {
         $maxCandidates = (int) ($this->config['scheduler']['max_candidates'] ?? 200);
         $queue = [];
         $seen = [];
-        $inspected = 0;
+        $total = count($coins);
 
+        /* ---- 1. Shared entries, from EVERY coin ----
+         *
+         * THE BUG THIS FIXES. Candidates used to be collected in one pass over
+         * the coin list, stopping at max_candidates — about twenty coins. At a
+         * hundred, the other eighty were never looked at, and a chain-scoped
+         * dataset whose chain only appears among them was never refreshed AT
+         * ALL. The capacity model showed it plainly: Bitcoin's network stats and
+         * eight chains' DeFi figures got zero requests an hour.
+         *
+         * Shared entries are few by construction — at most one per site dataset
+         * plus one per chain dataset per chain — so they are collected from the
+         * whole list. Duplicates are rejected BEFORE they cost anything: the
+         * seen-check is an array lookup, and only a new entry pays for a cache
+         * peek. */
         foreach ($coins as $coin) {
             foreach ($this->warmable($coin) as $dataset) {
-                if ($inspected >= $maxCandidates) {
-                    break 2;   // bounded work even when choosing what to do
+                if ($this->reach($dataset) === 2) {
+                    continue;   // coin-scoped: the bounded pass below
                 }
-                $inspected++;
-
-                $key = $this->cacheKeyOf($dataset, $coin);
-
-                // Scope means one entry can serve many coins; queue it once.
-                if (isset($seen[$dataset . '|' . $key])) {
-                    continue;
-                }
-                $seen[$dataset . '|' . $key] = true;
-
-                $overdue = $this->overdue($dataset, $key);
-                if ($overdue < 1.0) {
-                    continue;   // still fresh
-                }
-
-                $queue[] = [
-                    'coin'     => $coin,
-                    'dataset'  => $dataset,
-                    'priority' => $this->datasets->priority($dataset),
-                    'overdue'  => $overdue,
-                    'reach'    => $this->reach($dataset),
-                ];
+                $this->consider($coin, $dataset, $seen, $queue);
             }
         }
+
+        /* ---- 2. Coin-scoped entries, from a rotating window ----
+         *
+         * These genuinely scale with the coin count, so the candidate cap still
+         * applies — but the window now starts where the last tick's stopped and
+         * wraps, so every coin gets its turn instead of the head of the list
+         * getting all of them. */
+        $start = $total > 0 ? ((int) ($offset ?? get_option(self::OPTION_COIN_OFFSET, 0))) % $total : 0;
+        $inspected = 0;
+        $scanned = 0;
+
+        for ($i = 0; $i < $total; $i++) {
+            $coin = $coins[($start + $i) % $total];
+            $datasets = array_values(array_filter(
+                $this->warmable($coin),
+                fn(string $d): bool => $this->reach($d) === 2
+            ));
+
+            // Whole coins only: half a coin's datasets in one window and half in
+            // the next would split its chart windows across ticks for no reason.
+            if ($inspected > 0 && $inspected + count($datasets) > $maxCandidates) {
+                break;
+            }
+
+            foreach ($datasets as $dataset) {
+                $this->consider($coin, $dataset, $seen, $queue);
+            }
+            $inspected += count($datasets);
+            $scanned++;
+        }
+
+        $this->windowEnd = $total > 0 ? ($start + $scanned) % $total : 0;
 
         /* Priority, then REACH, then staleness.
          *
@@ -644,6 +683,36 @@ final class Scheduler
         });
 
         return $queue;
+    }
+
+    /**
+     * Add one candidate to the queue if it is new and due.
+     *
+     * @param array<string,bool> $seen
+     * @param array<int,array>   $queue
+     */
+    private function consider(Coin $coin, string $dataset, array &$seen, array &$queue): void
+    {
+        $key = $this->cacheKeyOf($dataset, $coin);
+
+        // Scope means one entry can serve many coins; queue it once.
+        if (isset($seen[$dataset . '|' . $key])) {
+            return;
+        }
+        $seen[$dataset . '|' . $key] = true;
+
+        $overdue = $this->overdue($dataset, $key);
+        if ($overdue < 1.0) {
+            return;   // still fresh
+        }
+
+        $queue[] = [
+            'coin'     => $coin,
+            'dataset'  => $dataset,
+            'priority' => $this->datasets->priority($dataset),
+            'overdue'  => $overdue,
+            'reach'    => $this->reach($dataset),
+        ];
     }
 
     /**

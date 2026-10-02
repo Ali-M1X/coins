@@ -94,6 +94,15 @@ abstract class Collector
             ? (int) ($settings['timeouts'][$variant] ?? $settings['timeout'] ?? 8)
             : (int) ($settings['timeout'] ?? 8);
 
+        /* Provider-level query defaults, merged UNDER the caller's.
+         *
+         * This is how an API key reaches a provider that wants one in the query
+         * string rather than a header — Settings::apply() puts it here at boot,
+         * so no collector has to know a key exists. The caller's own parameters
+         * win, which keeps a default from silently overriding a deliberate
+         * value. */
+        $query = $query + (array) ($settings['query'] ?? []);
+
         $url = rtrim($base, '/') . '/' . ltrim($path, '/');
         if ($query) {
             $url .= '?' . http_build_query($query);
@@ -185,13 +194,18 @@ abstract class Collector
         if (!has_action('thb_coins_http')) {
             return;
         }
+        /* The diagnostics screen's live check renders this URL. A provider that
+           takes its key in the query string would otherwise have that key
+           printed in an admin table — exactly the screen people screenshot when
+           asking for help. Scrubbed here, at the only exit. */
+        $settings = $this->settings();
         do_action('thb_coins_http', [
             'provider' => $this->id(),
-            'url'      => $url,
+            'url'      => \TheHybit\Coins\Settings::scrub($url, $settings),
             'code'     => $code,
             'bytes'    => $bytes,
             'seconds'  => $seconds,
-            'error'    => $error,
+            'error'    => $error !== null ? \TheHybit\Coins\Settings::scrub($error, $settings) : null,
             'body'     => $body,
         ]);
     }

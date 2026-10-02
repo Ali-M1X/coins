@@ -184,6 +184,7 @@ final class Diagnostics
         }
 
         $this->cronTable();
+        $this->keysTable();
         $this->budgetTable();
         $this->datasetTable($coin);
         $this->schedulerTable();
@@ -359,6 +360,53 @@ final class Diagnostics
                     : 'گرم‌سازی هنوز به بازدید صفحه وابسته است. برای مستقل کردن آن:'
             );
         }
+    }
+
+    /**
+     * Which API keys are stored, and what each one unlocks.
+     *
+     * Shows a MASKED hint only — enough to recognise which key is stored, never
+     * enough to use it — because this is the screen people screenshot. A
+     * required key that is missing disables its provider at boot rather than
+     * letting it fail on every request, and this table is where that is said.
+     */
+    private function keysTable(): void
+    {
+        $this->open('کلیدهای API', ['ارائه‌دهنده', 'وضعیت', 'کلید ذخیره‌شده', 'سقف رایگان', 'اثر']);
+
+        foreach (Settings::keys() as $setting => $spec) {
+            $has = Settings::hasKey($setting);
+            $provider = $spec['provider'];
+            $enabled = !empty($this->config['providers'][$provider]['enabled']);
+
+            $status = $has
+                ? '✅ تنظیم شده'
+                : (!empty($spec['required']) ? '⛔ تنظیم نشده — لازم است' : '— تنظیم نشده (اختیاری)');
+
+            $effect = match (true) {
+                $has                         => 'فعال',
+                !empty($spec['required'])    => 'ارائه‌دهنده غیرفعال است تا کلید وارد شود',
+                $enabled                     => 'بدون کلید با سقف پایین‌تر کار می‌کند',
+                default                      => '—',
+            };
+
+            printf(
+                '<tr><th scope="row">%s</th><td>%s</td><td><code dir="ltr">%s</code></td>'
+                . '<td dir="ltr">%s</td><td>%s</td></tr>',
+                esc_html($spec['label']),
+                $status,
+                esc_html($has ? Settings::mask((string) Settings::get($setting, '')) : '—'),
+                esc_html($spec['free']),
+                esc_html($effect)
+            );
+        }
+        $this->close();
+
+        printf(
+            '<p class="description">کلیدها را در <a href="%s">تنظیمات → TheHybit Coins</a> وارد کنید. '
+            . 'پس از ذخیره، دکمه «آزمون ارائه‌دهندگان» در پایین همین صفحه تأیید می‌کند که هر کلید کار می‌کند.</p>',
+            esc_url(admin_url('options-general.php?page=thb-coins-settings'))
+        );
     }
 
     /**

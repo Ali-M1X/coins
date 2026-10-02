@@ -39,7 +39,7 @@ $base = __DIR__ . '/../thehybit-coins/';
 require_once $base . 'thehybit-coins.php';
 
 use TheHybit\Coins\{Plugin, Coin, Cache, History, News, Pipeline, CoinRepository,
-                    Datasets, Budget, Lock, Scheduler, Context, Derive, Scoring};
+                    Datasets, Budget, Lock, Scheduler, Context, Derive, Scoring, Settings, ProviderProbe};
 use TheHybit\Coins\Collectors as C;
 
 $config = require $base . 'config/providers.php';
@@ -58,7 +58,8 @@ function pipeline(array $config): Pipeline
 {
     $p = new Pipeline($config, new Cache($config), new History($config), new News($config));
     foreach ([C\CoinGecko::class, C\DefiLlama::class, C\DexScreener::class,
-              C\L2Beat::class, C\OnChain::class, C\Fx::class, C\Alternative::class] as $cls) {
+              C\L2Beat::class, C\OnChain::class, C\Fx::class, C\Alternative::class,
+              C\Etherscan::class, C\Blockchair::class, C\BeaconChain::class, C\GitHub::class] as $cls) {
         $p->register(new $cls($config));
     }
     return $p;
@@ -608,6 +609,456 @@ ok(max($seen) === 1, 'no dataset is queued twice for the same cache key');
 
 ok(!in_array('market', array_column($queue, 'dataset'), true),
    'and market is absent from the per-coin queue — the batch covers it');
+
+/* =====================================================================
+ * 9. Group B providers — keys, parsing, chain gating, and no leaks
+ *
+ * Etherscan, Blockchair, beaconcha.in and GitHub. Three things matter more
+ * than any single figure: a key never reaches the screen or the repository; a
+ * provider that cannot answer for a chain is never asked; and each parser
+ * survives the specific shape that would fool it.
+ * ================================================================== */
+section('Group B — keys');
+
+reset_world($config);
+
+/* Keys are merged into the config from the WordPress option at boot. */
+update_option(Settings::OPTION, [
+    'etherscan_key'   => 'ETHERSCANKEY1234567890ABCDEF',
+    'beaconchain_key' => 'BEACONKEY987654321',
+    'github_token'    => 'github_pat_TOKEN1234567890',
+]);
+$keyed = Settings::apply($config);
+
+ok(($keyed['providers']['etherscan']['query']['apikey'] ?? '') === 'ETHERSCANKEY1234567890ABCDEF',
+   'the Etherscan key goes into the query string, where Etherscan expects it');
+ok(($keyed['providers']['beaconchain']['headers']['apikey'] ?? '') === 'BEACONKEY987654321',
+   'the beaconcha.in key goes into a header');
+ok(($keyed['providers']['github']['headers']['Authorization'] ?? '') === 'Bearer github_pat_TOKEN1234567890',
+   'and the GitHub token as a Bearer authorization header');
+ok(!isset($keyed['providers']['blockchair']['query']['key']),
+   'Blockchair, with no key stored, runs keyless rather than sending an empty key');
+
+/* A REQUIRED key that is missing disables its provider rather than letting it
+   fail on every request, spend budget and fill the log. */
+update_option(Settings::OPTION, []);
+$unkeyed = Settings::apply($config);
+ok(empty($unkeyed['providers']['etherscan']['enabled']),
+   'with no Etherscan key, Etherscan is disabled at boot');
+ok(($unkeyed['providers']['etherscan']['disabled_reason'] ?? '') === 'no API key configured',
+   'and says why, for the diagnostics screen');
+ok(!empty($unkeyed['providers']['beaconchain']['enabled']),
+   'while an OPTIONAL key\'s provider stays on, keyless');
+
+/* The committed config must never hold a key — it ships in the zip. */
+$configSource = (string) file_get_contents($base . 'config/providers.php');
+ok(!preg_match('/[\'"](?:apikey|key|Authorization)[\'"]\s*=>\s*[\'"][A-Za-z0-9_\-]{12,}/', $configSource),
+   'config/providers.php contains no key — only where a key goes, never what it is');
+
+/* Masking: enough to recognise, never enough to use. */
+ok(Settings::mask('ETHERSCANKEY1234567890ABCDEF') === 'ETHE' . str_repeat('•', 20) . 'CDEF',
+   'a long key shows its first and last four characters only');
+ok(Settings::mask('SHORTKEY') === '••••••••',
+   'a short key is masked ENTIRELY — first-four/last-four would reveal all of it');
+
+/* Scrub: secrets removed from anything bound for the screen or the log. */
+$scrubbed = Settings::scrub(
+    'https://api.etherscan.io/api?module=stats&apikey=ETHERSCANKEY1234567890ABCDEF',
+    $keyed['providers']['etherscan']
+);
+ok(!str_contains($scrubbed, 'ETHERSCANKEY1234567890ABCDEF'), 'a query-string key is scrubbed from a URL');
+ok(str_contains($scrubbed, 'module=stats'), 'while the rest of the URL survives, so it is still useful');
+ok(!str_contains(
+    Settings::scrub('401 for Bearer github_pat_TOKEN1234567890', $keyed['providers']['github']),
+    'github_pat_TOKEN1234567890'
+), 'and a header token is scrubbed from error text');
+
+/* The live-check trace — rendered as a table on the diagnostics screen. */
+$traced = [];
+add_action('thb_coins_http', static function (array $call) use (&$traced): void { $traced[] = $call; });
+$GLOBALS['thb_probe_background'] = true;
+(new C\Etherscan($keyed))->fetch(ethereum(), 'gas');
+remove_action('thb_coins_http', array_values($GLOBALS['thb_hooks']['thb_coins_http'] ?? [])[0] ?? '');
+$GLOBALS['thb_hooks']['thb_coins_http'] = [];
+
+ok(isset($traced[0]) && !str_contains($traced[0]['url'], 'ETHERSCANKEY1234567890ABCDEF'),
+   'the live-check trace shows the URL WITHOUT the key');
+ok(Probe::count('apikey=ETHERSCANKEY1234567890ABCDEF') === 1,
+   'while the request itself DID carry it — scrubbing is display-only');
+
+/* The provider probe: same rule. */
+$GLOBALS['thb_cfg_probe'] = $keyed;
+$probeResult = (new ProviderProbe($keyed))->run();
+$leaked = 0;
+foreach ($probeResult['results'] as $r) {
+    if (str_contains((string) $r['url'], 'ETHERSCANKEY') || str_contains((string) $r['url'], 'BEACONKEY')
+        || str_contains((string) $r['error'], 'ETHERSCANKEY')) {
+        $leaked++;
+    }
+}
+ok($leaked === 0, 'no probe result records a key (' . count($probeResult['results']) . ' endpoints probed)');
+
+$etherscanRows = array_values(array_filter($probeResult['results'], static fn($r) => $r['provider'] === 'etherscan'));
+ok($etherscanRows !== [] && $etherscanRows[0]['keyConfigured'] === true,
+   'the probe reports the Etherscan key as configured');
+$githubRows = array_values(array_filter($probeResult['results'], static fn($r) => $r['provider'] === 'github'));
+ok($githubRows !== [] && $githubRows[0]['keyConfigured'] === true,
+   'and the GitHub token — detected from the auth header, not from the always-present Accept header');
+
+$unkeyedProbe = (new ProviderProbe($unkeyed))->run();
+$ghUnkeyed = array_values(array_filter($unkeyedProbe['results'], static fn($r) => $r['provider'] === 'github'));
+ok($ghUnkeyed !== [] && $ghUnkeyed[0]['keyConfigured'] === false,
+   'and reports NO token when none is stored, despite GitHub\'s Accept header');
+
+foreach (['gas oracle', 'ETH supply', 'latest epoch', 'staking APR', 'Ethereum network', 'Bitcoin network', 'repository', 'recent commits'] as $label) {
+    $found = array_filter($probeResult['results'], static fn($r) => str_contains($r['label'], $label));
+    ok($found !== [], "the probe covers: {$label}");
+}
+
+update_option(Settings::OPTION, []);
+
+/* ------------------------------------------------------------------ */
+section('Group B — parsing');
+
+reset_world($config);
+$GLOBALS['thb_probe_background'] = true;
+$eth = ethereum();
+
+$gas = (new C\Etherscan($config))->fetch($eth, 'gas');
+ok($gas['safe'] === 12.0 && $gas['propose'] === 14.0 && $gas['fast'] === 16.0,
+   'gas: the three tiers a wallet shows, passed through rather than averaged');
+ok(abs((float) $gas['baseFee'] - 11.913) < 1e-9, 'and the base fee');
+
+freeBudget($config);
+$supply = (new C\Etherscan($config))->fetch($eth, 'supply');
+ok(abs($supply['totalSupply'] - 120530000.0) < 1.0,
+   'supply: wei strings beyond PHP_INT_MAX convert to ETH without overflow (' . round($supply['totalSupply']) . ')');
+ok(abs($supply['stakedPct'] - 28.21) < 0.01,
+   'the staked share is a ratio of two figures in the SAME response (' . round($supply['stakedPct'], 2) . '%)');
+ok(!isset($supply['burnRate']) && !isset($supply['issuanceRate']),
+   'and no RATE is claimed: burn and staking totals are cumulative since genesis');
+
+/* Etherscan reports failure as HTTP 200 with status "0". */
+freeBudget($config);
+$GLOBALS['thb_probe_etherscan_error'] = 'Invalid API Key';
+$bad = (new C\Etherscan($config))->fetch($eth, 'gas');
+ok($bad === null, 'an "Invalid API Key" reply is null — not cached as a gas price');
+
+freeBudget($config);
+$GLOBALS['thb_probe_etherscan_error'] = 'Max calls per sec rate limit reached (5/sec)';
+(new C\Etherscan($config))->fetch($eth, 'gas');
+ok((new Budget($config))->cooldownRemaining('etherscan') > 0,
+   'a rate-limit reply arriving as HTTP 200 still starts a cooldown — the budget could not see it otherwise');
+unset($GLOBALS['thb_probe_etherscan_error']);
+
+freeBudget($config);
+$net = (new C\Blockchair($config))->fetch($eth, 'network');
+ok($net['transactions24h'] === 1210000 && $net['mempool'] === 2843, 'network: daily transactions and the mempool');
+ok(abs($net['blockTime'] - 12.03) < 0.01,
+   'block time is DERIVED from the day\'s block count: 86400 / 7180 = ' . round($net['blockTime'], 2) . 's');
+ok($net['hashrate'] === null,
+   'Ethereum has NO hashrate since the Merge — a reported 0 becomes null, never "0 H/s"');
+
+freeBudget($config);
+$btcNet = (new C\Blockchair($config))->fetch(bitcoin(), 'network');
+ok($btcNet['hashrate'] === 6.5e20, 'while Bitcoin, which is mined, reports its hashrate');
+ok(abs($btcNet['blockTime'] - 600.0) < 0.1, 'and ten-minute blocks (' . round($btcNet['blockTime']) . 's)');
+
+freeBudget($config);
+$unmapped = new Coin(postId: 30, slug: 'solana', symbol: 'SOL', name: 'سولانا', nameEn: 'Solana',
+    coingeckoId: 'solana', newsCategorySlug: 'solana-news', meta: ['defillamaChain' => 'Solana']);
+$before = Probe::count();
+ok((new C\Blockchair($config))->fetch($unmapped, 'network') === null, 'a chain Blockchair does not index returns null');
+ok(Probe::count() === $before, 'without being asked — no request for an answer that cannot exist');
+
+freeBudget($config);
+$stake = (new C\BeaconChain($config))->fetch($eth, 'staking');
+ok($stake['validators'] === 1062000, 'staking: active validators');
+ok(abs($stake['stakedEth'] - 34200000.0) < 1.0, 'staked balance converted from gwei');
+ok(abs($stake['participation'] - 99.5) < 1e-9,
+   'participation arrives as a fraction (0.995) and renders as 99.5%, not 0.995%');
+ok(abs($stake['apr'] - 3.12) < 1e-9, 'realised APR likewise: 0.0312 → 3.12%, not 0.03%');
+
+freeBudget($config);
+$GLOBALS['thb_probe_ethstore_down'] = true;
+$partial = (new C\BeaconChain($config))->fetch($eth, 'staking');
+unset($GLOBALS['thb_probe_ethstore_down']);
+ok($partial['validators'] === 1062000 && $partial['apr'] === null,
+   'if the APR endpoint fails, the validator figures survive and only the APR is unavailable');
+
+freeBudget($config);
+$dev = (new C\GitHub($config))->fetch(ethereum(['githubRepo' => 'ethereum/go-ethereum']), 'development');
+ok($dev['repo'] === 'ethereum/go-ethereum' && $dev['stars'] === 48100, 'development: the repository');
+ok($dev['commits4w'] === 5, 'commits in the last four weeks');
+ok($dev['contributors4w'] === 4,
+   'distinct contributors = 4: alice, bob, carol AND the unlinked author — not folded into one null bucket');
+
+freeBudget($config);
+$before = Probe::count();
+ok((new C\GitHub($config))->fetch(new Coin(postId: 31, slug: 'x', symbol: 'X', name: 'x', nameEn: 'x',
+    coingeckoId: 'x', newsCategorySlug: 'x'), 'development') === null,
+   'with no repository configured, development is null');
+ok(Probe::count() === $before, 'and GitHub is not asked to guess one from the slug');
+
+/* The repository comes from CoinGecko's own metadata when no ACF value is set,
+   read from cache so warming dev activity never costs a CoinGecko request. */
+reset_world($config);
+Probe::$transients = [];
+$GLOBALS['thb_probe_background'] = true;
+$p = pipeline($config);
+$p->warm($eth, 'metadata');
+$geckoBefore = Probe::count('api.coingecko.com');
+freeBudget($config);
+$p->warm($eth, 'development');
+ok(Probe::count('api.coingecko.com') === $geckoBefore,
+   'warming development reads the repository from CACHED metadata — zero CoinGecko requests');
+ok(Probe::count('/repos/ethereum/go-ethereum') >= 1,
+   'and asks GitHub about the repository CoinGecko named');
+
+/* ------------------------------------------------------------------ */
+section('Group B — scope and chain gating');
+
+$sets = new Datasets($config);
+$cache = new Cache($config);
+
+foreach (['gas', 'supply', 'network', 'staking'] as $dataset) {
+    ok($sets->scope($dataset) === Datasets::SCOPE_CHAIN, "{$dataset} is chain-scoped");
+    ok($sets->rendersFromCacheOnly($dataset), "and cache-only on render");
+}
+ok($sets->scope('development') === Datasets::SCOPE_COIN, 'development is coin-scoped — each project has its own repo');
+
+/* Two coins on one chain share one entry — the reason chain scope is cheap. */
+$lido = new Coin(postId: 40, slug: 'lido-dao', symbol: 'LDO', name: 'لیدو', nameEn: 'Lido',
+    coingeckoId: 'lido-dao', newsCategorySlug: 'lido-news', meta: ['defillamaChain' => 'Ethereum']);
+ok($cache->keyFor('gas', $eth) === $cache->keyFor('gas', $lido),
+   'ETH and an ERC-20 on the same chain share ONE gas entry');
+ok($cache->keyFor('network', $eth) !== $cache->keyFor('network', bitcoin()),
+   'while different chains do not');
+
+$btcSets = $sets->forCoin(bitcoin());
+foreach (['gas', 'supply', 'staking'] as $dataset) {
+    ok(!in_array($dataset, $btcSets, true), "Bitcoin is never queued for {$dataset} — it has no such thing");
+}
+ok(in_array('network', $btcSets, true), 'but IS queued for network activity, which Blockchair serves');
+
+reset_world($config);
+Probe::$transients = [];
+$btcModel = pipeline($config)->viewModel(bitcoin());
+ok(($btcModel['staking']['state'] ?? '') === 'not_applicable',
+   'a Bitcoin page reports staking as NOT APPLICABLE — not "pending", which would promise data that never comes');
+ok(($btcModel['gas']['state'] ?? '') === 'not_applicable', 'and gas likewise');
+
+$ethModel = pipeline($config)->viewModel(ethereum());
+ok(($ethModel['staking']['state'] ?? '') === 'pending', 'while an unwarmed Ethereum page reports staking as PENDING');
+
+/* ------------------------------------------------------------------ */
+section('Group B — request cost');
+
+reset_world($config);
+Probe::$transients = [];
+$GLOBALS['thb_probe_background'] = false;
+$GLOBALS['thb_probe_dex_symbol'] = 'WETH';
+pipeline($config)->viewModel(ethereum(['dexSymbols' => 'WETH']));
+ok(Probe::count() === 7, 'a cold Ethereum render STILL makes exactly 7 requests (got ' . Probe::count() . ')');
+foreach (['etherscan.io', 'blockchair.com', 'beaconcha.in', 'api.github.com'] as $host) {
+    ok(Probe::count($host) === 0, "and none of them goes to {$host} — the scheduler owns Group B");
+}
+
+/* The queue: one entry per chain, not per coin. */
+$GLOBALS['thb_acf'] = [];
+$GLOBALS['thb_coin_fields'] = [];
+$GLOBALS['thb_post_slugs'] = [];
+$ids = [];
+for ($i = 0; $i < 20; $i++) {
+    $id = 600 + $i;
+    $ids[] = $id;
+    $GLOBALS['thb_post_slugs'][$id] = 'erc' . $i;
+    $GLOBALS['thb_coin_fields'][$id] = [
+        'thb_symbol' => 'E' . $i, 'thb_name_fa' => 'e' . $i, 'thb_coingecko_id' => 'erc' . $i,
+        'thb_news_category_slug' => 'erc' . $i, 'thb_defillama_chain' => 'Ethereum',
+    ];
+}
+$GLOBALS['thb_coin_ids'] = $ids;
+$many = (new CoinRepository())->all();
+$q = (new Scheduler($config, new CoinRepository(), pipeline($config), new History($config)))->queue($many);
+$counts = array_count_values(array_column($q, 'dataset'));
+foreach (['gas', 'supply', 'network', 'staking'] as $dataset) {
+    ok(($counts[$dataset] ?? 0) === 1,
+       "20 coins on Ethereum queue {$dataset} ONCE (got " . ($counts[$dataset] ?? 0) . ')');
+}
+$GLOBALS['thb_coin_ids'] = [10];
+$GLOBALS['thb_coin_fields'] = [];
+
+
+/* =====================================================================
+ * 10. The queue sees every chain, and every coin gets a turn
+ *
+ * THE BUG: candidates were collected in one pass over the coin list, stopping
+ * at max_candidates — about twenty coins. At a hundred, the rest were never
+ * looked at, so a chain that only appeared among them never had its
+ * chain-scoped data refreshed at all. Measured: Bitcoin's network stats and
+ * eight chains' DeFi figures received zero requests an hour.
+ * ================================================================== */
+section('queue reach at scale');
+
+reset_world($config);
+Probe::$transients = [];
+$GLOBALS['thb_acf'] = [];
+$GLOBALS['thb_coin_fields'] = [];
+$GLOBALS['thb_post_slugs'] = [];
+$ids = [];
+for ($i = 0; $i < 100; $i++) {
+    $id = 2000 + $i;
+    $ids[] = $id;
+    // Ninety-nine coins on Ethereum, then ONE on Solana at the very end of the
+    // list — exactly where the old single pass never reached.
+    $chain = $i === 99 ? 'Solana' : 'Ethereum';
+    $GLOBALS['thb_post_slugs'][$id] = 'tail' . $i;
+    $GLOBALS['thb_coin_fields'][$id] = [
+        'thb_symbol' => 'T' . $i, 'thb_name_fa' => 't' . $i, 'thb_coingecko_id' => 'tail' . $i,
+        'thb_news_category_slug' => 't' . $i, 'thb_defillama_chain' => $chain,
+        'thb_enable_defi' => 1, 'thb_enable_dex' => 1,
+    ];
+}
+$GLOBALS['thb_coin_ids'] = $ids;
+$hundred = (new CoinRepository())->all();
+$sched = new Scheduler($config, new CoinRepository(), pipeline($config), new History($config));
+
+$q = $sched->queue($hundred, 0);
+$solanaDefi = array_filter($q, static fn($i) => $i['dataset'] === 'defi'
+    && $i['coin']->meta('defillamaChain') === 'Solana');
+ok(count($solanaDefi) === 1,
+   'the LAST of 100 coins is the only one on Solana, and Solana\'s DeFi is still queued');
+
+$chainsQueued = array_unique(array_map(
+    static fn($i) => $i['coin']->meta('defillamaChain'),
+    array_filter($q, static fn($i) => $i['dataset'] === 'defi')
+));
+sort($chainsQueued);
+ok($chainsQueued === ['Ethereum', 'Solana'], 'every chain present is queued exactly once: ' . implode(', ', $chainsQueued));
+
+/* Coin-scoped entries are still bounded, and the window rotates. */
+$coinScoped = static fn(array $q): array => array_values(array_unique(array_map(
+    static fn($i) => $i['coin']->slug,
+    array_filter($q, static fn($i) => (new Datasets($GLOBALS['thb_cfg']))->scope($i['dataset']) === Datasets::SCOPE_COIN)
+)));
+$firstWindow = $coinScoped($sched->queue($hundred, 0));
+ok(count($firstWindow) < 100, 'coin-scoped candidates are still capped (' . count($firstWindow) . ' coins per window)');
+ok($firstWindow[0] === 'tail0', 'the first window starts at the head of the list');
+
+$GLOBALS['thb_probe_background'] = true;
+freeBudget($config);
+$sched->tick();
+$offset = (int) get_option(Scheduler::OPTION_COIN_OFFSET, 0);
+ok($offset === count($firstWindow), "a tick moves the window on by the coins it scanned (offset {$offset})");
+
+$secondWindow = $coinScoped($sched->queue($hundred));
+ok(($secondWindow[0] ?? '') === 'tail' . $offset, 'and the next window starts where that one stopped: ' . ($secondWindow[0] ?? '—'));
+ok(array_intersect($firstWindow, $secondWindow) === [], 'with no overlap between consecutive windows');
+
+/* Over enough ticks, every coin is reached — the actual guarantee. */
+$reached = [];
+for ($t = 0; $t < 20; $t++) {
+    foreach ($coinScoped($sched->queue($hundred)) as $slug) { $reached[$slug] = true; }
+    freeBudget($config);
+    $sched->tick();
+    Clock::advance(55);
+}
+ok(count($reached) === 100, 'within twenty ticks every one of the 100 coins has been in a window (' . count($reached) . ')');
+
+/* Reading the queue must not move it — the diagnostics screen calls queue(). */
+$before = get_option(Scheduler::OPTION_COIN_OFFSET, 0);
+$sched->queue($hundred);
+$sched->queue($hundred);
+ok(get_option(Scheduler::OPTION_COIN_OFFSET, 0) === $before, 'reading the queue does not advance the window; only a tick does');
+
+$GLOBALS['thb_probe_background'] = false;
+$GLOBALS['thb_coin_ids'] = [10];
+$GLOBALS['thb_coin_fields'] = [];
+
+
+/* =====================================================================
+ * 11. The settings screen never echoes a key back
+ * ================================================================== */
+section('settings screen');
+
+update_option(Settings::OPTION, [
+    'etherscan_key' => 'ETHERSCANKEY1234567890ABCDEF',
+    'github_token'  => 'github_pat_TOKEN1234567890',
+]);
+$_GET = [];
+ob_start();
+(new Settings())->render();
+$screen = (string) ob_get_clean();
+
+ok(!str_contains($screen, 'ETHERSCANKEY1234567890ABCDEF'), 'the stored Etherscan key does not appear in the page');
+ok(!str_contains($screen, 'github_pat_TOKEN1234567890'), 'nor the GitHub token');
+ok(str_contains($screen, 'ETHE') && str_contains($screen, 'CDEF'), 'a masked hint does, so you can tell which key is stored');
+ok(!preg_match('/name="etherscan_key" value="[^"]+"/', $screen), 'and the input is EMPTY — the key is not round-tripped through the form');
+foreach (Settings::keys() as $setting => $spec) {
+    ok(str_contains($screen, $spec['url']), "the screen links to where the {$spec['label']} key is created");
+}
+
+/* Saving an empty field leaves the stored key alone; clearing is explicit. */
+$_POST = ['etherscan_key' => '', 'github_token' => '', 'beaconchain_key' => 'NEWBEACON_123456', 'blockchair_key' => ''];
+try { (new Settings())->save(); } catch (\Throwable $e) {}
+$after = Settings::all();
+ok(($after['etherscan_key'] ?? '') === 'ETHERSCANKEY1234567890ABCDEF', 'saving with an empty field does NOT delete the stored key');
+ok(($after['beaconchain_key'] ?? '') === 'NEWBEACON_123456', 'while a newly typed key is stored');
+
+$_POST = ['clear_github_token' => '1'];
+try { (new Settings())->save(); } catch (\Throwable $e) {}
+ok(!isset(Settings::all()['github_token']), 'and a key is removed only when "clear" is ticked');
+
+$_POST = ['etherscan_key' => "  KEY'WITH\"<script>junk  "];
+try { (new Settings())->save(); } catch (\Throwable $e) {}
+ok(Settings::all()['etherscan_key'] === 'KEYWITHscriptjunk', 'pasted junk is reduced to key characters before it can reach a request');
+
+$_POST = [];
+update_option(Settings::OPTION, []);
+
+
+/* =====================================================================
+ * 12. The diagnostics screen renders, and leaks nothing
+ *
+ * Never rendered by any test before this; it is also the page most likely to
+ * be screenshotted and posted somewhere when asking for help.
+ * ================================================================== */
+section('diagnostics screen');
+
+reset_world($config);
+Probe::$transients = [];
+$GLOBALS['thb_acf'] = [
+    'thb_symbol' => 'ETH', 'thb_name_fa' => 'اتریوم', 'thb_name_en' => 'Ethereum',
+    'thb_coingecko_id' => 'ethereum', 'thb_news_category_slug' => 'ethereum-news',
+    'thb_defillama_chain' => 'Ethereum', 'thb_enable_defi' => 1, 'thb_enable_dex' => 1,
+];
+$GLOBALS['thb_coin_ids'] = [10];
+$GLOBALS['thb_post_slugs'] = [10 => 'ethereum'];
+update_option(Settings::OPTION, ['etherscan_key' => 'ETHERSCANKEY1234567890ABCDEF']);
+$diagConfig = Settings::apply($config);
+
+$_GET = ['coin' => 'ethereum'];
+ob_start();
+$threw = null;
+try {
+    (new \TheHybit\Coins\Diagnostics(new CoinRepository(), pipeline($diagConfig), $diagConfig))->render();
+} catch (\Throwable $e) {
+    $threw = $e;
+}
+$diag = (string) ob_get_clean();
+$_GET = [];
+
+ok($threw === null, 'the diagnostics screen renders without an error' . ($threw ? ': ' . $threw->getMessage() : ''));
+ok(str_contains($diag, 'کلیدهای API'), 'it shows the API key status table');
+ok(!str_contains($diag, 'ETHERSCANKEY1234567890ABCDEF'), 'without ever printing the stored key');
+ok(str_contains($diag, 'ETHE') , 'only its masked hint');
+foreach (['gas', 'supply', 'network', 'staking', 'development'] as $dataset) {
+    ok(str_contains($diag, '<code>' . $dataset . '</code>'), "the dataset table lists {$dataset}");
+}
+
+update_option(Settings::OPTION, []);
+
 
 echo $failed ? "\n{$failed} FAILED\n" : "\nAll runtime tests passed.\n";
 exit($failed ? 1 : 0);

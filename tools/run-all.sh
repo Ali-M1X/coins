@@ -43,6 +43,12 @@ run() {
 
   if [ $status -ne 0 ]; then
     SUITES_FAILED+=("$label")
+  # A suite that exits 0 WITHOUT printing its closing line ended early — an
+  # `exit` reached from inside a handler, say. Every assertion after that point
+  # silently never ran, and counting only the ones that did would report green.
+  elif ! echo "$output" | grep -qE 'passed\.|match the baseline'; then
+    echo "  ENDED EARLY: no closing line — assertions after the exit point never ran"
+    SUITES_FAILED+=("$label (ended early)")
   fi
 }
 

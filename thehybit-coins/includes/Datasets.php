@@ -107,6 +107,31 @@ final class Datasets
     }
 
     /**
+     * Does this provider have anything to say about this coin's chain?
+     *
+     * beaconcha.in knows about Ethereum's validators and nothing else;
+     * Blockchair indexes a specific list of chains. Asking either about a chain
+     * it does not serve returns a confident-looking error document, which costs
+     * budget, fills the log and — worst — can parse into something that looks
+     * like data.
+     *
+     * A provider with no `chains` list serves every chain, which is the right
+     * default: CoinGecko and DefiLlama do.
+     */
+    public function servesChain(string $provider, ?Coin $coin): bool
+    {
+        $chains = $this->config['providers'][$provider]['chains'] ?? null;
+        if (!is_array($chains) || $chains === []) {
+            return true;
+        }
+        if ($coin === null) {
+            return false;
+        }
+
+        return in_array((string) $coin->meta('defillamaChain', ''), $chains, true);
+    }
+
+    /**
      * The cache key fragment for one dataset, given a coin.
      *
      * This is the whole point of the class. A site-scoped dataset gets a key
@@ -163,6 +188,9 @@ final class Datasets
                 continue;
             }
             if (!$this->isEnabled($dataset)) {
+                continue;
+            }
+            if (!$this->servesChain($provider, $coin)) {
                 continue;
             }
             $out[] = $dataset;

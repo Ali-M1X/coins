@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     1.8.0
+ * Version:     1.9.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,13 +20,14 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '1.8.0');
+define('THB_COINS_VERSION', '1.9.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
 require_once THB_COINS_DIR . 'includes/Seeder.php';
 require_once THB_COINS_DIR . 'includes/AdminSetup.php';
 require_once THB_COINS_DIR . 'includes/CoinRepository.php';
+require_once THB_COINS_DIR . 'includes/Settings.php';
 require_once THB_COINS_DIR . 'includes/Datasets.php';
 require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';
@@ -51,6 +52,10 @@ require_once THB_COINS_DIR . 'includes/Collectors/L2Beat.php';
 require_once THB_COINS_DIR . 'includes/Collectors/OnChain.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Fx.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Alternative.php';
+require_once THB_COINS_DIR . 'includes/Collectors/Etherscan.php';
+require_once THB_COINS_DIR . 'includes/Collectors/Blockchair.php';
+require_once THB_COINS_DIR . 'includes/Collectors/BeaconChain.php';
+require_once THB_COINS_DIR . 'includes/Collectors/GitHub.php';
 
 final class Plugin
 {
@@ -70,7 +75,10 @@ final class Plugin
 
     private function __construct()
     {
-        $this->config   = require THB_COINS_DIR . 'config/providers.php';
+        /* Keys live in a WordPress option, never in the committed config, and
+           are merged in here — once, before any collector or the scheduler
+           reads the array. See includes/Settings.php. */
+        $this->config   = Settings::apply(require THB_COINS_DIR . 'config/providers.php');
         $this->coins    = new CoinRepository();
         $this->cache    = new Cache($this->config);
         $this->history  = new History($this->config);
@@ -85,6 +93,10 @@ final class Plugin
             Collectors\OnChain::class,
             Collectors\Fx::class,
             Collectors\Alternative::class,
+            Collectors\Etherscan::class,
+            Collectors\Blockchair::class,
+            Collectors\BeaconChain::class,
+            Collectors\GitHub::class,
         ] as $class) {
             $this->pipeline->register(new $class($this->config));
         }
@@ -110,6 +122,9 @@ final class Plugin
         /* TEMPORARY one-time setup page. Not part of the pipeline; registers
            nothing once setup is finished. See includes/AdminSetup.php. */
         (new AdminSetup($this->coins))->register();
+
+        /* Settings — API keys, and later the design selector. */
+        (new Settings())->register();
 
         /* Admin-only provider diagnostics. Adds nothing to the front-end
            request path — see includes/Diagnostics.php. */

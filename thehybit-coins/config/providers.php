@@ -64,6 +64,20 @@ return [
         'bridges'     => 6 * HOUR_IN_SECONDS,
         'categories'  => 6 * HOUR_IN_SECONDS,
         'structure'   => DAY_IN_SECONDS,
+
+        /* Group B. Each is the rate at which the underlying figure actually
+           moves, which for most of these is far slower than it feels.
+
+           Gas is the fastest at five minutes — it genuinely swings intraday and
+           a stale gas price is a misleading one. Validator counts and staking
+           yield change over hours; total supply over days. Developer activity is
+           counted over a 30-day window, so asking more than four times a day
+           cannot change the answer. */
+        'gas'         => 5 * MINUTE_IN_SECONDS,
+        'network'     => 10 * MINUTE_IN_SECONDS,
+        'staking'     => 30 * MINUTE_IN_SECONDS,
+        'supply'      => HOUR_IN_SECONDS,
+        'development' => 6 * HOUR_IN_SECONDS,
     ],
 
     /* ------------------------------------------------------------------
@@ -166,6 +180,23 @@ return [
            budget on a refusal every miss_ttl and put an "unavailable" card on
            the page indefinitely. */
         'bridges'     => ['provider' => 'defillama',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache', 'enabled' => false],
+
+        /* ---- Group B: on-chain, network and ecosystem --------------------
+         *
+         * All CHAIN-scoped except `development`, which is genuinely per coin —
+         * each project has its own repository. Chain scope is the whole reason
+         * these are affordable: a hundred coins across ten chains cost ten
+         * requests per dataset, not a hundred, and two coins on one chain cost
+         * one between them.
+         *
+         * Every one is `render => cache`, like Group A. A page reads what the
+         * scheduler left and never calls a provider itself, so adding eight
+         * datasets leaves the cold-render cost exactly where it was. */
+        'gas'         => ['provider' => 'etherscan',   'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
+        'supply'      => ['provider' => 'etherscan',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
+        'network'     => ['provider' => 'blockchair',  'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
+        'staking'     => ['provider' => 'beaconchain', 'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
+        'development' => ['provider' => 'github',      'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
     ],
 
     /* ------------------------------------------------------------------
@@ -402,6 +433,102 @@ return [
             'budget'   => ['per_minute' => 4, 'per_hour' => 60, 'per_day' => 600],
             'datasets' => ['fx'],
         ],
+
+        /* ==================================================================
+         * GROUP B PROVIDERS — the on-chain and ecosystem sources.
+         *
+         * Every one of these is CHAIN-SCOPED or coin-scoped by its datasets,
+         * never site-scoped, because what they report genuinely differs per
+         * chain. At a hundred coins spread over ten chains that is ten
+         * requests, not a hundred — the `chains` whitelist below is what keeps
+         * it so, and what stops us asking a Bitcoin-only endpoint about
+         * Ethereum.
+         *
+         * `auth` says where a key goes, never what it is. Keys live in the
+         * WordPress option behind includes/Settings.php and are merged in at
+         * boot, so nothing in this file or this repository ever holds one.
+         * ================================================================== */
+
+        'etherscan' => [
+            'label'    => 'Etherscan',
+            'enabled'  => true,
+            'base'     => 'https://api.etherscan.io',
+            'timeout'  => 10,
+            'headers'  => [],
+            'min_interval' => 1,
+            /* The free tier is 5 calls/second and 100,000 calls/day, which is
+               far more than anything here needs. The budget below is set by what
+               the DATA justifies rather than by what the provider permits: gas
+               moves by the minute, supply by the hour, and asking faster buys
+               nothing but a larger bill for somebody. */
+            'budget'   => ['per_minute' => 10, 'per_hour' => 200, 'per_day' => 3000],
+            'cooldown' => 2 * MINUTE_IN_SECONDS,
+            'auth'     => ['in' => 'query', 'name' => 'apikey'],
+            /* EVM chains only, and only the ones whose explorer this base
+               actually serves. A chain absent from this list simply has no gas
+               or supply figures, which the page states rather than guesses. */
+            'chains'   => ['Ethereum'],
+            'datasets' => ['gas', 'supply'],
+        ],
+
+        'beaconchain' => [
+            'label'    => 'beaconcha.in',
+            'enabled'  => true,
+            'base'     => 'https://beaconcha.in/api/v1',
+            'timeout'  => 12,
+            'headers'  => [],
+            'min_interval' => 2,
+            /* 10 calls/minute on the free tier — the tightest limit of any
+               provider here, so the budget sits well under it and the TTL is
+               measured in tens of minutes. Validator counts move slowly. */
+            'budget'   => ['per_minute' => 2, 'per_hour' => 30, 'per_day' => 500],
+            'cooldown' => 5 * MINUTE_IN_SECONDS,
+            'auth'     => ['in' => 'header', 'name' => 'apikey'],
+            /* The Ethereum beacon chain, and nothing else. There is no sense in
+               which this endpoint has an answer for Bitcoin or Solana. */
+            'chains'   => ['Ethereum'],
+            'datasets' => ['staking'],
+        ],
+
+        'blockchair' => [
+            'label'    => 'Blockchair',
+            'enabled'  => true,
+            'base'     => 'https://api.blockchair.com',
+            'timeout'  => 10,
+            'headers'  => [],
+            'min_interval' => 2,
+            /* 1,440 calls a day without a key — one a minute, averaged. Chosen
+               KEYLESS deliberately: it covers both Ethereum and Bitcoin from one
+               endpoint shape, which Etherscan cannot, and a key only raises a
+               ceiling we are nowhere near. */
+            'budget'   => ['per_minute' => 2, 'per_hour' => 40, 'per_day' => 1200],
+            'cooldown' => 5 * MINUTE_IN_SECONDS,
+            'auth'     => ['in' => 'query', 'name' => 'key'],
+            'chains'   => ['Ethereum', 'Bitcoin'],
+            /* Blockchair names chains its own way — an eighth identifier for one
+               coin, stored rather than derived, for the same reason as the other
+               seven. See Coin.php. */
+            'slugs'    => ['Ethereum' => 'ethereum', 'Bitcoin' => 'bitcoin'],
+            'datasets' => ['network'],
+        ],
+
+        'github' => [
+            'label'    => 'GitHub',
+            'enabled'  => true,
+            'base'     => 'https://api.github.com',
+            'timeout'  => 10,
+            'headers'  => ['Accept' => 'application/vnd.github+json'],
+            'min_interval' => 1,
+            /* 60 calls/hour unauthenticated, 5,000 with a token. The budget
+               assumes the unauthenticated floor so the plugin behaves the same
+               before and after a token is pasted in — it simply gets more
+               headroom, not different behaviour. */
+            'budget'   => ['per_minute' => 2, 'per_hour' => 40, 'per_day' => 400],
+            'cooldown' => 10 * MINUTE_IN_SECONDS,
+            'auth'     => ['in' => 'header', 'name' => 'Authorization', 'format' => 'Bearer %s'],
+            'datasets' => ['development'],
+        ],
+
     ],
 
     /* ------------------------------------------------------------------

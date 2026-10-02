@@ -222,33 +222,84 @@ final class ProviderProbe
                 'expects'  => ['0.longShortRatio'],
             ],
 
-            /* ---------------- Etherscan ---------------- */
+            /* ---------------- Etherscan ----------------
+             *
+             * Sent WITH the configured key (from Settings, merged into the query
+             * at send time) and displayed WITHOUT it. Etherscan reports an
+             * invalid or missing key as HTTP 200 with status "0", so a green
+             * status code here is not enough — the `expects` paths are what
+             * confirm a real answer. */
             [
                 'provider' => 'etherscan',
-                'label'    => 'gas oracle (candidate)',
+                'label'    => 'gas oracle (in use — gas)',
                 'url'      => 'https://api.etherscan.io/api',
                 'query'    => ['module' => 'gastracker', 'action' => 'gasoracle'],
                 'needsKey' => true,
-                'expects'  => ['result.SafeGasPrice', 'result.suggestBaseFee'],
-                'note'     => 'probed without a key on purpose — the reply proves whether one is required',
+                'expects'  => ['status', 'result.SafeGasPrice', 'result.ProposeGasPrice', 'result.FastGasPrice', 'result.suggestBaseFee'],
             ],
             [
                 'provider' => 'etherscan',
-                'label'    => 'latest block (candidate)',
+                'label'    => 'ETH supply incl. burn and staking (in use — supply)',
                 'url'      => 'https://api.etherscan.io/api',
-                'query'    => ['module' => 'proxy', 'action' => 'eth_blockNumber'],
+                'query'    => ['module' => 'stats', 'action' => 'ethsupply2'],
                 'needsKey' => true,
-                'expects'  => ['result'],
+                'expects'  => ['status', 'result.EthSupply', 'result.Eth2Staking', 'result.BurntFees'],
             ],
 
             /* ---------------- beaconcha.in ---------------- */
             [
                 'provider' => 'beaconchain',
-                'label'    => 'latest epoch (candidate)',
+                'label'    => 'latest epoch (in use — staking)',
                 'url'      => 'https://beaconcha.in/api/v1/epoch/latest',
                 'query'    => [],
                 'needsKey' => false,
-                'expects'  => ['data.validatorscount', 'data.totalvalidatorbalance'],
+                'expects'  => ['status', 'data.validatorscount', 'data.totalvalidatorbalance', 'data.globalparticipationrate'],
+            ],
+            [
+                'provider' => 'beaconchain',
+                'label'    => 'realised staking APR (in use — staking)',
+                'url'      => 'https://beaconcha.in/api/v1/ethstore/latest',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['status', 'data.apr'],
+                'note'     => 'optional — if this fails the validator figures still render and only the APR is unavailable',
+            ],
+
+            /* ---------------- Blockchair ---------------- */
+            [
+                'provider' => 'blockchair',
+                'label'    => 'Ethereum network stats (in use — network)',
+                'url'      => 'https://api.blockchair.com/ethereum/stats',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['data.blocks', 'data.blocks_24h', 'data.transactions_24h', 'data.mempool_transactions', 'data.average_transaction_fee_usd_24h'],
+            ],
+            [
+                'provider' => 'blockchair',
+                'label'    => 'Bitcoin network stats (in use — network)',
+                'url'      => 'https://api.blockchair.com/bitcoin/stats',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['data.blocks', 'data.blocks_24h', 'data.transactions_24h', 'data.hashrate_24h', 'data.difficulty'],
+            ],
+
+            /* ---------------- GitHub ---------------- */
+            [
+                'provider' => 'github',
+                'label'    => 'repository (in use — development)',
+                'url'      => 'https://api.github.com/repos/ethereum/go-ethereum',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['full_name', 'stargazers_count', 'forks_count', 'pushed_at'],
+                'note'     => 'x-ratelimit-limit shows 60 without a token and 5000 with one — the clearest proof the token is being sent',
+            ],
+            [
+                'provider' => 'github',
+                'label'    => 'recent commits (in use — development)',
+                'url'      => 'https://api.github.com/repos/ethereum/go-ethereum/commits',
+                'query'    => ['per_page' => '5'],
+                'needsKey' => false,
+                'expects'  => ['0.sha', '0.commit.author.date'],
             ],
 
             /* ---------------- alternative.me ---------------- */
@@ -351,12 +402,35 @@ final class ProviderProbe
      */
     private function probe(array $endpoint): array
     {
-        $url = $endpoint['query'] === []
+        $settings = $this->config['providers'][$endpoint['provider']] ?? [];
+        $configuredHeaders = (array) ($settings['headers'] ?? []);
+
+        /* TWO URLS, ON PURPOSE.
+         *
+         * Etherscan and Blockchair take their key in the QUERY STRING, and this
+         * probe used to echo the URL it requested straight onto the diagnostics
+         * screen — the screen somebody screenshots when asking for help. So the
+         * request goes out with the provider's query defaults (where
+         * Settings::apply() put the key) merged in, and the URL that is stored
+         * and displayed is built from the endpoint's own parameters only. The
+         * key is sent; it is never recorded. */
+        $displayUrl = $endpoint['query'] === []
             ? $endpoint['url']
             : $endpoint['url'] . '?' . http_build_query($endpoint['query']);
 
-        $settings = $this->config['providers'][$endpoint['provider']] ?? [];
-        $configuredHeaders = (array) ($settings['headers'] ?? []);
+        $sendQuery = (array) $endpoint['query'] + (array) ($settings['query'] ?? []);
+        $url = $sendQuery === []
+            ? $endpoint['url']
+            : $endpoint['url'] . '?' . http_build_query($sendQuery);
+
+        /* Whether a KEY is configured — not merely whether any header is. GitHub
+           always carries an Accept header, which used to read as "key present". */
+        $auth = (array) ($settings['auth'] ?? []);
+        $keyConfigured = match ($auth['in'] ?? null) {
+            'header' => isset($configuredHeaders[$auth['name'] ?? '']),
+            'query'  => isset($settings['query'][$auth['name'] ?? '']),
+            default  => false,
+        };
 
         $started = microtime(true);
         $response = wp_remote_get($url, [
@@ -372,12 +446,12 @@ final class ProviderProbe
         $base = [
             'provider'    => $endpoint['provider'],
             'label'       => $endpoint['label'],
-            // Query is echoed WITHOUT any configured header, so a key can never
-            // reach the screen. See keyConfigured below.
-            'url'         => $url,
+            // The DISPLAY url: endpoint parameters only, never the provider's
+            // query defaults, so a query-string key cannot reach the screen.
+            'url'         => $displayUrl,
             'note'        => $endpoint['note'] ?? '',
             'needsKey'    => (bool) $endpoint['needsKey'],
-            'keyConfigured' => $configuredHeaders !== [],
+            'keyConfigured' => $keyConfigured,
             'durationMs'  => $durationMs,
             'testedAt'    => gmdate('c'),
         ];
@@ -387,7 +461,7 @@ final class ProviderProbe
                 'ok'          => false,
                 'status'      => 0,
                 'bytes'       => 0,
-                'error'       => $response->get_error_message(),
+                'error'       => Settings::scrub($response->get_error_message(), $settings),
                 'rateHeaders' => [],
                 'missing'     => $endpoint['expects'],
                 'quotaNote'   => '',
