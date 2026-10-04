@@ -89,6 +89,16 @@ return [
         'peers'       => 30 * MINUTE_IN_SECONDS,
         'protocols'   => HOUR_IN_SECONDS,
         'longchart'   => DAY_IN_SECONDS,
+
+        /* v2, second round — sources for the sections that were empty.
+           CoinMetrics publishes daily figures with a one-day lag, so asking
+           more than four times a day returns the same rows. Whale transfers
+           are the one fast-moving list here. */
+        'chainstats'   => 6 * HOUR_IN_SECONDS,
+        'lidoapr'      => HOUR_IN_SECONDS,
+        'whales'       => 10 * MINUTE_IN_SECONDS,
+        'ethlocations' => HOUR_IN_SECONDS,
+        'interest'     => 12 * HOUR_IN_SECONDS,
     ],
 
     /* ------------------------------------------------------------------
@@ -220,6 +230,14 @@ return [
         'peers'       => ['provider' => 'coingecko',   'scope' => 'site',  'priority' => 4, 'render' => 'cache'],
         'protocols'   => ['provider' => 'defillama',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
         'longchart'   => ['provider' => 'llamaprices', 'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
+
+        /* Second round: the sections that showed "data unavailable". All
+           cache-only, so a render still costs exactly what it did. */
+        'chainstats'   => ['provider' => 'coinmetrics', 'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
+        'lidoapr'      => ['provider' => 'lido',        'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
+        'whales'       => ['provider' => 'blockchair',  'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
+        'ethlocations' => ['provider' => 'etherscan',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
+        'interest'     => ['provider' => 'wikimedia',   'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
     ],
 
     /* ------------------------------------------------------------------
@@ -505,7 +523,25 @@ return [
                actually serves. A chain absent from this list simply has no gas
                or supply figures, which the page states rather than guesses. */
             'chains'   => ['Ethereum'],
-            'datasets' => ['gas', 'supply'],
+            'datasets' => ['gas', 'supply', 'ethlocations'],
+
+            /* Where ETH sits, read from the chain itself (`ethlocations`).
+               WETH is the ERC-20 wrapper DeFi contracts trade; the bridges are
+               the CANONICAL L1 escrows of the largest rollups — native ETH
+               locked on Ethereum while it circulates on the L2. One
+               balancemulti call reads them all.
+
+               VERIFY THESE ON THE SERVER: Provider Probe → "canonical bridge
+               balances" prints each balance next to its address, and each
+               address can be opened on etherscan.io to confirm its name tag. */
+            'weth'     => '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+            'bridges'  => [
+                'Arbitrum One' => '0x8315177aB297bA92A06054cE80a67Ed4DBd7ed3a',
+                'Optimism'     => '0xbEb5Fc579115071764c7423A4f12eDde41f106Ed',
+                'Base'         => '0x49048044D57e1C92A77f79988d21Fa8fAF74E97e',
+                'Starknet'     => '0xae0Ee0A63A2cE6BaeEFFE56e7714FB4EFE48D419',
+                'Linea'        => '0xd19d4B5d358258f05D7B411E21A1460D11B0876F',
+            ],
         ],
 
         'beaconchain' => [
@@ -546,7 +582,9 @@ return [
                coin, stored rather than derived, for the same reason as the other
                seven. See Coin.php. */
             'slugs'    => ['Ethereum' => 'ethereum', 'Bitcoin' => 'bitcoin'],
-            'datasets' => ['network'],
+            'datasets' => ['network', 'whales'],
+            /* Whale radar: native transfers at or above this many coins. */
+            'whale_min' => ['Ethereum' => 500, 'Bitcoin' => 500],
         ],
 
         /* v2's price-since-launch chart. DefiLlama's price API, as its own
@@ -564,6 +602,63 @@ return [
             'budget'   => ['per_minute' => 6, 'per_hour' => 60, 'per_day' => 600],
             'cooldown' => 5 * MINUTE_IN_SECONDS,
             'datasets' => ['longchart'],
+        ],
+
+        /* CoinMetrics Community API — free, keyless, documented. Daily
+           on-chain metrics (active addresses, transactions, supply, and —
+           where the community tier includes them — exchange balances and
+           flows, and supply untouched for a year). One request per coin per
+           six hours. Its published limit is 10 requests per 6 seconds per IP. */
+        'coinmetrics' => [
+            'label'    => 'CoinMetrics',
+            'enabled'  => true,
+            'base'     => 'https://community-api.coinmetrics.io/v4',
+            'timeout'  => 12,
+            'headers'  => [],
+            'min_interval' => 1,
+            'budget'   => ['per_minute' => 6, 'per_hour' => 60, 'per_day' => 600],
+            'cooldown' => 5 * MINUTE_IN_SECONDS,
+            'datasets' => ['chainstats'],
+            /* CoinMetrics' asset ids, by CoinGecko id. Unlisted coins fall
+               back to the lower-case ticker, which is CoinMetrics' own
+               convention for most assets. */
+            'assets'   => ['ethereum' => 'eth', 'bitcoin' => 'btc'],
+            /* Requested together; the API is asked to drop any the community
+               tier does not include instead of refusing the whole request. */
+            'metrics'  => ['AdrActCnt', 'TxCnt', 'SplyCur', 'IssTotNtv', 'SplyExNtv',
+                           'FlowInExNtv', 'FlowOutExNtv', 'SplyAct1yr', 'HashRate'],
+        ],
+
+        /* Lido's published stETH APR (7-day moving average). Keyless. A real,
+           measured staking yield for the largest staking provider — used
+           when beaconcha.in's network-wide figure is unavailable, and
+           labelled as Lido's on the page. */
+        'lido' => [
+            'label'    => 'Lido',
+            'enabled'  => true,
+            'base'     => 'https://eth-api.lido.fi/v1',
+            'timeout'  => 10,
+            'headers'  => [],
+            'min_interval' => 1,
+            'budget'   => ['per_minute' => 2, 'per_hour' => 20, 'per_day' => 200],
+            'cooldown' => 10 * MINUTE_IN_SECONDS,
+            'chains'   => ['Ethereum'],
+            'datasets' => ['lidoapr'],
+        ],
+
+        /* Wikipedia page views (Wikimedia REST API) — free, keyless, official.
+           The public-interest figure that stands in for search interest, for
+           which Google publishes no API. Persian and English articles. */
+        'wikimedia' => [
+            'label'    => 'Wikimedia',
+            'enabled'  => true,
+            'base'     => 'https://wikimedia.org/api/rest_v1',
+            'timeout'  => 10,
+            'headers'  => [],
+            'min_interval' => 1,
+            'budget'   => ['per_minute' => 10, 'per_hour' => 100, 'per_day' => 1000],
+            'cooldown' => 5 * MINUTE_IN_SECONDS,
+            'datasets' => ['interest'],
         ],
 
         'github' => [

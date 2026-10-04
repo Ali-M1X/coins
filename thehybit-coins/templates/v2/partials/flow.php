@@ -56,6 +56,7 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
            this list, where they can be read at full size. */ ?>
         <div class="v2-flow__mobile">
           <?php foreach ([['از کجا آمد', $f['left'], $tones], ['به کجا رفت', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
+            <?php if ($nodes === []) { continue; } ?>
             <h3 class="v2-flow__mtitle"><?= esc_html($title) ?></h3>
             <ul class="v2-flow__mlist">
               <?php foreach ($nodes as $i => $node) : ?>
@@ -65,6 +66,9 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
             </ul>
           <?php endforeach; ?>
         </div>
+        <?php if ($f['right'] === []) : ?>
+          <p class="v2-muted">سمت راست نمودار (سهم درآمد پروتکل‌ها) هنوز دریافت نشده است؛ سمت چپ کامل است.</p>
+        <?php endif; ?>
         <div class="v2-flow__legend">
           <span>چپ: کارمزد بر اساس نوع پروتکل</span>
           <span>راست: سهم درآمد پروتکل‌ها در برابر تأمین‌کنندگان سرمایه</span>
@@ -98,9 +102,31 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
         <?php endif; ?>
       </div>
 
-      <div class="v2-card v2-card--muted">
+      <?php $w = $f['whales']; ?>
+      <div class="v2-card v2-whales">
         <h3 class="v2-card__title">رادار نهنگ‌ها</h3>
-        <?= View::na('unavailable', 'تراکنش‌های بزرگ با برچسب کیف پول فقط در سرویس‌های پولی (Arkham، Nansen) منتشر می‌شود؛ عددی ساخته نمی‌شود.') ?>
+        <?php if ($w['rows'] !== []) : ?>
+          <p class="v2-muted">آخرین انتقال‌های دست‌کم <?= View::n(Format::num((float) $w['min'], 0) . ' ' . $c['symbol']) ?> روی زنجیره</p>
+          <ul class="v2-whales__list">
+            <?php foreach ($w['rows'] as $row) : ?>
+              <li>
+                <a href="<?= esc_url($row['url']) ?>" rel="nofollow noopener" target="_blank">
+                  <strong><?= View::n($row['amount']) ?></strong>
+                  <?php if ($row['usd']) : ?><span class="v2-muted"><?= View::n($row['usd']) ?></span><?php endif; ?>
+                  <?php if ($row['from'] && $row['to']) : ?>
+                    <span class="v2-whales__route"><?= View::n($row['from'] . ' → ' . $row['to']) ?></span>
+                  <?php endif; ?>
+                  <?php if ($row['time']) : ?><span class="v2-whales__time"><?= View::n($row['time']) ?></span><?php endif; ?>
+                </a>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+          <p class="v2-source">انتقال‌های بومی <?= esc_html($c['symbol']) ?> (نه توکن‌ها). نام صاحب کیف پول‌ها در منبع رایگانی منتشر نمی‌شود و حدس زده نمی‌شود. منبع: <bdi>Blockchair</bdi></p>
+        <?php elseif ($w['state'] === 'ok' || $w['state'] === 'stale') : ?>
+          <p class="v2-muted">در بازه اخیر انتقالی بالاتر از <?= View::n(Format::num((float) $w['min'], 0) . ' ' . $c['symbol']) ?> ثبت نشده است.</p>
+        <?php else : ?>
+          <?= View::na($w['state'], 'فهرست انتقال‌های بزرگ از Blockchair') ?>
+        <?php endif; ?>
       </div>
     </aside>
   </div>

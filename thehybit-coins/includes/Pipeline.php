@@ -78,6 +78,11 @@ final class Pipeline
         'peers'     => 'coingecko',
         'protocols' => 'defillama',
         'longchart' => 'llamaprices',
+        'chainstats'   => 'coinmetrics',
+        'lidoapr'      => 'lido',
+        'whales'       => 'blockchair',
+        'ethlocations' => 'etherscan',
+        'interest'     => 'wikimedia',
     ];
 
     /** @var Collector[] keyed by provider id */

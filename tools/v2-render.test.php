@@ -207,18 +207,52 @@ foreach (['939 TH/s', '$72.4B', '989,423', '14.2 Gwei', '683.2K', '$3,261.48', '
           '34.6%', '32.4%', '−45%', '+120%', 'Search interest'] as $sample) {
     ok(!str_contains($html, $sample), "the reference's sample figure «{$sample}» does not appear");
 }
+/* Every section that showed "data not available" in the first build now
+   carries its figure — from a named source, never estimated. */
 foreach ([
-    'رادار نهنگ‌ها'          => 'whale radar',
-    'آدرس‌های فعال روزانه'    => 'daily active addresses',
-    'Google Trends'          => 'search interest',
-    'روی صرافی‌های متمرکز'    => 'supply on exchanges',
-    'کیف پول‌های بلندمدت'     => 'long-term wallets',
-    'تقویم آزادسازی توکن'     => 'unlock calendar',
+    '498,000'                      => 'daily active addresses (CoinMetrics)',
+    'آخرین انتقال‌های دست‌کم'      => 'whale radar lists large transfers (Blockchair)',
+    '2,000 ETH'                    => 'and shows the largest of them',
+    '1,500 ETH'                    => 'in whole coins, not rounded to "2K"',
+    "0xA1b2\u{2026}5678"           => 'with shortened addresses, never names',
+    '3.12%'                        => 'staking APR (beaconcha.in, network-wide)',
+    'اتر در استیکینگ (امنیت شبکه)' => 'the hash-rate row becomes staked ETH on proof of stake',
+    'بازدید ویکی‌پدیای فارسی'      => 'public interest from Wikipedia page views',
+    'رپ‌شده به WETH'               => 'WETH share of supply (Etherscan)',
+    'در پل‌های رسمی لایه ۲'        => 'L2 canonical bridge share (Etherscan)',
+    'روی صرافی‌های متمرکز'         => 'share of supply on exchanges (CoinMetrics)',
+    'نگهدارندگان بلندمدت'          => 'supply unmoved for a year (CoinMetrics)',
+    'خروج خالص از صرافی‌ها'        => 'net exchange flow (CoinMetrics)',
+    'پیدایش'                       => 'the editorial timeline',
+    'قرارداد هوشمند'               => 'the learn-in-60-seconds cards',
 ] as $needle => $label) {
-    ok(str_contains($html, $needle), "{$label} is present, as an explicit no-source state");
+    ok(str_contains($html, $needle), "{$label} is on the page ({$needle})");
 }
-ok(substr_count($html, 'v2-na__label') >= 8, 'unavailable states are visible, not hidden (' . substr_count($html, 'v2-na__label') . ')');
-ok(str_contains($html, 'در اثبات سهام وجود ندارد'), 'Ethereum hashrate is "not applicable", not a number');
+ok(!str_contains($html, 'Google Trends'), 'search interest no longer claims there is no source');
+ok(str_contains($html, 'v2-cockpit__value">ندارد<'), 'the unlock calendar states "none" for Ethereum, from the editorial field');
+ok(!preg_match('#<img[^>]+src="Array"#', $html), 'article thumbnails are real URLs, not "Array"');
+
+/* Real yield: Lido's 2.87% minus the measured supply change (+50 ETH a day,
+   annualised over the 7 days CoinMetrics returns). */
+$vv = $plugin->v2($plugin->coins->find(10));
+$infl = $vv['supply']['inflation'];
+$expected = 350 / (120530000 + 2 * 50) * 365 / 7 * 100;
+ok($infl !== null && abs($infl - $expected) < 0.0001,
+   'inflation is the annualised 7-day change in CoinMetrics supply (' . round((float) $infl, 3) . '%)');
+ok($vv['supply']['realYield'] !== null && abs($vv['supply']['realYield'] - ($vv['supply']['apr'] - $infl)) < 1e-9,
+   'real yield = staking APR − inflation (' . round((float) $vv['supply']['realYield'], 2) . '%)');
+/* The APR source chain: beaconcha.in, then Lido, then the protocol formula. */
+$noBeacon = $vm = $plugin->pipeline->viewModel($plugin->coins->find(10));
+$noBeacon['staking'] = ['available' => false, 'state' => 'unavailable', 'data' => null, 'source' => 'beaconcha.in', 'fetchedAt' => null];
+$lidoBuild = (new Model($plugin->config, $plugin->cache))->build($plugin->coins->find(10), $noBeacon);
+ok(abs($lidoBuild['supply']['apr'] - 2.87) < 1e-9 && str_contains((string) $lidoBuild['supply']['aprSource'], 'لیدو'),
+   'without beaconcha.in, the APR is Lido\'s published stETH figure, labelled as Lido\'s');
+$cfgNoLido = $plugin->config;
+$cfgNoLido['datasets']['lidoapr']['enabled'] = false;
+$formula = (new Model($cfgNoLido, $plugin->cache))->build($plugin->coins->find(10), $noBeacon);
+ok($formula['supply']['aprKind'] === 'formula' && abs($formula['supply']['apr'] - Model::consensusApr(34e6)) < 1e-9,
+   'without either, it is the consensus formula on Etherscan\'s staked total, marked as a calculation');
+ok(Model::consensusApr(34e6) > 2.8 && Model::consensusApr(34e6) < 2.9, 'the consensus-formula fallback gives ~2.85% at 34M ETH staked');
 
 /* =====================================================================
  * 7. The score is the classic score
@@ -357,6 +391,76 @@ $probeSrc = (string) file_get_contents(THB_COINS_DIR . 'includes/ProviderProbe.p
 foreach (['v2 peers', 'v2 protocols', 'v2 longchart'] as $entry) {
     ok(str_contains($probeSrc, $entry), "the Provider Probe has an entry for {$entry}");
 }
+
+/* =====================================================================
+ * 13. Second-round collectors parse what they are given, and no more
+ * ================================================================== */
+section('second-round collectors');
+
+$GLOBALS['thb_probe_background'] = true;
+$cfg2 = $plugin->config;
+$eth2 = $plugin->coins->find(10);
+$btc2 = $plugin->coins->find(11);
+$free = static function () use ($cfg2): void { foreach (array_keys($cfg2['providers']) as $p) { (new TheHybit\Coins\Budget($cfg2))->reset($p); } };
+
+$free();
+$w = (new C\Blockchair($cfg2))->fetch($eth2, 'whales');
+ok(count($w['transfers']) === 3 && min(array_column($w['transfers'], 'amount')) >= 500,
+   'whales: the 120 ETH row under the threshold is dropped even though the provider returned it');
+ok(str_contains((string) end(Probe::$calls)['url'], 'value%28500000000000000000000..%29'), 'whales: asked for transfers of at least 500 ETH, in wei');
+$free();
+$wb = (new C\Blockchair($cfg2))->fetch($btc2, 'whales');
+ok($wb['transfers'][0]['amount'] === 1500.0 && $wb['transfers'][0]['from'] === null, 'whales on Bitcoin: amounts in BTC, no sender/recipient invented');
+
+$free();
+$loc = (new C\Etherscan($cfg2))->fetch($eth2, 'ethlocations');
+ok(abs($loc['weth'] - 2.9e6) < 1, 'WETH supply read from the token contract (2.9M)');
+ok(count($loc['bridges']) === count($cfg2['providers']['etherscan']['bridges']), 'every configured bridge balance matched, whatever the address case');
+ok(abs($loc['bridgesTotal'] - (400000 + 500000 + 600000 + 700000 + 800000)) < 1, 'and summed');
+ok((new C\Etherscan($cfg2))->fetch($btc2, 'ethlocations') === null, 'and never asked about Bitcoin');
+
+$free();
+$cm = (new C\CoinMetrics($cfg2))->fetch($eth2, 'chainstats');
+ok($cm['asset'] === 'eth' && isset($cm['metrics']['AdrActCnt'], $cm['metrics']['SplyExNtv']), 'CoinMetrics: the community metrics that came back are kept');
+ok(!isset($cm['metrics']['IssTotNtv']) && !isset($cm['metrics']['HashRate']), 'and a metric withheld by the free tier is absent, not zero');
+ok($cm['metrics']['SplyCur']['weekAgo'] !== null, 'a week-ago reading is kept for the inflation calculation');
+ok(str_contains((string) end(Probe::$calls)['url'], 'ignore_forbidden_errors=true'), 'it asks the API to drop forbidden metrics instead of failing the request');
+
+$free();
+ok((new C\Lido($cfg2))->fetch($eth2, 'lidoapr') === ['smaApr' => 2.87], 'Lido: the 7-day stETH APR');
+$GLOBALS['thb_probe_override'] = ['data' => ['smaApr' => 287]];
+ok((new C\Lido($cfg2))->fetch($eth2, 'lidoapr') === null, 'an APR of 287% is rejected as a unit error, not shown');
+unset($GLOBALS['thb_probe_override']);
+
+$free();
+$int = (new C\Wikimedia($cfg2))->fetch($eth2, 'interest');
+ok(isset($int['fa'], $int['en']) && $int['fa']['title'] === 'اتریوم' && $int['en']['title'] === 'Ethereum', 'Wikipedia: Persian and English articles counted separately');
+ok($int['fa']['last7'] === array_sum(array_map(static fn($i) => 900 + $i * 10, range(8, 14))), 'the last seven full days, summed');
+$GLOBALS['thb_probe_background'] = false;
+
+$probeSrc2 = (string) file_get_contents(THB_COINS_DIR . 'includes/ProviderProbe.php');
+foreach (['v2 chainstats', 'v2 lidoapr', 'v2 whales', 'v2 ethlocations', 'v2 interest', 'v2 revenue'] as $entry) {
+    ok(str_contains($probeSrc2, $entry), "the Provider Probe has an entry for {$entry}");
+}
+
+/* =====================================================================
+ * 12. Editorial content reaches coins that already exist
+ * ================================================================== */
+section('editorial fill on upgrade');
+
+use TheHybit\Coins\Seeder;
+
+$GLOBALS['thb_pages'] = ['ethereum' => (object) ['ID' => 77]];
+$GLOBALS['thb_coin_fields'][77] = ['thb_timeline' => 'written by an editor', 'thb_symbol' => 'ETH'];
+delete_option(Seeder::OPTION_EDITORIAL);
+$filled = Seeder::fillEditorial();
+ok(($GLOBALS['thb_coin_fields'][77]['thb_timeline'] ?? '') === 'written by an editor', 'an editor\'s text is never overwritten');
+ok(str_contains((string) ($GLOBALS['thb_coin_fields'][77]['thb_learn'] ?? ''), 'قرارداد هوشمند'), 'empty fields are filled from config/coins.php');
+ok(!isset($GLOBALS['thb_coin_fields'][77]['thb_coingecko_id']) && !isset($GLOBALS['thb_coin_fields'][77]['thb_enable_defi']),
+   'identifiers and provider switches are never touched');
+ok(!isset($filled['bitcoin']), 'a coin that does not exist is skipped — no post is created');
+ok(Seeder::fillEditorial() === [], 'and it runs once per plugin version');
+unset($GLOBALS['thb_pages'], $GLOBALS['thb_coin_fields'][77]);
 
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);

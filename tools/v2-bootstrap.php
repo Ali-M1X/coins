@@ -45,14 +45,14 @@ function get_header(...$a): void
     echo "<title>" . htmlspecialchars($title) . "</title>\n";
     echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/v2.css\">\n";
     echo "</head>\n<body>\n";
-    /* Like the live theme: every page sits in a narrow boxed column, header
-       included. v2 must break out of it; the box is drawn so a screenshot
-       shows that it did. */
+    /* Like the live theme: the page box, header included, is sized by its
+       content (fit-content). The classic page makes it 1320px wide; v2 must
+       leave it exactly that wide and break out only inside it. */
     if (!empty($GLOBALS['thb_theme_boxed'])) {
-        echo "<div id=\"page\" style=\"max-width:560px;margin:0 auto;background:#fff;border:1px solid #ddd\">\n";
+        echo "<div id=\"page\" style=\"width:fit-content;max-width:1400px;margin:0 auto;background:#fff;border:1px solid #ddd\">\n";
     }
     // A stand-in for the theme's header, so the page is judged inside a site.
-    echo "<header style=\"padding:14px 16px;background:#070b14;border-bottom:1px solid #18202f;color:#e8edf5;font:600 18px Vazirmatn,sans-serif\">های‌بیت <small style=\"font-weight:400;color:#8b97a8\">(سربرگ قالب — داخل ستون باریک قالب)</small></header>\n";
+    echo "<header id=\"theme-header\" style=\"padding:14px 16px;background:#070b14;border-bottom:1px solid #18202f;color:#e8edf5;font:600 18px Vazirmatn,sans-serif\">های‌بیت <small style=\"font-weight:400;color:#8b97a8\">(سربرگ قالب — عرض آن باید با صفحه کلاسیک یکی باشد)</small></header>\n";
 }
 
 function get_footer(...$a): void
@@ -102,7 +102,7 @@ function v2_warm(int $postId): void
         array_map(static fn($p) => 'chart.' . $p, array_keys($config['chart']['windows'])),
         ['market', 'metadata', 'historical', 'defi', 'dex', 'fx', 'global', 'categories', 'sentiment',
          'chains', 'stablecoins', 'structure', 'gas', 'supply', 'network', 'staking', 'development',
-         'peers', 'protocols', 'longchart']
+         'peers', 'protocols', 'longchart', 'chainstats', 'lidoapr', 'whales', 'ethlocations', 'interest']
     );
     foreach ($datasets as $dataset) {
         foreach (array_keys($config['providers']) as $provider) {

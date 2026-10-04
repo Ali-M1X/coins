@@ -38,14 +38,23 @@ const THEMES = {
   'v2-boxed.html':   ['<div id="page" style="max-width:480px;margin:0 auto;padding:0 14px;border:1px solid #ccc;background:#fff">', '</div>'],
   'v2-sidebar.html': ['<div style="display:flex;gap:30px;max-width:1100px;margin:0 auto"><main style="flex:1;min-width:0">', '</main><aside style="width:300px;flex:none">sidebar</aside></div>'],
   'v2-shrink.html':  ['<div style="display:flex;flex-direction:column;align-items:center"><div class="site">', '</div></div>'],
+  /* THE LIVE THEME'S BEHAVIOUR: a page box sized by its content, capped.
+     Measured: classic content asks for 1320px, the pre-fix v2 for 354px —
+     which is why the theme header shrank on v2 pages. */
+  'v2-fit.html':     ['<div id="page" style="width:fit-content;max-width:1400px;margin:0 auto;background:#fff">', '</div>'],
 };
+/* The same wrappers around the CLASSIC page, so the theme box can be compared
+   with the one the classic design gets — they must be identical. */
+for (const name of ['v2-boxed.html', 'v2-shrink.html', 'v2-fit.html']) {
+  THEMES[name.replace('v2-', 'classic-')] = THEMES[name];
+}
 
 const server = createServer(async (req, res) => {
   try {
     const name = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
     if (THEMES[name]) {
       const [open, close] = THEMES[name];
-      const html = (await readFile(join(ROOT, 'v2.html'), 'utf8'))
+      const html = (await readFile(join(ROOT, name.startsWith('classic-') ? 'classic.html' : 'v2.html'), 'utf8'))
         .replace('<body>', '<body>' + open).replace('</body>', close + '</body>');
       res.writeHead(200, { 'Content-Type': TYPES['.html'] });
       res.end(html);
@@ -91,7 +100,24 @@ for (const width of [1440, 1120, 768, 390, 360]) {
 
 /* ---- inside a theme's box: the page still takes the whole viewport ---- */
 const columns = (page, sel) => page.$eval(sel, (el) => getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length);
-for (const file of Object.keys(THEMES)) {
+/* The theme's own box — header, footer and all — is left exactly as the
+   classic page leaves it. v2 only breaks out INSIDE it. */
+const themeBox = async (file, width) => {
+  const p = await browser.newPage({ viewport: { width, height: 900 } });
+  await p.goto(`http://localhost:${PORT}/${file}`, { waitUntil: 'networkidle' });
+  const w = await p.$eval('body > div', (el) => Math.round(el.getBoundingClientRect().width));
+  await p.close();
+  return w;
+};
+for (const name of ['boxed', 'shrink', 'fit']) {
+  for (const width of [1440, 390]) {
+    const classic = await themeBox(`classic-${name}.html`, width);
+    const v2 = await themeBox(`v2-${name}.html`, width);
+    ok(classic === v2, `${name} theme at ${width}px: the theme box (and its header) is ${v2}px on v2, ${classic}px on classic — identical`);
+  }
+}
+
+for (const file of Object.keys(THEMES).filter((f) => f.startsWith('v2-'))) {
   for (const width of [1440, 390]) {
     const p = await browser.newPage({ viewport: { width, height: 900 } });
     await p.goto(`http://localhost:${PORT}/${file}`, { waitUntil: 'networkidle' });

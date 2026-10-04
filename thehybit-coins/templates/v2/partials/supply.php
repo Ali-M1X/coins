@@ -39,24 +39,38 @@ $c = $v['coin'];
       <?php else : ?>
         <?= View::na($s['state'], $s['state'] === 'disabled' ? 'کلید Etherscan در تنظیمات افزونه وارد نشده است' : null) ?>
       <?php endif; ?>
-      <ul class="v2-dist__missing">
-        <?php foreach ($s['missing'] as $m) : ?>
-          <li><span><?= esc_html($m) ?></span> <?= View::na('unavailable') ?></li>
-        <?php endforeach; ?>
-      </ul>
-      <p class="v2-muted">سهم دارایی روی صرافی‌ها، در دیفای، در پل‌ها و در کیف پول‌های بلندمدت به داده برچسب‌دار آدرس‌ها نیاز دارد که منبع رایگانی ندارد.</p>
+      <?php if ($s['missing'] !== []) : ?>
+        <ul class="v2-dist__missing">
+          <?php foreach ($s['missing'] as $m) : ?>
+            <li><span><?= esc_html($m) ?></span> <?= View::na('pending') ?></li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+      <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم یک سال جابه‌جا نشده باشد. منابع: Etherscan (استیکینگ، سوزاندن، WETH، پل‌ها) و CoinMetrics (صرافی‌ها، نگهداری بلندمدت).</p>
     </div>
 
     <div class="v2-card v2-yield">
       <h3 class="v2-card__title">بازده واقعی</h3>
       <?php if ($s['apr'] !== null) : ?>
-        <p class="v2-yield__eq">بازده استیکینگ (APR) <?= View::n(Format::pct($s['apr'], false, 2)) ?> − تورم عرضه <span class="v2-muted">؟</span></p>
-        <p class="v2-yield__big"><?= View::n(Format::pct($s['apr'], false, 2)) ?></p>
-        <p class="v2-muted">بازده اسمی استیکینگ<?= $s['validators'] ? ' · ' . View::n(Format::num((float) $s['validators'], 0)) . ' اعتبارسنج' : '' ?></p>
-        <?= View::na('unavailable', 'بازده واقعی = APR منهای تورم. نرخ تورم به دو اندازه‌گیری عرضه با فاصله زمانی نیاز دارد که هنوز در تاریخچه افزونه جمع نشده است.') ?>
-        <?= View::source('beaconcha.in') ?>
+        <p class="v2-yield__eq">بازده استیکینگ <?= View::n(Format::pct($s['apr'], false, 2)) ?>
+          − تورم خالص عرضه <?= $s['inflation'] !== null ? View::n(Format::pct($s['inflation'], true, 2)) : '<span class="v2-muted">؟</span>' ?></p>
+        <?php if ($s['realYield'] !== null) : ?>
+          <p class="v2-yield__big"><?= View::n(Format::pct($s['realYield'], false, 2)) ?></p>
+          <p class="v2-muted">بازده واقعی سالانه = بازده استیکینگ منهای تغییر سالانه‌شده عرضه در ۷ روز گذشته (انتشار منهای سوزاندن، CoinMetrics)</p>
+        <?php else : ?>
+          <p class="v2-yield__big"><?= View::n(Format::pct($s['apr'], false, 2)) ?></p>
+          <p class="v2-muted">بازده استیکینگ؛ تورم عرضه هنوز دریافت نشده، پس بازده واقعی محاسبه نشده است.</p>
+        <?php endif; ?>
+        <p class="v2-source">بازده: <?= esc_html((string) $s['aprSource']) ?><?= $s['validators'] ? ' · ' . View::n(Format::num((float) $s['validators'], 0)) . ' اعتبارسنج' : '' ?></p>
+        <?php if ($s['aprKind'] === 'formula') : ?>
+          <p class="v2-muted">این عدد اندازه‌گیری نیست: حداکثر بازده لایه اجماع است که از فرمول پروتکل و کل اتر سپرده‌شده محاسبه شده؛ کارمزد اولویت و MEV در آن نیست.</p>
+        <?php endif; ?>
+      <?php elseif ($s['inflation'] !== null) : ?>
+        <p class="v2-yield__eq">این شبکه استیکینگ ندارد؛ تورم سالانه عرضه:</p>
+        <p class="v2-yield__big"><?= View::n(Format::pct($s['inflation'], true, 2)) ?></p>
+        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته · <bdi>CoinMetrics</bdi></p>
       <?php else : ?>
-        <?= View::na($s['aprState'], $s['aprState'] === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : ($s['aprState'] === 'disabled' ? 'کلید beaconcha.in در تنظیمات افزونه وارد نشده است' : null)) ?>
+        <?= View::na($s['aprState'] === 'not_applicable' ? 'not_applicable' : 'pending', $s['aprState'] === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : 'بازده استیکینگ هنوز از هیچ منبعی نرسیده است') ?>
       <?php endif; ?>
     </div>
 
@@ -68,7 +82,8 @@ $c = $v['coin'];
             <div>
               <span class="v2-cockpit__label"><?= esc_html($r['label']) ?></span>
               <?php if ($r['value'] !== null) : ?>
-                <span class="v2-cockpit__value"><?= View::n($r['value']) ?></span>
+                <span class="v2-cockpit__value"><?= preg_match('/\p{Arabic}/u', $r['value']) ? esc_html($r['value']) : View::n($r['value']) ?></span>
+                <?php if (!empty($r['detail'])) : ?><span class="v2-muted"><?= esc_html($r['detail']) ?></span><?php endif; ?>
               <?php else : ?>
                 <?= View::na('unavailable', $r['note']) ?>
               <?php endif; ?>

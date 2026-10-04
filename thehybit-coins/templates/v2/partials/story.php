@@ -63,7 +63,7 @@ $featured = $s['featured'];
             <li>
               <a href="<?= esc_url($n['url']) ?>">
                 <?php if (!empty($n['image'])) : ?>
-                  <img src="<?= esc_url($n['image']) ?>" alt="" width="64" height="64" loading="lazy" decoding="async">
+                  <img src="<?= esc_url($n['image']) ?>" alt="<?= esc_attr($n['imageAlt']) ?>" width="64" height="64" loading="lazy" decoding="async">
                 <?php else : ?>
                   <span class="v2-insights__thumb" aria-hidden="true"></span>
                 <?php endif; ?>

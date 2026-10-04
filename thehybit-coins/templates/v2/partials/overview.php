@@ -132,6 +132,9 @@ $ch = $v['chart'];
               <?php if ($km['change'] !== null) : ?>
                 <span class="v2-delta v2-delta--<?= View::dir($km['change']) ?>"><?= View::n(Format::pct($km['change'], true, 1)) ?></span>
               <?php endif; ?>
+              <?php if (!empty($km['detail'])) : ?>
+                <span class="v2-kv__detail"><?= esc_html($km['detail']) ?></span>
+              <?php endif; ?>
             <?php else : ?>
               <?= View::na('unavailable', $km['note']) ?>
             <?php endif; ?>

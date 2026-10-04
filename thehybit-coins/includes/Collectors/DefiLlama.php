@@ -367,10 +367,26 @@ final class DefiLlama extends Collector
             // The protocol list still stands on its own.
         }
 
+        /* The protocols' own share of those fees. The chain overview the
+           classic page reads does not always carry revenue, and without it the
+           right-hand side of the fee-flow diagram has nothing to draw. The
+           same endpoint answers with revenue when asked for it by data type. */
+        $revenue = null;
+        try {
+            $r = $this->get('/overview/fees/' . rawurlencode($chain), [
+                'dataType'                       => 'dailyRevenue',
+                'excludeTotalDataChart'          => 'true',
+                'excludeTotalDataChartBreakdown' => 'true',
+            ]);
+            $revenue = isset($r['total24h']) && is_numeric($r['total24h']) ? (float) $r['total24h'] : null;
+        } catch (\Throwable) {
+            // The fee sources still draw on their own.
+        }
+
         if ($protocols === [] && $weekly === []) {
             return null;
         }
-        return ['protocols' => $protocols, 'tvlWeekly' => $weekly];
+        return ['protocols' => $protocols, 'tvlWeekly' => $weekly, 'fees24h' => $d['total24h'] ?? null, 'revenue24h' => $revenue];
     }
 
     private static function tail(array $series, int $n): array

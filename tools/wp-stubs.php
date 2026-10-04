@@ -532,7 +532,8 @@ function get_field(string $field, $id = false)
 
 function get_post_meta($id, $k = '', bool $single = false) { return ''; }
 function get_posts(array $a): array { return $GLOBALS['thb_coin_ids'] ?? []; }
-function get_page_by_path(string $p, $out = null, $type = '') { return null; }
+function get_page_by_path(string $p, $out = null, $type = '') { return $GLOBALS['thb_pages'][$p] ?? null; }
+function update_post_meta($id, $k, $v, $prev = '') { $GLOBALS['thb_coin_fields'][$id][$k] = $v; return true; }
 function get_the_title($p = 0): string { return is_object($p) ? ($p->post_title ?? '') : 'اتریوم'; }
 function get_permalink($p = 0): string { return 'https://thehybit.com/post/' . (is_object($p) ? $p->ID : $p); }
 function get_post_time(string $f, bool $gmt = false, $p = null) { return '2026-08-10T09:00:00+00:00'; }

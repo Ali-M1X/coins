@@ -138,6 +138,17 @@ function probe_payload(string $url): array
                 'FastGasPrice' => '16', 'suggestBaseFee' => '11.913', 'gasUsedRatio' => '0.4,0.6',
             ]];
         }
+        if (($q['action'] ?? '') === 'tokensupply') {
+            return ['status' => '1', 'message' => 'OK', 'result' => '2900000000000000000000000'];   // 2.9M WETH
+        }
+        if (($q['action'] ?? '') === 'balancemulti') {
+            $rows = [];
+            foreach (explode(',', (string) ($q['address'] ?? '')) as $i => $addr) {
+                // Upper-cased on purpose: matching must not depend on checksum case.
+                $rows[] = ['account' => strtoupper($addr), 'balance' => (string) ((400000 + $i * 100000) . '000000000000000000')];
+            }
+            return ['status' => '1', 'message' => 'OK', 'result' => $rows];
+        }
         if (($q['action'] ?? '') === 'ethsupply2') {
             /* Wei, as decimal STRINGS far beyond PHP_INT_MAX — the shape that
                breaks a parser which casts to int. */
@@ -155,6 +166,56 @@ function probe_payload(string $url): array
      * Ethereum reports NO hashrate (proof of stake since the Merge); Bitcoin
      * does. A parser that rendered Ethereum's zero as "0 H/s" would be making a
      * false statement, so the fixture carries exactly that zero. */
+    /* ---- Blockchair: large transfers. One row below the threshold, which
+       the collector must drop rather than trust the provider's filter. */
+    if (preg_match('#^/(ethereum|bitcoin)/transactions$#', $path, $m)) {
+        $isBtc = $m[1] === 'bitcoin';
+        $rows = [];
+        foreach ([1500, 800, 2000, 120] as $i => $amount) {
+            $rows[] = $isBtc
+                ? ['hash' => 'btchash' . $i, 'time' => '2025-10-09 08:0' . $i . ':00', 'output_total' => $amount * 100000000, 'output_total_usd' => $amount * 62000.0]
+                : ['hash' => '0xethhash' . $i, 'time' => '2025-10-09 08:0' . $i . ':00', 'sender' => '0xA1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
+                   'recipient' => '0x9f8e7d6c5b4a39281706f5e4d3c2b1a098765432', 'value' => $amount . '000000000000000000', 'value_usd' => $amount * 3245.67];
+        }
+        return ['data' => $rows, 'context' => ['code' => 200]];
+    }
+
+    /* ---- CoinMetrics community: ten daily rows. IssTotNtv and HashRate
+       are left out for ETH, as the free tier may withhold metrics. ---- */
+    if (str_contains($url, 'community-api.coinmetrics.io')) {
+        $asset = (string) ($q['assets'] ?? 'eth');
+        $rows = [];
+        for ($i = 9; $i >= 0; $i--) {
+            $row = [
+                'asset' => $asset, 'time' => gmdate('Y-m-d', Clock::$now - ($i + 1) * 86400) . 'T00:00:00.000000000Z',
+                'AdrActCnt' => (string) (480000 + (9 - $i) * 2000), 'TxCnt' => '1210000',
+                'SplyCur' => (string) ($asset === 'btc' ? 19700000 + (9 - $i) * 450 : 120530000 + (9 - $i) * 50),
+                'SplyExNtv' => $asset === 'btc' ? '2400000' : '14500000',
+                'FlowInExNtv' => $asset === 'btc' ? '21000' : '310000', 'FlowOutExNtv' => $asset === 'btc' ? '23500' : '342000',
+                'SplyAct1yr' => $asset === 'btc' ? '7000000' : '52000000',
+            ];
+            if ($asset === 'btc') {
+                $row['HashRate'] = '650000000';   // TH/s
+                $row['IssTotNtv'] = '450';
+            }
+            $rows[] = $row;
+        }
+        return ['data' => $rows];
+    }
+
+    if (str_contains($url, 'eth-api.lido.fi')) {
+        return ['data' => ['aprs' => [['timeUnix' => Clock::$now, 'apr' => 2.9]], 'smaApr' => 2.87], 'meta' => ['symbol' => 'stETH']];
+    }
+
+    if (str_contains($url, 'wikimedia.org/api/rest_v1/metrics/pageviews')) {
+        $fa = str_contains($path, '/fa.wikipedia/');
+        $items = [];
+        for ($i = 0; $i < 15; $i++) {
+            $items[] = ['timestamp' => gmdate('Ymd', Clock::$now - (15 - $i) * 86400) . '00', 'views' => ($fa ? 900 : 12000) + $i * ($fa ? 10 : 100)];
+        }
+        return ['items' => $items];
+    }
+
     if (preg_match('#^/(ethereum|bitcoin)/stats$#', $path, $m)) {
         $isBtc = $m[1] === 'bitcoin';
         return ['data' => [
@@ -239,6 +300,10 @@ function probe_payload(string $url): array
             $series[] = ['date' => Clock::$now - $i * 86400, 'tvl' => 6.0e10 + (120 - $i) * 1e8];
         }
         return $series;
+    }
+
+    if (str_contains($path, '/overview/fees/') && ($q['dataType'] ?? '') === 'dailyRevenue') {
+        return ['total24h' => 4.1e6, 'total7d' => 2.8e7];
     }
 
     if (str_contains($path, '/overview/fees/')) {

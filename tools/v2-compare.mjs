@@ -38,5 +38,20 @@ for (const [refs, id, title] of screens) {
     </div></body></html>`, { waitUntil: 'load' });
   await page.screenshot({ path: `${dir}/screen-${String(n).padStart(2, '0')}-${id}.png`, fullPage: true });
 }
+/* The theme header on the classic page and on v2, under the same theme. */
+await page.setContent(`<!doctype html><html dir="rtl"><body style="margin:0;background:#151515;color:#eee;font:600 20px sans-serif">
+  <div style="padding:14px 18px;font-size:24px">سربرگ قالب — صفحه کلاسیک و نسخه ۲، در یک قالب با جعبه محتوامحور (مثل سایت)</div>
+  <div style="display:flex;gap:18px;padding:0 18px 18px;align-items:flex-start">
+    <div style="width:1440px;flex:none">
+      <div style="padding:6px 0">دسکتاپ ۱۴۴۰px — کلاسیک</div><img src="${uri(`${dir}/header-classic-desktop.png`)}" style="width:100%;display:block;border:1px solid #333">
+      <div style="padding:14px 0 6px">دسکتاپ ۱۴۴۰px — نسخه ۲</div><img src="${uri(`${dir}/header-v2-desktop.png`)}" style="width:100%;display:block;border:1px solid #333">
+    </div>
+    <div style="width:390px;flex:none">
+      <div style="padding:6px 0">موبایل ۳۹۰px — کلاسیک</div><img src="${uri(`${dir}/header-classic-mobile.png`)}" style="width:100%;display:block;border:1px solid #333">
+      <div style="padding:14px 0 6px">موبایل ۳۹۰px — نسخه ۲</div><img src="${uri(`${dir}/header-v2-mobile.png`)}" style="width:100%;display:block;border:1px solid #333">
+    </div>
+  </div></body></html>`, { waitUntil: 'load' });
+await page.screenshot({ path: `${dir}/screen-00-header.png`, fullPage: true });
+
 await browser.close();
-console.log('wrote', screens.length, 'composites to', dir);
+console.log('wrote', screens.length + 1, 'composites to', dir);

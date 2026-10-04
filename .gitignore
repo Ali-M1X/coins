@@ -16,3 +16,4 @@ package-lock.json
 
 # Packaged plugin zips are built on demand by tools/package.sh.
 thehybit-coins-*.zip
+classic-themed.html

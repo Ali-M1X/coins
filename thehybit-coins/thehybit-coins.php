@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.0.0
+ * Version:     2.0.1
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.0.0');
+define('THB_COINS_VERSION', '2.0.1');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -61,6 +61,9 @@ require_once THB_COINS_DIR . 'includes/Collectors/Blockchair.php';
 require_once THB_COINS_DIR . 'includes/Collectors/BeaconChain.php';
 require_once THB_COINS_DIR . 'includes/Collectors/GitHub.php';
 require_once THB_COINS_DIR . 'includes/Collectors/LlamaPrices.php';
+require_once THB_COINS_DIR . 'includes/Collectors/CoinMetrics.php';
+require_once THB_COINS_DIR . 'includes/Collectors/Lido.php';
+require_once THB_COINS_DIR . 'includes/Collectors/Wikimedia.php';
 
 final class Plugin
 {
@@ -103,6 +106,9 @@ final class Plugin
             Collectors\BeaconChain::class,
             Collectors\GitHub::class,
             Collectors\LlamaPrices::class,
+            Collectors\CoinMetrics::class,
+            Collectors\Lido::class,
+            Collectors\Wikimedia::class,
         ] as $class) {
             $this->pipeline->register(new $class($this->config));
         }
@@ -128,6 +134,14 @@ final class Plugin
         /* TEMPORARY one-time setup page. Not part of the pipeline; registers
            nothing once setup is finished. See includes/AdminSetup.php. */
         (new AdminSetup($this->coins))->register();
+
+        /* v2 editorial content for coins that already exist: empty fields
+           only, once per version. See Seeder::fillEditorial(). */
+        add_action('admin_init', static function (): void {
+            if (current_user_can('manage_options')) {
+                Seeder::fillEditorial();
+            }
+        });
 
         /* Settings — API keys and the design selector. */
         (new Settings())->register();

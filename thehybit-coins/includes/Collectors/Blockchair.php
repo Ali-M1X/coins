@@ -35,10 +35,13 @@ final class Blockchair extends Collector
 {
     public function id(): string { return 'blockchair'; }
 
-    public function datasets(): array { return ['network']; }
+    public function datasets(): array { return ['network', 'whales']; }
 
     public function fetch(Coin $coin, string $dataset): ?array
     {
+        if ($dataset === 'whales') {
+            return $this->whales($coin);
+        }
         if ($dataset !== 'network') {
             return null;
         }
@@ -112,5 +115,65 @@ final class Blockchair extends Collector
             }
         }
         return false;
+    }
+
+    /**
+     * Whale radar: the most recent native transfers above a size threshold.
+     *
+     * Blockchair's transaction table accepts a range filter and a sort, so one
+     * request returns "the latest transfers of at least N coins" — the list the
+     * reference design shows. Native ETH/BTC only: token transfers (WETH,
+     * stablecoins) are a different table and are not included, which the page
+     * says. Addresses are shown shortened, without names: wallet labels are a
+     * paid product (Arkham, Nansen) and are not guessed.
+     *
+     * RESPONSE SHAPE UNVERIFIED from the build environment; the Provider Probe
+     * has an entry for it.
+     */
+    private function whales(Coin $coin): ?array
+    {
+        $slug = $this->slugFor($coin);
+        $chain = (string) $coin->meta('defillamaChain', '');
+        $min = (float) ($this->settings()['whale_min'][$chain] ?? 0);
+        if ($slug === null || $min <= 0) {
+            return null;
+        }
+
+        $isEth = $slug === 'ethereum';
+        // Blockchair stores amounts in the chain's base unit: wei, satoshi.
+        $unit = $isEth ? 1e18 : 1e8;
+        $field = $isEth ? 'value' : 'output_total';
+        $threshold = number_format($min * $unit, 0, '.', '');
+
+        $rows = $this->get('/' . rawurlencode($slug) . '/transactions', [
+            'q'     => $field . '(' . $threshold . '..)',
+            's'     => 'id(desc)',
+            'limit' => '8',
+        ])['data'] ?? null;
+        if (!is_array($rows)) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r) || empty($r['hash']) || !isset($r[$field]) || !is_numeric($r[$field])) {
+                continue;
+            }
+            $amount = ((float) $r[$field]) / $unit;
+            if ($amount < $min) {
+                continue;   // the filter is the provider's; the threshold is ours
+            }
+            $usdKey = $field . '_usd';
+            $out[] = [
+                'hash'   => (string) $r['hash'],
+                'time'   => isset($r['time']) ? (string) $r['time'] : null,
+                'amount' => $amount,
+                'usd'    => isset($r[$usdKey]) && is_numeric($r[$usdKey]) ? (float) $r[$usdKey] : null,
+                'from'   => $isEth && is_string($r['sender'] ?? null) ? $r['sender'] : null,
+                'to'     => $isEth && is_string($r['recipient'] ?? null) ? $r['recipient'] : null,
+            ];
+        }
+
+        return ['min' => $min, 'transfers' => $out];
     }
 }

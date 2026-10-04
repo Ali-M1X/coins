@@ -41,7 +41,7 @@ final class Etherscan extends Collector
 
     public function id(): string { return 'etherscan'; }
 
-    public function datasets(): array { return ['gas', 'supply']; }
+    public function datasets(): array { return ['gas', 'supply', 'ethlocations']; }
 
     public function fetch(Coin $coin, string $dataset): ?array
     {
@@ -53,6 +53,7 @@ final class Etherscan extends Collector
         return match ($dataset) {
             'gas'    => $this->gas($chainId),
             'supply' => $this->supply($chainId),
+            'ethlocations' => $this->locations($chainId),
             default  => null,
         };
     }
@@ -148,6 +149,62 @@ final class Etherscan extends Collector
             'stakedPct'    => $staked !== null ? ($staked / $total) * 100 : null,
             'burnedPct'    => $burned !== null ? ($burned / $total) * 100 : null,
         ];
+    }
+
+    /**
+     * Where part of the ETH supply sits, read from the chain (v2 supply card).
+     *
+     * Two measured figures, each with an exact meaning:
+     *   - WETH's total supply: ETH wrapped into the ERC-20 that DeFi contracts
+     *     trade and lend. It is ETH that has entered DeFi use, but not ALL ETH
+     *     in DeFi (native ETH is also deposited), so the page names it as
+     *     WETH rather than as "in DeFi".
+     *   - the ETH balance of each configured canonical L2 bridge: ETH locked on
+     *     Ethereum while its counterpart circulates on that rollup.
+     * Two requests per hour, on the key already configured.
+     */
+    private function locations(int $chainId): ?array
+    {
+        if ($chainId !== 1) {
+            return null;
+        }
+        $settings = $this->settings();
+        $out = ['weth' => null, 'bridges' => [], 'bridgesTotal' => null];
+
+        $weth = (string) ($settings['weth'] ?? '');
+        if ($weth !== '') {
+            $r = $this->result($this->get('/api', [
+                'chainid' => $chainId, 'module' => 'stats', 'action' => 'tokensupply', 'contractaddress' => $weth,
+            ]));
+            $out['weth'] = is_numeric($r) ? ((float) $r) / self::WEI : null;
+        }
+
+        $bridges = (array) ($settings['bridges'] ?? []);
+        if ($bridges !== []) {
+            $rows = $this->result($this->get('/api', [
+                'chainid' => $chainId, 'module' => 'account', 'action' => 'balancemulti',
+                'address' => implode(',', array_values($bridges)), 'tag' => 'latest',
+            ]));
+            if (is_array($rows)) {
+                $byAddress = [];
+                foreach ($rows as $row) {
+                    if (is_array($row) && isset($row['account'], $row['balance']) && is_numeric($row['balance'])) {
+                        $byAddress[strtolower((string) $row['account'])] = ((float) $row['balance']) / self::WEI;
+                    }
+                }
+                foreach ($bridges as $label => $address) {
+                    $eth = $byAddress[strtolower((string) $address)] ?? null;
+                    if ($eth !== null) {
+                        $out['bridges'][] = ['label' => (string) $label, 'address' => (string) $address, 'eth' => $eth];
+                    }
+                }
+                if ($out['bridges'] !== []) {
+                    $out['bridgesTotal'] = array_sum(array_column($out['bridges'], 'eth'));
+                }
+            }
+        }
+
+        return ($out['weth'] !== null || $out['bridgesTotal'] !== null) ? $out : null;
     }
 
     /**

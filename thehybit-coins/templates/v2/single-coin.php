@@ -49,6 +49,22 @@ $nav = [
 get_header();
 ?>
 
+<?php /* THE THEME'S BOX MUST NOT CHANGE.
+   The live theme sizes its page box (header and footer included) from its
+   content, like width: fit-content. The classic page's content asks for 1320px
+   — its container's max-width — so the box, and the theme header in it, is
+   1320px wide. v2 must ask for exactly the same and nothing more:
+
+   - .thb-v2-sizer is an invisible, zero-height block whose natural width is
+     what the classic container's is: 1320px at most, and narrow enough to
+     wrap on a phone. It is the only thing v2 tells the theme about its size.
+   - .thb-v2-frame has `contain: inline-size`, so the full-width layer inside
+     it contributes nothing to the box's width — no matter how wide it is.
+
+   The header and footer are never touched or styled. */ ?>
+<div class="thb-v2-host">
+<div class="thb-v2-sizer" aria-hidden="true"><span></span> <span></span> <span></span> <span></span> <span></span> <span></span> <span></span></div>
+<div class="thb-v2-frame">
 <div class="thb-v2" data-thb-design="v2">
   <?php /* Runs as soon as it is parsed, before this section paints, so there
      is no narrow first frame. Sets the exact viewport width (100vw would
@@ -84,6 +100,8 @@ get_header();
     ?>
 
   </div>
+</div>
+</div>
 </div>
 
 <?php get_footer(); ?>

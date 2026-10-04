@@ -7,7 +7,7 @@
  * section at desktop width so each screen can be set beside its reference.
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { resolve, join, extname } from 'node:path';
@@ -52,5 +52,27 @@ for (const slug of ['ethereum', 'bitcoin']) {
     await page.close();
   }
 }
+/* HEADER CHECK. The classic page wrapped in the very same theme box and
+   header as the v2 showcase, so the two can be compared: the theme's box,
+   and the header in it, must be the same width on both. */
+{
+  const v2 = readFileSync(`${root}/v2-ethereum.html`, 'utf8');
+  const open = v2.match(/<div id="page"[^>]*>\s*<header[\s\S]*?<\/header>/)[0];
+  const classic = readFileSync(`${root}/classic.html`, 'utf8')
+    .replace('<body>', '<body>' + open).replace('</body>', '<footer style="padding:14px 16px;color:#555;font:13px sans-serif">پانویس قالب</footer></div></body>');
+  writeFileSync(`${root}/classic-themed.html`, classic);
+  for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
+    const widths = {};
+    for (const [label, file] of [['classic', 'classic-themed.html'], ['v2', 'v2-ethereum.html']]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      await page.goto(`http://localhost:8125/${file}`, { waitUntil: 'networkidle' });
+      widths[label] = await page.$eval('#theme-header', (el) => Math.round(el.getBoundingClientRect().width));
+      await page.screenshot({ path: `${out}/header-${label}-${name}.png`, clip: { x: 0, y: 0, width, height: 520 } });
+      await page.close();
+    }
+    console.log(`theme header at ${width}px: classic ${widths.classic}px, v2 ${widths.v2}px`);
+  }
+}
+
 await browser.close();
 server.close();
