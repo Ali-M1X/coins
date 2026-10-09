@@ -31,18 +31,27 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
     <div class="v2-card v2-flow__sankey">
       <?php if ($f['state'] === 'ok') : ?>
         <div class="v2-xscroll" style="--min: 0px">
-        <svg viewBox="-20 0 1100 400" role="img" aria-label="نمودار جریان کارمزد <?= esc_attr($c['name']) ?>: مجموع <?= esc_attr(Format::usdCompact($f['fees'])) ?> در ۲۴ ساعت">
-          <?php foreach ($f['ribbonsLeft'] as $i => $r) : ?>
+        <?php /* Right to left, as a Persian reader reads: fees ENTER on the
+           right (by protocol type), pass through the chain, and LEAVE on the
+           left (who keeps them). Column titles and an arrowhead at every
+           ribbon's arriving end make the direction explicit. */ ?>
+        <svg viewBox="-20 -50 1100 450" role="img" aria-label="جریان کارمزد <?= esc_attr($c['name']) ?> از راست به چپ: <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['left']))) ?> وارد شبکه شد (مجموع <?= esc_attr(Format::usdCompact($f['fees'])) ?>) و به <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['right']))) ?> رسید">
+          <text class="v2-flow__head v2-fa" x="905" y="-20" text-anchor="middle">ورودی: از کجا آمد</text>
+          <text class="v2-flow__head v2-fa" x="95" y="-20" text-anchor="middle">خروجی: به کجا رفت</text>
+          <text class="v2-flow__dir" x="500" y="-20" text-anchor="middle">◀ ─────── جهت جریان ─────── ◀</text>
+          <?php foreach ($f['ribbonsSources'] as $i => $r) : $mid = $r['cy'] + $r['ch'] / 2; ?>
             <path class="v2-ribbon v2-t--<?= $tones[$i % 5] ?>" d="<?= esc_attr($r['d']) ?>"/>
-            <rect class="v2-flow__node v2-t--<?= $tones[$i % 5] ?>" x="138" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
-            <text class="v2-flow__label v2-fa" x="128" y="<?= $r['y'] + $r['h'] / 2 - 2 ?>" text-anchor="start"><?= esc_html($f['left'][$i]['label']) ?></text>
-            <text class="v2-flow__pct" x="128" y="<?= $r['y'] + $r['h'] / 2 + 18 ?>" text-anchor="end"><?= esc_html(Format::pct($f['left'][$i]['share'] * 100, false, 1)) ?></text>
+            <polygon class="v2-flow__arrow v2-t--<?= $tones[$i % 5] ?>" points="<?= 598 ?>,<?= $mid - 7 ?> <?= 598 ?>,<?= $mid + 7 ?> 584,<?= $mid ?>"/>
+            <rect class="v2-flow__node v2-t--<?= $tones[$i % 5] ?>" x="850" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
+            <text class="v2-flow__label v2-fa" x="872" y="<?= $r['y'] + $r['h'] / 2 - 2 ?>" text-anchor="end"><?= esc_html($f['left'][$i]['label']) ?></text>
+            <text class="v2-flow__pct" x="872" y="<?= $r['y'] + $r['h'] / 2 + 18 ?>" text-anchor="start"><?= esc_html(Format::pct($f['left'][$i]['share'] * 100, false, 1)) ?></text>
           <?php endforeach; ?>
-          <?php foreach ($f['ribbonsRight'] as $i => $r) : ?>
+          <?php foreach ($f['ribbonsDest'] as $i => $r) : $mid = $r['y'] + $r['h'] / 2; ?>
             <path class="v2-ribbon v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" d="<?= esc_attr($r['d']) ?>"/>
-            <rect class="v2-flow__node v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" x="850" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
-            <text class="v2-flow__label v2-fa" x="872" y="<?= $r['y'] + $r['h'] / 2 - 2 ?>" text-anchor="end"><?= esc_html($f['right'][$i]['label']) ?></text>
-            <text class="v2-flow__pct" x="872" y="<?= $r['y'] + $r['h'] / 2 + 18 ?>" text-anchor="start"><?= esc_html(Format::pct($f['right'][$i]['share'] * 100, false, 1)) ?></text>
+            <polygon class="v2-flow__arrow v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" points="166,<?= $mid - 8 ?> 166,<?= $mid + 8 ?> 152,<?= $mid ?>"/>
+            <rect class="v2-flow__node v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" x="138" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
+            <text class="v2-flow__label v2-fa" x="128" y="<?= $r['y'] + $r['h'] / 2 - 2 ?>" text-anchor="start"><?= esc_html($f['right'][$i]['label']) ?></text>
+            <text class="v2-flow__pct" x="128" y="<?= $r['y'] + $r['h'] / 2 + 18 ?>" text-anchor="end"><?= esc_html(Format::pct($f['right'][$i]['share'] * 100, false, 1)) ?></text>
           <?php endforeach; ?>
           <rect class="v2-flow__core" x="420" y="130" width="160" height="140" rx="24"/>
           <?php if (!empty($c['logo'])) : ?>
@@ -55,7 +64,7 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
         <?php /* Phone layout: the diagram fits the card and its labels move into
            this list, where they can be read at full size. */ ?>
         <div class="v2-flow__mobile">
-          <?php foreach ([['از کجا آمد', $f['left'], $tones], ['به کجا رفت', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
+          <?php foreach ([['ورودی: از کجا آمد ↓', $f['left'], $tones], ['خروجی: به کجا رفت', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
             <?php if ($nodes === []) { continue; } ?>
             <h3 class="v2-flow__mtitle"><?= esc_html($title) ?></h3>
             <ul class="v2-flow__mlist">
@@ -67,11 +76,11 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
           <?php endforeach; ?>
         </div>
         <?php if ($f['right'] === []) : ?>
-          <p class="v2-muted">سمت راست نمودار (سهم درآمد پروتکل‌ها) هنوز دریافت نشده است؛ سمت چپ کامل است.</p>
+          <p class="v2-muted">ستون خروجی (سهم درآمد پروتکل‌ها) هنوز دریافت نشده است؛ ستون ورودی کامل است.</p>
         <?php endif; ?>
         <div class="v2-flow__legend">
-          <span>چپ: کارمزد بر اساس نوع پروتکل</span>
-          <span>راست: سهم درآمد پروتکل‌ها در برابر تأمین‌کنندگان سرمایه</span>
+          <span>راست (ورودی): کارمزدی که کاربران به هر نوع پروتکل پرداختند</span>
+          <span>چپ (خروجی): چه سهمی درآمد خود پروتکل‌ها شد و چه سهمی به تأمین‌کنندگان سرمایه رسید</span>
         </div>
         <?= View::source('DefiLlama') ?>
       <?php else : ?>

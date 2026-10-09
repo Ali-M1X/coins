@@ -33,9 +33,12 @@ final class Lido extends Collector
         $d = $this->get('/protocol/steth/apr/sma')['data'] ?? null;
         $apr = is_array($d) && isset($d['smaApr']) && is_numeric($d['smaApr']) ? (float) $d['smaApr'] : null;
 
+        if ($apr === null) {
+            throw new \RuntimeException('no data.smaApr in the response');
+        }
         // A staking yield outside 0–20% is a unit or parsing problem, not news.
-        if ($apr === null || $apr <= 0 || $apr > 20) {
-            return null;
+        if ($apr <= 0 || $apr > 20) {
+            throw new \RuntimeException('implausible APR ' . $apr . ' — rejected');
         }
         return ['smaApr' => $apr];
     }

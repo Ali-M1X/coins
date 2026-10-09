@@ -164,8 +164,10 @@ function probe_payload(string $url): array
             /* Wei, as decimal STRINGS far beyond PHP_INT_MAX — the shape that
                breaks a parser which casts to int. */
             return ['status' => '1', 'message' => 'OK', 'result' => [
-                'EthSupply'      => '120530000000000000000000000',
-                'Eth2Staking'    => '34000000000000000000000000',
+                // Eth2Staking is cumulative staking REWARDS (Etherscan docs),
+                // not the stake: supply = 122.63M + 2.3M − 4.4M = 120.53M.
+                'EthSupply'      => '122630000000000000000000000',
+                'Eth2Staking'    => '2300000000000000000000000',
                 'BurntFees'      => '4400000000000000000000000',
                 'WithdrawnTotal' => '4100000000000000000000000',
             ]];
@@ -337,14 +339,31 @@ function probe_payload(string $url): array
         ];
     }
 
+    /* ---- Kraken: weekly OHLC, the long chart's second source ---- */
+    if (str_contains($url, 'api.kraken.com/0/public/OHLC')) {
+        if (!empty($GLOBALS['thb_probe_kraken_down'])) {
+            return ['error' => ['EService:Unavailable'], 'result' => []];
+        }
+        $rows = [];
+        for ($i = 0; $i < 580; $i++) {
+            $close = (string) (1 + $i * 6);
+            $rows[] = [1438560000 + $i * 604800, $close, $close, $close, $close, $close, '100', 10];
+        }
+        return ['error' => [], 'result' => [($q['pair'] ?? 'X') => $rows, 'last' => 0]];
+    }
+
     /* ---- DefiLlama prices: weekly history since `start` ---- */
+    if (str_contains($path, '/chart/coingecko') && !empty($GLOBALS['thb_probe_llama_empty'])) {
+        return ['coins' => []];
+    }
     if (str_contains($path, '/chart/coingecko')) {
         $key = rawurldecode(substr($path, strpos($path, '/chart/') + 7));
         $start = (int) ($q['start'] ?? 0);
         $span = (int) ($q['span'] ?? 0);
+        $step = (int) ($q['period'] ?? '1w') * 604800; // '2w' → two weeks
         $prices = [];
         for ($i = 0; $i < $span; $i++) {
-            $prices[] = ['timestamp' => $start + $i * 604800, 'price' => 100 + $i * 5];
+            $prices[] = ['timestamp' => $start + $i * $step, 'price' => 100 + $i * 5];
         }
         return ['coins' => [$key => ['symbol' => 'X', 'confidence' => 0.99, 'prices' => $prices]]];
     }

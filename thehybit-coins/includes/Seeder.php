@@ -19,7 +19,7 @@ final class Seeder
 {
     /** Fields fillEditorial() may write: content only, never configuration. */
     public const EDITORIAL = ['thb_tagline', 'thb_timeline', 'thb_learn', 'thb_audience', 'thb_faq',
-                              'thb_unlocks', 'thb_wikipedia', 'thb_github_repo'];
+                              'thb_unlocks', 'thb_wikipedia', 'thb_github_repo', 'thb_price_events'];
 
     public const OPTION_EDITORIAL = 'thb_coins_editorial_seeded';
 
@@ -61,7 +61,12 @@ final class Seeder
                     continue;
                 }
                 $current = function_exists('get_field') ? get_field($field, $post->ID) : get_post_meta($post->ID, $field, true);
-                if ($current !== null && $current !== '' && $current !== false) {
+                /* An earlier version's seed, still exactly as shipped, is
+                   upgraded to the current one; anything an editor changed — by
+                   even a character — is left alone. */
+                $previous = (array) ($spec['fields']['previous'][$field] ?? []);
+                $untouched = is_string($current) && in_array($current, $previous, true);
+                if ($current !== null && $current !== '' && $current !== false && !$untouched) {
                     continue;
                 }
                 if (function_exists('update_field')) {
@@ -103,6 +108,9 @@ final class Seeder
 
             $written = 0;
             foreach ($spec['fields'] as $field => $value) {
+                if ($field === 'previous') {
+                    continue;   // earlier seeds, for fillEditorial(); not a field
+                }
                 $current = function_exists('get_field') ? get_field($field, $postId) : null;
                 // Only fill blanks, so an editor's work is never clobbered.
                 if (!$force && $current !== null && $current !== '' && $current !== false) {

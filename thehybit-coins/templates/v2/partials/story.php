@@ -24,9 +24,14 @@ $featured = $s['featured'];
       <ol class="v2-timeline__list">
         <?php foreach ($s['timeline'] as $i => $t) :
             $isFeatured = $t['event'] !== null && $t['event'] === $featured; ?>
-          <li class="v2-timeline__item<?= $isFeatured ? ' is-featured' : '' ?>">
+          <li class="v2-timeline__item<?= $isFeatured ? ' is-featured' : '' ?><?= $t['planned'] ? ' is-planned' : '' ?>">
             <span class="v2-timeline__dot" aria-hidden="true"></span>
-            <time class="v2-timeline__year" datetime="<?= esc_attr($t['date']) ?>"><?= View::n($t['year']) ?></time>
+            <?php if ($t['planned']) : ?>
+              <span class="v2-timeline__year"><?= preg_match('/^\d/', $t['year']) ? View::n($t['year']) : esc_html($t['year']) ?></span>
+              <span class="v2-timeline__badge">برنامه‌ریزی‌شده</span>
+            <?php else : ?>
+              <time class="v2-timeline__year" datetime="<?= esc_attr($t['date']) ?>"><?= View::n($t['year']) ?></time>
+            <?php endif; ?>
             <h3 class="v2-timeline__title"><?= esc_html($t['title']) ?></h3>
             <p class="v2-timeline__text"><?= esc_html($t['text']) ?></p>
           </li>

@@ -129,25 +129,32 @@ final class Etherscan extends Collector
             return ((float) $d[$key]) / self::WEI;
         };
 
-        $total   = $eth($d, 'EthSupply');
-        $staked  = $eth($d, 'Eth2Staking');
-        $burned  = $eth($d, 'BurntFees');
+        /* WHAT THE FIELDS MEAN — Etherscan's documentation, not their names:
+             EthSupply      ETH issued EXCLUDING staking rewards and burn
+             Eth2Staking    cumulative beacon-chain staking REWARDS — not the
+                            ETH that is staked (2.0.1 read it as the stake and
+                            showed ~4.4M "staked" instead of ~34M)
+             BurntFees      cumulative EIP-1559 burn
+             WithdrawnTotal cumulative withdrawals from the beacon chain
+           Current supply = EthSupply + Eth2Staking − BurntFees.
+           The staked amount is NOT in this response; it comes from
+           beaconcha.in (validators' total balance). */
+        $base      = $eth($d, 'EthSupply');
+        $rewards   = $eth($d, 'Eth2Staking');
+        $burned    = $eth($d, 'BurntFees');
         $withdrawn = $eth($d, 'WithdrawnTotal');
 
-        if ($total === null || $total <= 0.0) {
+        if ($base === null || $base <= 0.0) {
             return null;   // without a denominator nothing below means anything
         }
+        $total = $base + ($rewards ?? 0.0) - ($burned ?? 0.0);
 
         return [
-            'totalSupply'  => $total,
-            'stakedSupply' => $staked,
-            'burnedTotal'  => $burned,
+            'totalSupply'    => $total,
+            'stakingRewards' => $rewards,
+            'burnedTotal'    => $burned,
             'withdrawnTotal' => $withdrawn,
-            /* The share actually staked. A real ratio of two measured figures,
-               which is why it is computed here and the other four slices of the
-               design's supply chart are not. */
-            'stakedPct'    => $staked !== null ? ($staked / $total) * 100 : null,
-            'burnedPct'    => $burned !== null ? ($burned / $total) * 100 : null,
+            'burnedPct'      => $burned !== null ? ($burned / $total) * 100 : null,
         ];
     }
 
@@ -180,10 +187,14 @@ final class Etherscan extends Collector
         }
 
         $bridges = (array) ($settings['bridges'] ?? []);
-        if ($bridges !== []) {
+        $wallets = (array) ($settings['exchange_wallets'] ?? []);
+        $out['exchanges'] = [];
+        $out['exchangesTotal'] = null;
+        $addresses = array_slice(array_values(array_unique(array_merge(array_values($bridges), array_values($wallets)))), 0, 20);
+        if ($addresses !== []) {
             $rows = $this->result($this->get('/api', [
                 'chainid' => $chainId, 'module' => 'account', 'action' => 'balancemulti',
-                'address' => implode(',', array_values($bridges)), 'tag' => 'latest',
+                'address' => implode(',', $addresses), 'tag' => 'latest',
             ]));
             if (is_array($rows)) {
                 $byAddress = [];
@@ -198,8 +209,17 @@ final class Etherscan extends Collector
                         $out['bridges'][] = ['label' => (string) $label, 'address' => (string) $address, 'eth' => $eth];
                     }
                 }
+                foreach ($wallets as $label => $address) {
+                    $eth = $byAddress[strtolower((string) $address)] ?? null;
+                    if ($eth !== null) {
+                        $out['exchanges'][] = ['label' => (string) $label, 'exchange' => strtok((string) $label, ' '), 'address' => (string) $address, 'eth' => $eth];
+                    }
+                }
                 if ($out['bridges'] !== []) {
                     $out['bridgesTotal'] = array_sum(array_column($out['bridges'], 'eth'));
+                }
+                if ($out['exchanges'] !== []) {
+                    $out['exchangesTotal'] = array_sum(array_column($out['exchanges'], 'eth'));
                 }
             }
         }

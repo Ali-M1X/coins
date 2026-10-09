@@ -184,7 +184,7 @@ ok(str_contains($html, 'dir="rtl"') && str_contains($html, 'lang="fa"'), 'RTL an
 foreach ([
     '$3,245.67' => 'price', '$390.23B' => 'market cap', '$18.74B' => '24h volume',
     'Uniswap V3' => 'top protocol by fees', '$12.6M' => 'chain fees in the Sankey centre',
-    '28.2%' => 'staked share (Etherscan)', '3.12%' => 'staking APR (beaconcha.in)',
+    '28.4%' => 'staked share (beaconcha.in stake ÷ Etherscan supply)', '3.12%' => 'staking APR (beaconcha.in)',
     '1,062,000' => 'validators', '14.00 Gwei' => 'gas', 'ادغام (The Merge)' => 'editorial timeline',
 ] as $needle => $label) {
     ok(str_contains($html, $needle), "{$label} is in the initial HTML ({$needle})");
@@ -249,9 +249,15 @@ ok(abs($lidoBuild['supply']['apr'] - 2.87) < 1e-9 && str_contains((string) $lido
    'without beaconcha.in, the APR is Lido\'s published stETH figure, labelled as Lido\'s');
 $cfgNoLido = $plugin->config;
 $cfgNoLido['datasets']['lidoapr']['enabled'] = false;
-$formula = (new Model($cfgNoLido, $plugin->cache))->build($plugin->coins->find(10), $noBeacon);
+/* The formula needs the staked total, which only beaconcha.in reports
+   (Etherscan's Eth2Staking is rewards): a stake figure without an APR. */
+$stakeOnly = $noBeacon;
+$stakeOnly['staking'] = ['available' => true, 'state' => 'ok', 'data' => ['stakedEth' => 34e6, 'apr' => null], 'source' => 'beaconcha.in', 'fetchedAt' => null];
+$formula = (new Model($cfgNoLido, $plugin->cache))->build($plugin->coins->find(10), $stakeOnly);
 ok($formula['supply']['aprKind'] === 'formula' && abs($formula['supply']['apr'] - Model::consensusApr(34e6)) < 1e-9,
-   'without either, it is the consensus formula on Etherscan\'s staked total, marked as a calculation');
+   'with a stake but no published APR, it is the consensus formula, marked as a calculation');
+$none = (new Model($cfgNoLido, $plugin->cache))->build($plugin->coins->find(10), $noBeacon);
+ok($none['supply']['apr'] === null, 'and with no stake figure at all, no APR is shown — never one computed from the wrong number');
 ok(Model::consensusApr(34e6) > 2.8 && Model::consensusApr(34e6) < 2.9, 'the consensus-formula fallback gives ~2.85% at 34M ETH staked');
 
 /* =====================================================================
@@ -380,10 +386,17 @@ ok($pro['protocols'][0]['name'] === 'Uniswap V3' && $pro['protocols'][0]['fees24
 ok(count($pro['tvlWeekly']) === 18 && $pro['tvlWeekly'][1][0] - $pro['tvlWeekly'][0][0] === 7 * 86400, 'TVL history thinned to one point a week');
 
 $long = (new C\LlamaPrices($cfg))->fetch($eth, 'longchart');
-ok(count($long['t'] ?? []) > 400 && $long['t'][0] >= 1438387200, 'long history: weekly points from launch (' . count($long['t'] ?? []) . ')');
-ok(str_contains((string) end(Probe::$calls)['url'] ?? '', 'coins.llama.fi/chart/coingecko%3Aethereum'), 'from DefiLlama prices, by CoinGecko id');
+ok(count($long['t'] ?? []) > 250 && $long['t'][0] >= 1438387200, 'long history: a point every two weeks from launch (' . count($long['t'] ?? []) . ')');
+ok(str_contains((string) end(Probe::$calls)['url'] ?? '', 'coins.llama.fi/chart/coingecko:ethereum?'),
+   'from DefiLlama prices, with the colon NOT percent-encoded (2.0.1 sent %3A, which matched no coin)');
 $GLOBALS['thb_probe_override'] = ['coins' => []];
-ok((new C\LlamaPrices($cfg))->fetch($eth, 'longchart') === null, 'an empty answer is null, not an empty chart');
+try {
+    (new C\LlamaPrices($cfg))->fetch($eth, 'longchart');
+    ok(false, 'an empty answer from both sources is an error, not an empty chart');
+} catch (\RuntimeException $e) {
+    ok(str_contains($e->getMessage(), 'DefiLlama') && str_contains($e->getMessage(), 'Kraken'),
+       'an empty answer from both sources is an error naming both, for the diagnostics page');
+}
 unset($GLOBALS['thb_probe_override']);
 $GLOBALS['thb_probe_background'] = false;
 
@@ -429,7 +442,12 @@ ok(str_contains((string) end(Probe::$calls)['url'], 'ignore_forbidden_errors=tru
 $free();
 ok((new C\Lido($cfg2))->fetch($eth2, 'lidoapr') === ['smaApr' => 2.87], 'Lido: the 7-day stETH APR');
 $GLOBALS['thb_probe_override'] = ['data' => ['smaApr' => 287]];
-ok((new C\Lido($cfg2))->fetch($eth2, 'lidoapr') === null, 'an APR of 287% is rejected as a unit error, not shown');
+try {
+    (new C\Lido($cfg2))->fetch($eth2, 'lidoapr');
+    ok(false, 'an APR of 287% is rejected as a unit error, not shown');
+} catch (\RuntimeException $e) {
+    ok(str_contains($e->getMessage(), 'implausible'), 'an APR of 287% is rejected as a unit error, not shown');
+}
 unset($GLOBALS['thb_probe_override']);
 
 $free();
@@ -555,6 +573,87 @@ ok(str_contains($livePage, 'data-v2-live-change') && str_contains($livePage, 'da
 $island = \TheHybit\Coins\V2\Model::client($plugin->v2($ethL));
 ok(($island['live']['url'] ?? '') === 'https://thehybit.com/wp-json/thehybit/v1/price/ethereum', 'the data island carries the endpoint URL');
 ok(!str_contains($livePage, 'api.coingecko.com'), 'the page never points the browser at CoinGecko');
+
+/* =====================================================================
+ * 15. Pre-launch review fixes (data/1–8.PNG)
+ * ================================================================== */
+section('pre-launch review');
+
+$cfgR = $plugin->config;
+$ethR = $plugin->coins->find(10);
+foreach (array_keys($cfgR['providers']) as $p) { (new TheHybit\Coins\Budget($cfgR))->reset($p); }
+$GLOBALS['thb_probe_background'] = true;
+
+/* #6 — long chart: DefiLlama empty → Kraken weekly candles. */
+$GLOBALS['thb_probe_override'] = null;
+unset($GLOBALS['thb_probe_override']);
+$llamaRoute = static fn() => null;
+Probe::reset(keepCache: true);
+$GLOBALS['thb_probe_llama_empty'] = true;
+$kr = (new C\LlamaPrices($cfgR))->fetch($ethR, 'longchart');
+unset($GLOBALS['thb_probe_llama_empty']);
+ok(count($kr['t']) > 500 && Probe::count('api.kraken.com/0/public/OHLC?pair=ETHUSD&interval=10080') === 1,
+   '#6 when DefiLlama has nothing, the long chart comes from Kraken weekly candles (' . count($kr['t']) . ' weeks)');
+
+/* #8 — exchange wallets read in the same balancemulti call as the bridges. */
+Probe::reset(keepCache: true);
+$locR = (new C\Etherscan($cfgR))->fetch($ethR, 'ethlocations');
+ok(count($locR['exchanges']) === count($cfgR['providers']['etherscan']['exchange_wallets']) && $locR['exchangesTotal'] > 0,
+   '#8 the labelled exchange wallets are read: ' . count($locR['exchanges']) . ' balances');
+ok(Probe::count('balancemulti') === 1, '#8 in ONE balancemulti call together with the bridges');
+// What the scheduler would do with it (ethlocations is scheduler-only).
+$plugin->cache->put('ethlocations', $plugin->cache->keyFor('ethlocations', $ethR), $locR);
+$GLOBALS['thb_probe_background'] = false;
+
+$html15 = v2_render(10);
+
+/* #2 — every bar carries its protocol's name. */
+preg_match('#<ol class="v2-hbars">(.*?)</ol>#s', $html15, $bars);
+ok(isset($bars[1]) && substr_count($bars[1], 'v2-hbars__name') >= 5 && str_contains($bars[1], 'Uniswap V3') && str_contains($bars[1], 'Lido'),
+   '#2 the top-protocols bars are labelled with protocol names and values');
+
+/* #3 — direction: titles, arrowheads, RTL order, one "other". */
+ok(str_contains($html15, 'ورودی: از کجا آمد') && str_contains($html15, 'خروجی: به کجا رفت') && str_contains($html15, 'جهت جریان'),
+   '#3 the Sankey has "in" (right) and "out" (left) column titles and a direction caption');
+ok(substr_count($html15, 'class="v2-flow__arrow') >= 4, '#3 every ribbon ends in an arrowhead (' . substr_count($html15, 'class="v2-flow__arrow') . ')');
+preg_match_all('#<text class="v2-flow__label v2-fa"[^>]*>([^<]+)</text>#', $html15, $flowLabels);
+ok(count(array_keys($flowLabels[1], 'سایر')) <= 1, '#3 "سایر" appears once, not twice');
+
+/* #5 — wrapping timeline with the roadmap. */
+ok(substr_count($html15, 'is-planned') >= 3 && substr_count($html15, 'برنامه‌ریزی‌شده') >= 3,
+   '#5 three planned roadmap items are on the timeline, marked as planned');
+ok(str_contains($html15, 'گلمستردام (Glamsterdam)') && str_contains($html15, 'فوزاکا (Fusaka)'), '#5 including Glamsterdam, after Fusaka');
+
+/* #6 — market events on the chart, label above, arrow to the price. */
+ok(substr_count($html15, 'class="v2-pin__box"') >= 6, '#6 market events are marked on the price chart (' . substr_count($html15, 'class="v2-pin__box"') . ')');
+ok(str_contains($html15, 'marker-end="url(#v2-arrowhead)"') && str_contains($html15, 'سقوط ترا/لونا'),
+   '#6 each with an arrow to the price on the day and its label above');
+
+/* #7 — provenance is a collapsed footnote, not a pulse card. */
+ok(!str_contains($html15, 'چرا این گزارش؟') && str_contains($html15, '<details class="v2-card v2-provenance">'),
+   '#7 the provenance list is a collapsed footnote under About, not a card in the daily pulse');
+
+/* #8 — exchange concentration falls back to the labelled wallets. */
+$cfgNoCm = $plugin->config;
+$cfgNoCm['datasets']['chainstats']['enabled'] = false;
+$noCm = (new Model($cfgNoCm, $plugin->cache))->build($ethR, $plugin->pipeline->viewModel($ethR));
+$riskRow = array_values(array_filter($noCm['supply']['risk'], static fn($r) => str_contains($r['label'], 'صرافی‌ها (حداقل)')))[0] ?? null;
+ok($riskRow !== null && $riskRow['value'] !== null && str_contains((string) $riskRow['detail'], 'Binance'),
+   '#8 without CoinMetrics, exchange concentration is the known wallets\' balance, labelled as a minimum, naming the largest');
+
+/* Seeds: 2.0.1's untouched timeline is upgraded; an edited one is not. */
+$seeds = require THB_COINS_DIR . 'config/coins.php';
+$GLOBALS['thb_pages'] = ['ethereum' => (object) ['ID' => 78], 'bitcoin' => (object) ['ID' => 79]];
+$GLOBALS['thb_coin_fields'][78] = ['thb_timeline' => $seeds['ethereum']['fields']['previous']['thb_timeline'][0]];
+$GLOBALS['thb_coin_fields'][79] = ['thb_timeline' => $seeds['bitcoin']['fields']['previous']['thb_timeline'][0] . "\n2030 | edited | by an editor"];
+Seeder::fillEditorial(true);
+ok($GLOBALS['thb_coin_fields'][78]['thb_timeline'] === $seeds['ethereum']['fields']['thb_timeline'], 'an untouched 2.0.1 timeline is upgraded with the roadmap');
+ok(str_contains($GLOBALS['thb_coin_fields'][79]['thb_timeline'], 'by an editor'), 'an edited one is left exactly as the editor left it');
+ok(!isset($GLOBALS['thb_coin_fields'][78]['previous']), 'and "previous" is never written as a field');
+unset($GLOBALS['thb_pages'], $GLOBALS['thb_coin_fields'][78], $GLOBALS['thb_coin_fields'][79]);
+
+/* Item 4 data correctness: Etherscan's Eth2Staking is not the stake. */
+ok(!str_contains($html15, '4.38M ETH') && str_contains($html15, '34.20M ETH'), 'staked ETH comes from beaconcha.in, not from Etherscan\'s rewards field');
 
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);

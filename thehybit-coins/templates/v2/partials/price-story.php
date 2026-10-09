@@ -35,7 +35,7 @@ $fe = $p['featured'] ?? null;
   <div class="v2-pstory__grid">
     <div class="v2-card v2-pstory__chart" data-v2-pstory>
       <div class="v2-xscroll" style="--min: 720px">
-        <svg viewBox="0 -40 960 420" role="img" aria-label="قیمت هفتگی <?= esc_attr($c['name']) ?> از <?= esc_attr($p['from']) ?> تا امروز، مقیاس لگاریتمی، با <?= count($p['events']) ?> رویداد">
+        <svg viewBox="0 -205 960 585" role="img" aria-label="قیمت هفتگی <?= esc_attr($c['name']) ?> از <?= esc_attr($p['from']) ?> تا امروز، مقیاس لگاریتمی، با <?= count($p['events']) ?> رویداد">
         <defs>
           <linearGradient id="v2-ps-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="var(--v2-accent)" stop-opacity=".4"/>
@@ -60,12 +60,21 @@ $fe = $p['featured'] ?? null;
           <?php endforeach; ?>
         </g>
         <g data-v2-layer-el="events">
-          <?php foreach ($p['events'] as $e) : ?>
-            <g class="v2-pin<?= $fe && $fe['key'] === $e['key'] ? ' is-on' : '' ?>" data-v2-event="<?= $e['key'] ?>" tabindex="0" role="button" aria-label="<?= esc_attr($e['title'] . '، ' . $e['date']) ?>">
-              <line x1="<?= $e['x'] ?>" y1="<?= $e['y'] ?>" x2="<?= $e['x'] ?>" y2="<?= max(-10, $e['y'] - 46) ?>"/>
-              <circle cx="<?= $e['x'] ?>" cy="<?= $e['y'] ?>" r="6"/>
-              <text x="<?= $e['x'] ?>" y="<?= max(-14, $e['y'] - 52) ?>" text-anchor="middle"><?= esc_html(substr($e['date'], 0, 4)) ?></text>
-              <title><?= esc_html($e['title'] . ' — ' . $e['date']) ?></title>
+          <defs>
+            <marker id="v2-arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+              <path d="M0 0 L10 5 L0 10 Z" class="v2-pin__head"/>
+            </marker>
+          </defs>
+          <?php foreach ($p['events'] as $e) :
+              $lw = 132; $lx = max(2, min(960 - $lw - 2, $e['x'] - $lw / 2)); ?>
+            <g class="v2-pin<?= $fe && $fe['key'] === $e['key'] ? ' is-on' : '' ?>" data-v2-event="<?= $e['key'] ?>" tabindex="0" role="button"
+               aria-label="<?= esc_attr($e['title'] . '، ' . $e['date'] . ($e['c90'] ? '، ۹۰ روز بعد ' . $e['c90'] : '')) ?>">
+              <line class="v2-pin__arrow" x1="<?= $e['x'] ?>" y1="<?= $e['ly'] + 38 ?>" x2="<?= $e['x'] ?>" y2="<?= $e['y'] - 9 ?>" marker-end="url(#v2-arrowhead)"/>
+              <circle cx="<?= $e['x'] ?>" cy="<?= $e['y'] ?>" r="5"/>
+              <rect class="v2-pin__box" x="<?= $lx ?>" y="<?= $e['ly'] ?>" width="<?= $lw ?>" height="38" rx="7"/>
+              <text class="v2-pin__title v2-fa" x="<?= $lx + $lw / 2 ?>" y="<?= $e['ly'] + 16 ?>" text-anchor="middle"><?= esc_html($e['title']) ?></text>
+              <text class="v2-pin__meta" x="<?= $lx + $lw / 2 ?>" y="<?= $e['ly'] + 32 ?>" text-anchor="middle"><?= esc_html(substr($e['date'], 0, 7)) ?><?php if ($e['c90']) : ?> · <tspan class="v2-pin__chg v2-pin__chg--<?= esc_attr($e['dir90']) ?>">90d <?= esc_html($e['c90']) ?></tspan><?php endif; ?></text>
+              <title><?= esc_html($e['title'] . ' — ' . $e['date'] . ($e['c90'] ? ' — تغییر قیمت ۹۰ روز بعد: ' . $e['c90'] : '')) ?></title>
             </g>
           <?php endforeach; ?>
         </g>

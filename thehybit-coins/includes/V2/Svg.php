@@ -244,7 +244,8 @@ final class Svg
                 $xTo, round($cy + $ch, 1),
                 $mid, round($cy + $ch, 1), $mid, round($y + $h, 1), $xFrom, round($y + $h, 1)
             );
-            $out[] = ['d' => $d, 'y' => round($y, 1), 'h' => round($h, 1)];
+            // Both ends, so a template can put an arrowhead where the flow arrives.
+            $out[] = ['d' => $d, 'y' => round($y, 1), 'h' => round($h, 1), 'cy' => round($cy, 1), 'ch' => round($ch, 1)];
             $y += $h + $gap;
             $cy += $ch;
         }

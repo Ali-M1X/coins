@@ -42,7 +42,7 @@ $c = $v['coin'];
       <?php if ($s['missing'] !== []) : ?>
         <ul class="v2-dist__missing">
           <?php foreach ($s['missing'] as $m) : ?>
-            <li><span><?= esc_html($m) ?></span> <?= View::na('pending') ?></li>
+            <li><span><?= esc_html($m[0]) ?></span> <?= View::na('unavailable', $m[1]) ?></li>
           <?php endforeach; ?>
         </ul>
       <?php endif; ?>

@@ -39,5 +39,18 @@ $c = $v['coin'];
     <?php endif; ?>
   </div>
 
-  <p class="v2-note">داده‌ها از CoinGecko، DefiLlama، Etherscan، beaconcha.in، Blockchair، GitHub و Alternative.me دریافت و در سرور <?= esc_html($v['brand']) ?> ذخیره می‌شوند؛ مرورگر شما مستقیماً با هیچ‌کدام تماس نمی‌گیرد. جایی که داده‌ای منبع معتبر ندارد، همین را می‌نویسیم و عددی نمی‌سازیم.</p>
+  <?php $fetched = array_values(array_filter($v['sources'], static fn($r) => $r['time'] !== null)); ?>
+  <?php if ($fetched !== []) : ?>
+    <details class="v2-card v2-provenance">
+      <summary>منابع داده و زمان آخرین به‌روزرسانی (<?= View::n((string) count($fetched)) ?> منبع)</summary>
+      <p class="v2-muted">هر عدد این صفحه از کدام منبع آمده و آخرین بار چه ساعتی (به وقت تهران) دریافت شده است — برای وقتی که می‌خواهید تازگی یک عدد را بسنجید.</p>
+      <ol class="v2-sources">
+        <?php foreach ($fetched as $src) : ?>
+          <li><span class="v2-sources__time"><?= View::n($src['time']) ?></span><span><?= esc_html($src['what']) ?> · <bdi><?= esc_html($src['who']) ?></bdi></span></li>
+        <?php endforeach; ?>
+      </ol>
+    </details>
+  <?php endif; ?>
+
+  <p class="v2-note">داده‌ها از CoinGecko، DefiLlama، Kraken، Etherscan، beaconcha.in، Blockchair، CoinMetrics، Lido، GitHub، ویکی‌پدیا و Alternative.me دریافت و در سرور <?= esc_html($v['brand']) ?> ذخیره می‌شوند؛ مرورگر شما مستقیماً با هیچ‌کدام تماس نمی‌گیرد. جایی که داده‌ای منبع معتبر ندارد، همین را می‌نویسیم و عددی نمی‌سازیم.</p>
 </section>

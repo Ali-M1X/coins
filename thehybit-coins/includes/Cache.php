@@ -143,10 +143,12 @@ final class Cache
 
             // Stored for TTL + grace so the stale copy outlives its freshness.
             set_transient($name, $entry, $ttl + (int) $this->config['stale_grace']);
+            self::clearError($dataset);
             return $entry;
 
         } catch (\Throwable $e) {
             error_log('[thb] refresh failed for ' . $dataset . '/' . $key . ': ' . $e->getMessage());
+            self::noteError($dataset, $e->getMessage());
 
             if ($previous !== null) {
                 $entry['stale'] = true;
@@ -161,6 +163,40 @@ final class Cache
 
             return ['data' => null, 'fetchedAt' => 0, 'stale' => true, 'source' => 'unavailable'];
         }
+    }
+
+    /* ------------------------------------------------------------------
+     * The last failure of each dataset, for the diagnostics screen.
+     *
+     * The error log is not something a site owner reads, and a dataset that
+     * fails every time looks, on the page, exactly like one that has not been
+     * fetched yet. One small option keeps the most recent reason per dataset;
+     * a success clears it. Written only when something changes.
+     * ---------------------------------------------------------------- */
+    public const OPTION_ERRORS = 'thb_coins_last_errors';
+
+    private static function noteError(string $dataset, string $message): void
+    {
+        $all = get_option(self::OPTION_ERRORS, []);
+        $all = is_array($all) ? $all : [];
+        $all[$dataset] = ['at' => gmdate('c', time()), 'message' => mb_substr($message, 0, 300)];
+        update_option(self::OPTION_ERRORS, $all, false);
+    }
+
+    private static function clearError(string $dataset): void
+    {
+        $all = get_option(self::OPTION_ERRORS, []);
+        if (is_array($all) && isset($all[$dataset])) {
+            unset($all[$dataset]);
+            update_option(self::OPTION_ERRORS, $all, false);
+        }
+    }
+
+    /** @return array<string, array{at:string, message:string}> */
+    public static function lastErrors(): array
+    {
+        $all = get_option(self::OPTION_ERRORS, []);
+        return is_array($all) ? $all : [];
     }
 
     /**

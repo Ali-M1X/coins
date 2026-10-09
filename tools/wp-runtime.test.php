@@ -735,9 +735,9 @@ ok(Probe::count('etherscan.io/api?') === 0, 'and never from the old V1 path');
 freeBudget($config);
 $supply = (new C\Etherscan($config))->fetch($eth, 'supply');
 ok(abs($supply['totalSupply'] - 120530000.0) < 1.0,
-   'supply: wei strings beyond PHP_INT_MAX convert to ETH without overflow (' . round($supply['totalSupply']) . ')');
-ok(abs($supply['stakedPct'] - 28.21) < 0.01,
-   'the staked share is a ratio of two figures in the SAME response (' . round($supply['stakedPct'], 2) . '%)');
+   'supply = EthSupply + staking rewards − burn; wei strings beyond PHP_INT_MAX convert to ETH without overflow (' . round($supply['totalSupply']) . ')');
+ok(abs($supply['stakingRewards'] - 2300000.0) < 1.0 && !isset($supply['stakedSupply']),
+   'Eth2Staking is read as cumulative staking REWARDS (per Etherscan) — the stake itself is not in this response');
 ok(!isset($supply['burnRate']) && !isset($supply['issuanceRate']),
    'and no RATE is claimed: burn and staking totals are cumulative since genesis');
 

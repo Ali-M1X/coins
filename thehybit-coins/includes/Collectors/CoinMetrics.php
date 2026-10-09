@@ -55,7 +55,7 @@ final class CoinMetrics extends Collector
             return null;
         }
 
-        $raw = $this->get('/timeseries/asset-metrics', [
+        $query = [
             'assets'                    => $asset,
             'metrics'                   => implode(',', $metrics),
             'frequency'                 => '1d',
@@ -65,10 +65,24 @@ final class CoinMetrics extends Collector
             'page_size'                 => '30',
             'ignore_forbidden_errors'   => 'true',
             'ignore_unsupported_errors' => 'true',
-        ]);
+        ];
+        try {
+            $raw = $this->get('/timeseries/asset-metrics', $query);
+        } catch (\Throwable $full) {
+            /* Second attempt with only the core community metrics and none of
+               the optional flags, in case either is what was refused. The
+               first failure is kept in the message for the diagnostics page. */
+            $query['metrics'] = 'AdrActCnt,TxCnt,SplyCur';
+            unset($query['ignore_forbidden_errors'], $query['ignore_unsupported_errors']);
+            try {
+                $raw = $this->get('/timeseries/asset-metrics', $query);
+            } catch (\Throwable $core) {
+                throw new \RuntimeException('full request: ' . $full->getMessage() . ' | core metrics only: ' . $core->getMessage());
+            }
+        }
         $rows = is_array($raw['data'] ?? null) ? $raw['data'] : null;
         if ($rows === null) {
-            return null;
+            throw new \RuntimeException('no "data" in the response: ' . mb_substr((string) json_encode($raw), 0, 200));
         }
 
         // Chronological, whatever order the page came back in.
@@ -96,6 +110,9 @@ final class CoinMetrics extends Collector
             ];
         }
 
-        return $out === [] ? null : ['asset' => $asset, 'metrics' => $out];
+        if ($out === []) {
+            throw new \RuntimeException('none of the requested metrics came back for "' . $asset . '"');
+        }
+        return ['asset' => $asset, 'metrics' => $out];
     }
 }

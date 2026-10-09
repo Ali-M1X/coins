@@ -122,7 +122,13 @@ final class Model
         $corr = $bench['state'] === 'self' ? null : self::correlation($returns, self::dailyReturns($bench['data']));
 
         $timeline = self::parseLines((string) $coin->meta('timeline', ''), 3);
-        $events = $this->events($timeline, $long);
+        /* The price chart's markers: the editor's market events when written,
+           otherwise the timeline's dated entries. */
+        $marketEvents = self::parseLines((string) $coin->meta('priceEvents', ''), 3);
+        $events = $this->events($marketEvents !== [] ? $marketEvents : $timeline, $long);
+        if ($marketEvents !== []) {
+            $events['byIndex'] = [];   // markers no longer correspond to timeline rows
+        }
 
         $v = [
             'brand'      => self::brand(),
@@ -384,7 +390,11 @@ final class Model
             arsort($byGroup);
             $listed = array_sum($byGroup);
             $base = max($fees, $listed);
-            foreach (array_slice($byGroup, 0, 4, true) as $g => $v) {
+            /* DefiLlama's own "Others" category and the unlisted remainder are
+               both "other": named groups first, then ONE "سایر" band for the
+               rest — 2.0.1 showed "سایر" twice. */
+            $named = array_diff_key($byGroup, ['other' => true]);
+            foreach (array_slice($named, 0, 4, true) as $g => $v) {
                 $left[] = ['label' => self::GROUP_LABELS[$g], 'value' => $v, 'share' => $v / $base];
             }
             $rest = $base - array_sum(array_column($left, 'value'));
@@ -428,9 +438,9 @@ final class Model
                         'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in'];
             /* Proof of stake has no hash rate. Its security budget is the ETH
                at stake, which is what takes the hash-rate row's place. */
-            $staked = $m['supplyChain']['data']['stakedSupply'] ?? ($sd['stakedEth'] ?? null);
+            $staked = $sd['stakedEth'] ?? null;   // beaconcha.in: validators' total balance
             $pulse[] = ['label' => 'اتر در استیکینگ (امنیت شبکه)', 'value' => is_numeric($staked) ? Format::compact((float) $staked) . ' ETH' : null,
-                        'state' => $m['supplyChain']['state'] ?? 'unavailable', 'source' => 'Etherscan'];
+                        'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in'];
         } else {
             $cmHash = $this->cm('HashRate');
             $hash = isset($nd['hashrate']) ? (float) $nd['hashrate'] : ($cmHash ? $cmHash['latest'] * 1e12 : null);   // CoinMetrics reports TH/s
@@ -448,8 +458,9 @@ final class Model
         if ($stable['available'] ?? false) {
             $cards[] = ['text' => 'عرضه استیبل‌کوین روی این زنجیره', 'value' => Format::usdCompact((float) $stable['value'])];
         }
-        if (($m['supplyChain']['available'] ?? false) && isset($m['supplyChain']['data']['stakedPct'])) {
-            $cards[] = ['text' => 'سهم اتر سپرده‌شده در استیکینگ', 'value' => Format::pct((float) $m['supplyChain']['data']['stakedPct'], false, 1)];
+        $stakedShare = $this->stakedShare($m);
+        if ($stakedShare !== null) {
+            $cards[] = ['text' => 'سهم اتر سپرده‌شده در استیکینگ', 'value' => Format::pct($stakedShare, false, 1)];
         }
         if ($m['derived']['dexShareOfVolume']['available'] ?? false) {
             $cards[] = ['text' => 'سهم صرافی‌های غیرمتمرکز از حجم', 'value' => Format::pct((float) $m['derived']['dexShareOfVolume']['value'], false, 1)];
@@ -491,8 +502,12 @@ final class Model
             'fees'    => $fees,
             'left'    => $left,
             'right'   => $right,
-            'ribbonsLeft'  => $ok ? Svg::ribbons(array_column($left, 'share'), 150, 420, 20, 360, 12, 140, 120) : [],
-            'ribbonsRight' => $ok && $right !== [] ? Svg::ribbons(array_column($right, 'share'), 850, 580, 60, 280, 24, 140, 120, 60) : [],
+            /* RTL: money ENTERS on the right (where a Persian reader starts)
+               and LEAVES on the left. `left`/`right` in this array are the
+               data's roles — sources and destinations — drawn on the right and
+               left of the diagram respectively. */
+            'ribbonsSources' => $ok ? Svg::ribbons(array_column($left, 'share'), 850, 580, 20, 360, 12, 140, 120) : [],
+            'ribbonsDest'    => $ok && $right !== [] ? Svg::ribbons(array_column($right, 'share'), 150, 420, 60, 280, 24, 140, 120, 60) : [],
             'whales'  => $whales,
             'exchange' => $exchange,
             'pulse'   => $pulse,
@@ -511,8 +526,11 @@ final class Model
     {
         $entries = [];
         foreach ($timeline as $i => [$date, $title, $text]) {
+            // ">2026", ">بلندمدت": a planned roadmap item, not a past event.
+            $planned = str_starts_with($date, '>');
             $entries[] = [
-                'year'  => substr($date, 0, 4),
+                'planned' => $planned,
+                'year'  => $planned ? trim(substr($date, 1)) : substr($date, 0, 4),
                 'date'  => $date,
                 'title' => $title,
                 'text'  => $text,
@@ -688,8 +706,10 @@ final class Model
             }
             $at = self::nearest($t, $ts);
             $after = self::nearest($t, $ts + 365 * 86400);
+            $after90 = self::nearest($t, $ts + 90 * 86400);
             $hasYear = $t[$n - 1] >= $ts + 365 * 86400;
             $change = $p[$at] > 0 ? ($p[$after] - $p[$at]) / $p[$at] * 100 : null;
+            $change90 = $p[$at] > 0 && $t[$n - 1] >= $ts + 90 * 86400 ? ($p[$after90] - $p[$at]) / $p[$at] * 100 : null;
             $event = [
                 'index'  => $i,
                 'date'   => $date,
@@ -698,6 +718,7 @@ final class Model
                 'ts'     => $ts,
                 'price'  => $p[$at],
                 'change' => $change,
+                'change90' => $change90,
                 'window' => $hasYear ? '۱۲ ماه بعد' : 'تا امروز',
             ];
             $byIndex[$i] = count($list);
@@ -750,8 +771,23 @@ final class Model
         $area = $line . sprintf(' L%s %s L%s %s Z', end($pts)[0], $H, $pts[0][0], $H);
 
         $markers = [];
+        /* Labels sit in rows above the line, each with an arrow down to the
+           price on the day. A label goes in the first row where it clears the
+           previous label by its own width; four rows hold the densest decade. */
+        $rowEnds = [];
         foreach ($events['list'] as $k => $e) {
-            $markers[] = $e + ['x' => $x($e['ts']), 'y' => $y((float) $e['price']), 'key' => $k];
+            $mx = $x($e['ts']);
+            $row = 0;
+            while (isset($rowEnds[$row]) && $mx - $rowEnds[$row] < 150 && $row < 3) {
+                $row++;
+            }
+            $rowEnds[$row] = $mx;
+            $markers[] = $e + [
+                'x' => $mx, 'y' => $y((float) $e['price']), 'key' => $k,
+                'row' => $row, 'ly' => -196 + $row * 46,   // label rows above the plot area
+                'c90' => $e['change90'] !== null ? Format::pct($e['change90'], true, 0) : null,
+                'dir90' => Format::direction($e['change90']),
+            ];
         }
 
         /* TVL layer, on its own linear scale: it is a different quantity and
@@ -1032,8 +1068,9 @@ final class Model
 
         $slices = [];
         if ($sc['available'] ?? false) {
-            if (isset($sd['stakedPct'])) {
-                $slices[] = ['label' => 'در استیکینگ', 'pct' => (float) $sd['stakedPct'], 'tone' => 'violet', 'source' => 'Etherscan'];
+            $stakedShare = $this->stakedShare($m);
+            if ($stakedShare !== null) {
+                $slices[] = ['label' => 'در استیکینگ', 'pct' => $stakedShare, 'tone' => 'violet', 'source' => 'beaconcha.in / Etherscan'];
             }
             if (isset($sd['burnedPct'])) {
                 $slices[] = ['label' => 'سوزانده‌شده (نسبت به عرضه فعلی)', 'pct' => (float) $sd['burnedPct'], 'tone' => 'amber', 'source' => 'Etherscan'];
@@ -1057,28 +1094,29 @@ final class Model
             if ($total && isset($loc['weth'])) {
                 $slices[] = ['label' => 'رپ‌شده به WETH (برای دیفای)', 'pct' => $loc['weth'] / $total * 100, 'tone' => 'green', 'source' => 'Etherscan'];
             } else {
-                $missing[] = 'رپ‌شده به WETH';
+                $missing[] = ['رپ‌شده به WETH', 'از Etherscan هنوز نرسیده'];
             }
             if ($total && isset($loc['bridgesTotal'])) {
                 $slices[] = ['label' => 'در پل‌های رسمی لایه ۲ (' . implode('، ', array_column($loc['bridges'], 'label')) . ')',
                              'pct' => $loc['bridgesTotal'] / $total * 100, 'tone' => 'blue', 'source' => 'Etherscan'];
             } else {
-                $missing[] = 'در پل‌های لایه ۲';
+                $missing[] = ['در پل‌های لایه ۲', 'از Etherscan هنوز نرسیده'];
             }
         }
         $ex = $this->cm('SplyExNtv');
         $cur = $this->cm('SplyCur');
-        if ($ex && $cur && $cur['latest'] > 0) {
-            $slices[] = ['label' => 'روی صرافی‌های متمرکز', 'pct' => $ex['latest'] / $cur['latest'] * 100, 'tone' => 'pink', 'source' => 'CoinMetrics'];
+        $onExchanges = $this->exchangeShare($total);
+        if ($onExchanges !== null) {
+            $slices[] = ['label' => $onExchanges['label'], 'pct' => $onExchanges['pct'], 'tone' => 'pink', 'source' => $onExchanges['source']];
         } else {
-            $missing[] = 'روی صرافی‌های متمرکز';
+            $missing[] = ['روی صرافی‌های متمرکز', 'نه CoinMetrics پاسخ داد و نه موجودی کیف پول‌های صرافی‌ها از Etherscan رسید'];
         }
         $act = $this->cm('SplyAct1yr');
         if ($act && $cur && $cur['latest'] > 0) {
             $slices[] = ['label' => 'بدون جابه‌جایی در یک سال اخیر (نگهدارندگان بلندمدت)',
                          'pct' => max(0.0, 100 - $act['latest'] / $cur['latest'] * 100), 'tone' => 'teal', 'source' => 'CoinMetrics'];
         } else {
-            $missing[] = 'کیف پول‌های بلندمدت';
+            $missing[] = ['کیف پول‌های بلندمدت', 'سن کوین‌ها را رایگان فقط CoinMetrics منتشر می‌کند و هنوز از آن پاسخی نرسیده'];
         }
 
         $aprInfo = $this->stakingApr($m);
@@ -1099,9 +1137,7 @@ final class Model
             self::risk('تمرکز صرافی‌ها (شاخص هرفیندال)', $hhi !== null ? Format::num($hhi, 0) : null,
                 $hhi === null ? null : ($hhi < self::HHI_CALM ? 'ok' : ($hhi < self::HHI_WATCH ? 'warn' : 'alert')), 'CoinGecko',
                 $hhi === null ? 'داده بازارهای صرافی هنوز دریافت نشده' : null),
-            self::risk('عرضه روی صرافی‌ها', $ex && $cur && $cur['latest'] > 0 ? Format::pct($ex['latest'] / $cur['latest'] * 100, false, 1) : null,
-                $ex && $cur && $cur['latest'] > 0 ? self::exchangeTone($ex['latest'] / $cur['latest'] * 100) : null, 'CoinMetrics',
-                'CoinMetrics این شاخص را برای این دارایی در سطح رایگان منتشر نکرده است'),
+            $this->exchangeRisk($onExchanges),
             $this->unlocks($coin),
         ];
 
@@ -1445,6 +1481,62 @@ final class Model
                 'note' => self::stateNote($this->x['interest']['state'] ?? 'pending') . ' — بازدید ویکی‌پدیا (Wikimedia)'];
     }
 
+    /** Staked share of supply: beaconcha.in's staked balance over Etherscan's supply. */
+    private function stakedShare(array $m): ?float
+    {
+        $staked = $m['staking']['data']['stakedEth'] ?? null;
+        $total = $m['supplyChain']['data']['totalSupply'] ?? ($m['market']['circulatingSupply'] ?? null);
+        return is_numeric($staked) && is_numeric($total) && $total > 0 ? $staked / $total * 100 : null;
+    }
+
+    /**
+     * Share of supply on exchanges: CoinMetrics' figure for all exchange
+     * wallets when available; otherwise the measured balances of the largest
+     * labelled exchange wallets (Etherscan) — a floor, and labelled as one.
+     *
+     * @return array{pct:float, label:string, source:string, floor:bool, top:?array}|null
+     */
+    private function exchangeShare(?float $total): ?array
+    {
+        $ex = $this->cm('SplyExNtv');
+        $cur = $this->cm('SplyCur');
+        if ($ex && $cur && $cur['latest'] > 0) {
+            return ['pct' => $ex['latest'] / $cur['latest'] * 100, 'label' => 'روی صرافی‌های متمرکز', 'source' => 'CoinMetrics', 'floor' => false, 'top' => null];
+        }
+        $loc = (array) ($this->x['ethlocations']['data'] ?? []);
+        if ($total && !empty($loc['exchangesTotal'])) {
+            $byExchange = [];
+            foreach ((array) $loc['exchanges'] as $w) {
+                $byExchange[$w['exchange']] = ($byExchange[$w['exchange']] ?? 0) + $w['eth'];
+            }
+            arsort($byExchange);
+            $topName = array_key_first($byExchange);
+            return [
+                'pct'    => $loc['exchangesTotal'] / $total * 100,
+                'label'  => 'در ' . Format::num((float) count($loc['exchanges']), 0) . ' کیف پول بزرگ صرافی‌ها (حداقل)',
+                'source' => 'Etherscan',
+                'floor'  => true,
+                'top'    => ['name' => $topName, 'pct' => $byExchange[$topName] / $total * 100, 'count' => count($byExchange), 'wallets' => count($loc['exchanges'])],
+            ];
+        }
+        return null;
+    }
+
+    private function exchangeRisk(?array $share): array
+    {
+        if ($share === null) {
+            return self::risk('تمرکز روی صرافی‌ها', null, null, null,
+                'نه CoinMetrics این شاخص را برگرداند و نه موجودی کیف پول‌های صرافی‌ها از Etherscan رسید');
+        }
+        $row = self::risk($share['floor'] ? 'تمرکز روی صرافی‌ها (حداقل)' : 'تمرکز روی صرافی‌ها', Format::pct($share['pct'], false, 1),
+            self::exchangeTone($share['pct']), $share['source']);
+        $row['detail'] = $share['floor']
+            ? sprintf('موجودی %s کیف پول شناخته‌شده از %s صرافی؛ بیشترین: %s با %s از کل عرضه. کیف پول‌های واریز بی‌شمارند، پس عدد واقعی بیشتر است.',
+                Format::num((float) $share['top']['wallets'], 0), Format::num((float) $share['top']['count'], 0), $share['top']['name'], Format::pct($share['top']['pct'], false, 1))
+            : 'همه کیف پول‌های صرافی‌ها که CoinMetrics شناسایی کرده است';
+        return $row;
+    }
+
     /** One CoinMetrics metric: {latest, date, weekAgo, series}, or null. */
     private function cm(string $metric): ?array
     {
@@ -1485,7 +1577,7 @@ final class Model
             return ['value' => (float) $lido, 'source' => 'Lido',
                     'detail' => 'بازده stETH لیدو، میانگین ۷ روزه', 'kind' => 'measured'];
         }
-        $staked = $m['supplyChain']['data']['stakedSupply'] ?? ($staking['data']['stakedEth'] ?? null);
+        $staked = $staking['data']['stakedEth'] ?? null;
         if (is_numeric($staked) && $staked > 0) {
             return ['value' => self::consensusApr((float) $staked), 'source' => 'محاسبه از فرمول پروتکل',
                     'detail' => 'حداکثر نظری لایه اجماع، از کل اتر سپرده‌شده (Etherscan)', 'kind' => 'formula'];

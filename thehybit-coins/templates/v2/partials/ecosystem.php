@@ -120,11 +120,19 @@ $first = $nodes[0] ?? null;
 
       <div class="v2-card">
         <h3 class="v2-card__title">کارمزد ۱۰ پروتکل برتر</h3>
-        <svg class="v2-bars" viewBox="0 0 300 110" preserveAspectRatio="none" aria-hidden="true">
-          <?php foreach ($e['bars'] as $b) : ?>
-            <rect x="<?= $b['x'] ?>" y="<?= $b['y'] ?>" width="<?= $b['w'] ?>" height="<?= $b['h'] ?>" rx="2"/>
+        <?php /* Labelled bars: each row names its protocol and states its figure,
+           so the chart reads without a legend or a hover. Widths are relative
+           to the largest. */
+        $maxFee = max(array_column($nodes, 'fees')); ?>
+        <ol class="v2-hbars">
+          <?php foreach ($nodes as $i => $nd) : ?>
+            <li class="v2-g--<?= esc_attr($nd['group']) ?>">
+              <span class="v2-hbars__name"><bdi><?= esc_html($nd['name']) ?></bdi></span>
+              <span class="v2-hbars__track"><span class="v2-hbars__fill<?= $i === 0 ? ' is-top' : '' ?>" style="--w: <?= round($maxFee > 0 ? $nd['fees'] / $maxFee * 100 : 0, 1) ?>%"></span></span>
+              <span class="v2-hbars__val"><?= View::n(Format::usdCompact($nd['fees'], 1)) ?></span>
+            </li>
           <?php endforeach; ?>
-        </svg>
+        </ol>
         <p class="v2-muted">مجموع: <?= View::n(Format::usdCompact($e['totalFees'])) ?> در ۲۴ ساعت</p>
       </div>
       <?= View::source($e['source'], $e['fetchedAt']) ?>

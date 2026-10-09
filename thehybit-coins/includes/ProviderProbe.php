@@ -326,10 +326,19 @@ final class ProviderProbe
                 'provider' => 'llamaprices',
                 'label'    => 'weekly price since launch (in use — v2 longchart)',
                 'url'      => 'https://coins.llama.fi/chart/coingecko:ethereum',
-                'query'    => ['start' => '1438387200', 'span' => '520', 'period' => '1w'],
+                'query'    => ['start' => '1438387200', 'span' => '290', 'period' => '2w', 'searchWidth' => '600'],
                 'needsKey' => false,
                 'expects'  => ['coins.coingecko:ethereum.prices.0.timestamp', 'coins.coingecko:ethereum.prices.0.price'],
-                'note'     => 'confirms how many weekly points one request may return (span is capped at 600 in the collector)',
+                'note'     => 'the exact request the collector makes (fortnightly points since launch, span capped at 400)',
+            ],
+            [
+                'provider' => 'llamaprices',
+                'label'    => 'Kraken weekly candles (in use — v2 longchart fallback)',
+                'url'      => 'https://api.kraken.com/0/public/OHLC',
+                'query'    => ['pair' => 'ETHUSD', 'interval' => '10080'],
+                'needsKey' => false,
+                'expects'  => ['result.XETHZUSD.0.0', 'result.XETHZUSD.0.4'],
+                'note'     => 'used only when DefiLlama returns no history; up to 720 weekly closes',
             ],
 
             [
@@ -386,6 +395,16 @@ final class ProviderProbe
                 'needsKey' => true,
                 'expects'  => ['result.0.account', 'result.0.balance'],
                 'note'     => 'open each address on etherscan.io to confirm its name tag (Arbitrum One Bridge, OptimismPortal, Base Portal, StarkGate ETH, Linea)',
+            ],
+            [
+                'provider' => 'etherscan',
+                'label'    => 'labelled exchange wallet balances (in use — v2 exchange concentration)',
+                'url'      => 'https://api.etherscan.io/v2/api',
+                'query'    => ['chainid' => '1', 'module' => 'account', 'action' => 'balancemulti', 'tag' => 'latest',
+                               'address' => '0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8,0xF977814e90dA44bFA03b6295A0616a897441aceC,0x28C6c06298d514Db089934071355E5743bf21d60,0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43,0xDA9dfA130Df4dE4673b89022EE50ff26f6EA73Cf,0x40B38765696e3d5d8d9d834D8AaD4bB6e418E489,0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3'],
+                'needsKey' => true,
+                'expects'  => ['result.0.account', 'result.0.balance'],
+                'note'     => 'open each address on etherscan.io and confirm its name tag (Binance 7/8/14, Coinbase 10, Kraken 13, Robinhood, Crypto.com) before launch',
             ],
             [
                 'provider' => 'wikimedia',

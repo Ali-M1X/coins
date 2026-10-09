@@ -567,6 +567,27 @@ return [
                 'Starknet'     => '0xae0Ee0A63A2cE6BaeEFFE56e7714FB4EFE48D419',
                 'Linea'        => '0xd19d4B5d358258f05D7B411E21A1460D11B0876F',
             ],
+
+            /* The largest exchange wallets by public Etherscan name tag, read
+               in the SAME balancemulti call as the bridges (20 addresses max).
+               Their total is a floor for "ETH held on exchanges", never the
+               whole — exchanges run thousands of deposit addresses — and the
+               page says so. Used when CoinMetrics' exchange-supply figure is
+               not available.
+
+               VERIFY ON THE SERVER: Provider Probe → "exchange wallet
+               balances" lists each balance; open each address on etherscan.io
+               and check its name tag before launch. Format: label => address,
+               the label's first word is the exchange. */
+            'exchange_wallets' => [
+                'Binance 7'   => '0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8',
+                'Binance 8'   => '0xF977814e90dA44bFA03b6295A0616a897441aceC',
+                'Binance 14'  => '0x28C6c06298d514Db089934071355E5743bf21d60',
+                'Coinbase 10' => '0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43',
+                'Kraken 13'   => '0xDA9dfA130Df4dE4673b89022EE50ff26f6EA73Cf',
+                'Robinhood'   => '0x40B38765696e3d5d8d9d834D8AaD4bB6e418E489',
+                'Crypto.com'  => '0x6262998Ced04146fA42253a5C0AF90CA02dfd2A3',
+            ],
         ],
 
         'beaconchain' => [
@@ -627,6 +648,9 @@ return [
             'budget'   => ['per_minute' => 6, 'per_hour' => 60, 'per_day' => 600],
             'cooldown' => 5 * MINUTE_IN_SECONDS,
             'datasets' => ['longchart'],
+            /* Second source, same budget: Kraken's public OHLC (keyless). */
+            'bases'    => ['kraken' => 'https://api.kraken.com/0/public'],
+            'kraken_pairs' => ['ethereum' => 'ETHUSD', 'bitcoin' => 'XBTUSD'],
         ],
 
         /* CoinMetrics Community API — free, keyless, documented. Daily

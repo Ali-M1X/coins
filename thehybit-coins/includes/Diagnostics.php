@@ -185,6 +185,7 @@ final class Diagnostics
 
         $this->cronTable();
         $this->keysTable();
+        $this->errorsTable();
         $this->budgetTable();
         $this->datasetTable($coin);
         $this->schedulerTable();
@@ -370,7 +371,31 @@ final class Diagnostics
      * required key that is missing disables its provider at boot rather than
      * letting it fail on every request, and this table is where that is said.
      */
-    private function keysTable(): void
+    /**
+     * Why a dataset is not on the page. A dataset that fails every time looks,
+     * to a visitor, like one still being fetched; this says which it is, and
+     * what the provider answered.
+     */
+    private function errorsTable(): void
+    {
+        $this->open('آخرین خطای هر داده', ['داده', 'زمان (UTC)', 'پاسخ']);
+        $errors = Cache::lastErrors();
+        if ($errors === []) {
+            echo '<tr><td colspan="3">هیچ داده‌ای در آخرین تلاش خطا نداشته است.</td></tr>';
+        }
+        foreach ($errors as $dataset => $e) {
+            // Keys never reach the screen, whichever provider's message this is.
+            $message = (string) $e['message'];
+            foreach ((array) ($this->config['providers'] ?? []) as $ps) {
+                $message = Settings::scrub($message, (array) $ps);
+            }
+            printf('<tr><td><code>%s</code></td><td>%s</td><td dir="ltr" style="text-align:left">%s</td></tr>',
+                esc_html($dataset), esc_html($e['at']), esc_html($message));
+        }
+        $this->close();
+    }
+
+        private function keysTable(): void
     {
         $this->open('کلیدهای API', ['ارائه‌دهنده', 'وضعیت', 'کلید ذخیره‌شده', 'سقف رایگان', 'اثر']);
 

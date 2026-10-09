@@ -60,19 +60,21 @@ $c = $v['coin'];
     </div>
 
     <aside class="v2-pulse__side">
-      <div class="v2-card">
-        <h3 class="v2-card__title">چرا این گزارش؟</h3>
-        <ol class="v2-sources">
-          <?php foreach ($v['sources'] as $src) : ?>
-            <li class="<?= $src['time'] ? '' : 'is-missing' ?>">
-              <span class="v2-sources__time"><?= $src['time'] ? View::n($src['time']) : '—' ?></span>
-              <span><?= esc_html($src['what']) ?> · <bdi><?= esc_html($src['who']) ?></bdi></span>
-            </li>
-          <?php endforeach; ?>
-        </ol>
-      </div>
+      <?php /* The per-dataset provenance list that used to stand here is a
+         transparency record, not a reading aid: it answers "where did this
+         number come from, and how old is it?", which a reader asks of a
+         specific figure, not while reading the day's summary. It is now a
+         collapsed footnote under the About section. */ ?>
       <div class="v2-card v2-card--accent v2-tldr">
         <h3 class="v2-card__title">اگر فقط ۳۰ ثانیه وقت داری</h3>
+        <?php $top = array_slice(array_values(array_filter($v['story']['signals'], static fn($x) => $x['tone'] !== 'neutral')), 0, 3); ?>
+        <?php if ($top !== []) : ?>
+          <ul class="v2-tldr__list">
+            <?php foreach ($top as $sig) : ?>
+              <li><span class="v2-pill v2-pill--<?= esc_attr($sig['tone']) ?>"><?= esc_html($sig['toneFa']) ?></span> <?= esc_html($sig['label']) ?> <?= View::n($sig['value']) ?></li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
         <p class="v2-tldr__text">ترکیب داده‌ها، سیگنال خرید نیست.</p>
       </div>
     </aside>

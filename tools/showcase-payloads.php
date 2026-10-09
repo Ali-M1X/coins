@@ -176,9 +176,10 @@ function showcase_payload(string $url): ?array
         $key = rawurldecode(substr($path, strpos($path, '/chart/') + 7));
         $start = (int) ($q['start'] ?? 0);
         $span = (int) ($q['span'] ?? 0);
+        $step = (int) ($q['period'] ?? '1w') * 604800; // '2w' → two weeks
         $times = [];
         for ($i = 0; $i < $span; $i++) {
-            $times[] = $start + $i * 604800;
+            $times[] = $start + $i * $step;
         }
         $isBtc = str_contains($key, 'bitcoin');
         $anchors = $isBtc ? [

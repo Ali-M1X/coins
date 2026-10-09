@@ -66,6 +66,7 @@ final class CoinRepository
         'thb_faq'                 => 'meta.faq',
         'thb_unlocks'             => 'meta.unlocks',
         'thb_wikipedia'           => 'meta.wikipedia',
+        'thb_price_events'        => 'meta.priceEvents',
 
         // per-coin provider toggles
         'thb_enable_defi'         => 'flags.defillama',
