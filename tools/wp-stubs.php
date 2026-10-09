@@ -59,6 +59,8 @@ final class Probe
      * always after the allowance was spent, and never refilled into existence.
      */
     public static array $rateLimit = [];
+    /** host => requests the simulated provider answered with 429 */
+    public static array $refused = [];
 
     /** @var array<string, array<int, int>> host => timestamps of served calls */
     public static array $served = [];
@@ -75,6 +77,7 @@ final class Probe
         self::$sleep = 0.0;
         self::$rateLimit = [];
         self::$served = [];
+        self::$refused = [];
         self::$responseHeaders = [];
         if (!$keepCache) {
             self::$transients = [];
@@ -427,7 +430,7 @@ function dbDelta(string $sql): array { return []; }
 function wp_remote_get(string $url, array $args = [])
 {
     $host = parse_url($url, PHP_URL_HOST) ?: '';
-    Probe::$calls[] = ['url' => $url, 'host' => $host];
+    Probe::$calls[] = ['url' => $url, 'host' => $host, 'at' => Clock::$now];
     Probe::$network += ASSUMED_LATENCY;
 
     if (!empty($GLOBALS['thb_probe_fail_all'])) {
@@ -442,6 +445,7 @@ function wp_remote_get(string $url, array $args = [])
             static fn(int $t): bool => $t > Clock::$now - $window['per']
         ));
         if (count(Probe::$served[$host]) >= $window['max']) {
+            Probe::$refused[$host] = (Probe::$refused[$host] ?? 0) + 1;
             return [
                 'response' => ['code' => 429],
                 'headers'  => ['retry-after' => '60'],
@@ -582,6 +586,19 @@ function absint($v): int { return abs((int) $v); }
 function number_format_i18n($n, int $decimals = 0): string { return number_format((float) $n, $decimals); }
 function size_format($bytes, $decimals = 0) { return round(((int) $bytes) / 1024) . ' KB'; }
 function home_url(string $p = '/'): string { return 'https://thehybit.com' . $p; }
+function rest_url(string $p = ''): string { return 'https://thehybit.com/wp-json/' . ltrim($p, '/'); }
+function register_rest_route(string $ns, string $route, array $args): bool { $GLOBALS['thb_rest_routes'][$ns . $route] = $args; return true; }
+function sanitize_title($t): string { return strtolower(preg_replace('/[^a-z0-9-]+/i', '-', (string) $t) ?? ''); }
+if (!class_exists('WP_REST_Response')) {
+    class WP_REST_Response
+    {
+        public array $headers = [];
+        public function __construct(public $data = null, public int $status = 200) {}
+        public function header(string $k, string $v): void { $this->headers[$k] = $v; }
+        public function get_data() { return $this->data; }
+        public function get_status(): int { return $this->status; }
+    }
+}
 function get_bloginfo(string $show = ''): string { return $show === 'name' ? ($GLOBALS['thb_blogname'] ?? 'های‌بیت') : ''; }
 function site_url(string $p = ''): string { return 'https://thehybit.com/' . ltrim($p, '/'); }
 function admin_url(string $p = ''): string { return 'https://thehybit.com/wp-admin/' . ltrim($p, '/'); }

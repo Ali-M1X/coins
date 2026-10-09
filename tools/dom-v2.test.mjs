@@ -199,6 +199,47 @@ if (axis && (await page.$$('[data-v2-axis] option')).length > 1) {
 
 ok(requests.length === before, 'none of the interactions made a network request');
 
+/* ---- live price: updates in place, from our endpoint only ---- */
+{
+  const lp = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await lp.clock.install();
+  const polls = [];
+  let price = 3300.5;
+  await lp.route('**/wp-json/thehybit/v1/price/**', async (route) => {
+    polls.push(route.request().url());
+    price += 10;
+    // The page's (fake) clock, as the server's would agree with the visitor's.
+    const now = await lp.evaluate(() => Date.now());
+    route.fulfill({
+      status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ coin: 'ethereum', price, change24h: -1.25, toman: price * 83000,
+        fetchedAt: new Date(now).toISOString(), nextRefreshAt: new Date(now + 60000).toISOString(), source: 'ticker' }),
+    });
+  });
+  const offsite = [];
+  lp.on('request', (r) => { if (/coingecko/.test(r.url())) offsite.push(r.url()); });
+  await lp.goto(URL_, { waitUntil: 'networkidle' });
+  const before = await lp.textContent('[data-v2-price]');
+  ok(polls.length === 0, 'no poll on load — the first paint is already the cached price');
+
+  await lp.clock.runFor(20000);
+  await lp.waitForFunction(() => document.querySelector('[data-v2-price]').textContent.includes('3,310.50'), null, { timeout: 5000 }).catch(() => {});
+  const after = await lp.textContent('[data-v2-price]');
+  ok(polls.length === 1 && after.includes('$3,310.50') && after !== before, `the price updates in place after the server refresh is due (${before.trim()} → ${after.trim()})`);
+  ok((await lp.getAttribute('[data-v2-live-change]', 'class')).includes('v2-delta--down')
+     && (await lp.textContent('[data-v2-live-change]')).includes('−1.25%'), 'and the 24h change with its direction');
+  ok((await lp.textContent('[data-v2-live-toman]')).includes('274,771,500'), 'and the toman figure');
+
+  await lp.clock.runFor(30000);
+  ok(polls.length === 1, 'no second poll before the next refresh is due — never faster than the data changes');
+  await lp.clock.runFor(40000);
+  await lp.waitForFunction(() => document.querySelector('[data-v2-price]').textContent.includes('3,320.50'), null, { timeout: 5000 }).catch(() => {});
+  ok(polls.length === 2, 'the next poll comes right after the next one-minute refresh');
+  ok(offsite.length === 0, 'the browser never contacts CoinGecko');
+  ok(await lp.locator('[data-v2-price]').count() === 1, 'no reload: the same element was updated');
+  await lp.close();
+}
+
 /* ---- JavaScript off: the page is still complete ---- */
 const ctx = await browser.newContext({ javaScriptEnabled: false });
 const nojs = await ctx.newPage();

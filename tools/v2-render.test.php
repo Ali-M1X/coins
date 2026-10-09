@@ -462,6 +462,100 @@ ok(!isset($filled['bitcoin']), 'a coin that does not exist is skipped — no pos
 ok(Seeder::fillEditorial() === [], 'and it runs once per plugin version');
 unset($GLOBALS['thb_pages'], $GLOBALS['thb_coin_fields'][77]);
 
+/* =====================================================================
+ * 14. Live price — once a minute, one request for every coin
+ * ================================================================== */
+section('live price');
+
+use TheHybit\Coins\{LivePrice, Scheduler};
+
+$cfgL = $plugin->config;
+$sched = new Scheduler($cfgL, $plugin->coins, $plugin->pipeline, $plugin->history);
+$live = new LivePrice($cfgL, $plugin->coins, $plugin->cache);
+$ethL = $plugin->coins->find(10);
+
+ok($plugin->cache->ttl('ticker') < Scheduler::interval($cfgL),
+   'the ticker TTL (' . $plugin->cache->ttl('ticker') . 's) is shorter than the tick interval (' . Scheduler::interval($cfgL) . 's), so every tick refreshes it');
+ok(!array_key_exists('ticker', (array) (new ReflectionClassConstant(TheHybit\Coins\Pipeline::class, 'DATASETS'))->getValue()),
+   'the ticker is not part of a page render — renders still never wait on it');
+
+Probe::reset();
+Clock::reset();
+foreach (array_keys($cfgL['providers']) as $p) { (new TheHybit\Coins\Budget($cfgL))->reset($p); }
+$GLOBALS['thb_probe_background'] = true;
+$sched->tick();
+ok(Probe::count('/simple/price') === 1, 'one tick: ONE /simple/price request for every coin (' . Probe::count('/simple/price') . ')');
+$call = array_values(array_filter(Probe::$calls, static fn($c) => str_contains($c['url'], '/simple/price')))[0]['url'] ?? '';
+ok(str_contains($call, 'ethereum') && str_contains($call, 'bitcoin') && str_contains($call, 'include_24hr_change=true'),
+   'asking for both coins and their 24h change in the same request');
+$tick = $plugin->cache->peek('ticker', $plugin->cache->keyFor('ticker'));
+ok(isset($tick['data']['prices']['ethereum'], $tick['data']['prices']['bitcoin']) && !isset($tick['data']['prices']['zero-coin']),
+   'both coins cached; a zero price is dropped, never shown as $0');
+
+Clock::advance(30);
+$sched->tick();
+ok(Probe::count('/simple/price') === 1, 'a tick 30s later does not ask again — the minute has not passed');
+Clock::advance(25);
+$sched->tick();
+ok(Probe::count('/simple/price') === 2, 'the next tick (55s after the first) refreshes it — once a minute');
+$GLOBALS['thb_probe_background'] = false;
+
+/* The per-minute budget slides, and holds one call for the ticker. */
+$b = new TheHybit\Coins\Budget($cfgL);
+$b->reset('coingecko');
+Clock::reset();
+foreach (range(1, 3) as $_) { $b->record('coingecko'); }
+ok($b->refuse('coingecko') !== null, 'after 3 calls in a minute, ordinary CoinGecko calls stop: the 4th slot is reserved');
+ok($b->refuse('coingecko', reserved: true) === null, 'but the live ticker may still use it');
+$b->record('coingecko');
+ok($b->refuse('coingecko', reserved: true) !== null, 'and nothing gets a 5th call inside 60 seconds');
+Clock::advance(59);
+ok($b->refuse('coingecko', reserved: true) !== null, '59s later the window still holds all four — it slides, it does not reset on a bucket edge');
+Clock::advance(2);
+ok($b->refuse('coingecko') === null, '61s later they have aged out');
+$b->reset('coingecko');
+
+/* The endpoint: reads the cache, never a provider. */
+Probe::reset(keepCache: true);
+$r = $live->read($ethL);
+ok(abs($r['price'] - 3251.04) < 1e-9 && abs($r['change24h'] - 2.61) < 1e-9 && $r['source'] === 'ticker',
+   'the endpoint returns the cached ticker price and 24h change');
+ok(Probe::count() === 0, 'and makes 0 provider requests (' . Probe::count() . ')');
+for ($i = 0; $i < 500; $i++) { $live->read($ethL); }
+ok(Probe::count() === 0, '500 polls later: still 0 provider requests');
+ok(strtotime($r['nextRefreshAt']) >= strtotime($r['fetchedAt']) + Scheduler::interval($cfgL),
+   'it tells the page when the next refresh is due, so the page polls once per refresh');
+ok(isset($r['toman']) && $r['toman'] > 0, 'with the toman figure, recomputed from the live price');
+
+$GLOBALS['thb_pages'] = ['ethereum' => (object) ['ID' => 10], 'bitcoin' => (object) ['ID' => 11]];
+$resp = $live->respond(['slug' => 'ethereum']);
+ok($resp->get_status() === 200 && str_contains($resp->headers['Cache-Control'] ?? '', 's-maxage=20'),
+   'HTTP 200, cacheable by a shared cache for 20s');
+ok($live->respond(['slug' => 'no-such-coin'])->get_status() === 404, 'an unknown coin is a 404');
+unset($GLOBALS['thb_pages']);
+$live->register();
+do_action('rest_api_init');
+ok(isset($GLOBALS['thb_rest_routes']['thehybit/v1/price/(?P<slug>[a-z0-9-]+)']), 'the route is registered as GET /wp-json/thehybit/v1/price/{slug}');
+
+/* Before the first ticker refresh, the 5-minute market price still answers. */
+$plugin->cache->forget('ticker', $plugin->cache->keyFor('ticker'));
+$fallback = $live->read($ethL);
+ok($fallback !== null && $fallback['source'] === 'market', 'with no ticker yet, it falls back to the cached market price');
+Probe::reset(keepCache: true);
+$GLOBALS['thb_probe_background'] = true;
+foreach (array_keys($cfgL['providers']) as $p) { (new TheHybit\Coins\Budget($cfgL))->reset($p); }
+$sched->tick();
+$GLOBALS['thb_probe_background'] = false;
+
+/* The page. */
+$fresh();
+$livePage = v2_render(10);
+ok(str_contains($livePage, '$3,251.04'), 'the v2 page renders the live price on first paint, not the 5-minute one');
+ok(str_contains($livePage, 'data-v2-live-change') && str_contains($livePage, 'data-v2-live-stamp'), 'the live figures are marked for in-place updates');
+$island = \TheHybit\Coins\V2\Model::client($plugin->v2($ethL));
+ok(($island['live']['url'] ?? '') === 'https://thehybit.com/wp-json/thehybit/v1/price/ethereum', 'the data island carries the endpoint URL');
+ok(!str_contains($livePage, 'api.coingecko.com'), 'the page never points the browser at CoinGecko');
+
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);
 }

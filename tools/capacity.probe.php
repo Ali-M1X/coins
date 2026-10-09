@@ -167,8 +167,22 @@ function simulateHour(array $config, int $coins, int $hours = 8): array
     $byHost = array_map(static fn(int $n): float => $n / $window, $byHost);
     ksort($byHost);
 
+    /* CoinGecko, split: the live ticker vs everything else, and the busiest
+       60 seconds — the window CoinGecko's own limit is enforced over. */
+    $cg = array_values(array_filter($GLOBALS['thb_last_hour_calls'], static fn($c) => $c['host'] === 'api.coingecko.com'));
+    $ticker = count(array_filter($cg, static fn($c) => str_contains($c['url'], '/simple/price')));
+    $times = array_map(static fn($c) => (int) ($c['at'] ?? 0), $cg);
+    sort($times);
+    $peak = 0;
+    for ($i = 0, $j = 0, $n = count($times); $i < $n; $i++) {
+        while ($times[$i] - $times[$j] >= 60) { $j++; }
+        $peak = max($peak, $i - $j + 1);
+    }
+    $cgSplit = ['ticker' => $ticker / $window, 'other' => (count($cg) - $ticker) / $window, 'peakMinute' => $peak,
+                'refused' => (Probe::$refused['api.coingecko.com'] ?? 0)];
+
     $GLOBALS['thb_probe_background'] = false;
-    return ['byHost' => $byHost, 'ticks' => $ticks, 'worstTick' => $worst];
+    return ['byHost' => $byHost, 'ticks' => $ticks, 'worstTick' => $worst, 'coingecko' => $cgSplit];
 }
 
 /** Calls per hour to URLs containing $needle — for per-dataset rows. */
@@ -200,6 +214,15 @@ $line(str_repeat('=', 72));
 $line('Requests per hour by provider — steady state, averaged over hours 3-8');
 $line(str_repeat('=', 72));
 $line();
+echo "\n  CoinGecko split (live ticker vs the rest), per hour\n";
+foreach (['ticker' => 'live price ticker', 'other' => 'everything else'] as $k => $label) {
+    printf("  %-30s %10.1f %10.1f\n", $label, $results[2]['coingecko'][$k], $results[100]['coingecko'][$k]);
+}
+printf("  %-30s %10d %10d\n", '429s from CoinGecko (whole run)', $results[2]['coingecko']['refused'], $results[100]['coingecko']['refused']);
+printf("  %-30s %10d %10d\n", 'busiest 60s (requests)', $results[2]['coingecko']['peakMinute'], $results[100]['coingecko']['peakMinute']);
+printf("  %-30s %10.0f %10.0f\n\n", 'per day (x24)', 24 * ($results[2]['coingecko']['ticker'] + $results[2]['coingecko']['other']),
+       24 * ($results[100]['coingecko']['ticker'] + $results[100]['coingecko']['other']));
+
 $hosts = array_unique(array_merge(array_keys($results[2]['byHost']), array_keys($results[100]['byHost'])));
 sort($hosts);
 printf("  %-30s %10s %10s\n", 'host', '2 coins', '100 coins');

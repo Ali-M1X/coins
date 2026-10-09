@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.0.1
+ * Version:     2.0.2
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.0.1');
+define('THB_COINS_VERSION', '2.0.2');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -29,6 +29,7 @@ require_once THB_COINS_DIR . 'includes/AdminSetup.php';
 require_once THB_COINS_DIR . 'includes/CoinRepository.php';
 require_once THB_COINS_DIR . 'includes/Settings.php';
 require_once THB_COINS_DIR . 'includes/Design.php';
+require_once THB_COINS_DIR . 'includes/LivePrice.php';
 require_once THB_COINS_DIR . 'includes/Datasets.php';
 require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';
@@ -146,7 +147,11 @@ final class Plugin
         /* Settings — API keys and the design selector. */
         (new Settings())->register();
 
-        /* noindex for ?thb_design= previews; see includes/Design.php. */
+        /* GET /wp-json/thehybit/v1/price/{slug} — cached live price, never a
+           provider call. See includes/LivePrice.php. */
+        (new LivePrice($this->config, $this->coins, $this->cache))->register();
+
+                /* noindex for ?thb_design= previews; see includes/Design.php. */
         (new Design())->register();
 
         /* Admin-only provider diagnostics. Adds nothing to the front-end

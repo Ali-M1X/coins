@@ -445,6 +445,60 @@ final class CoinGecko extends Collector
         return $out === [] ? null : ['peers' => $out];
     }
 
+    /**
+     * The live price: price, 24h change and CoinGecko's own update time for
+     * every coin, in ONE /simple/price request.
+     *
+     * /simple/price takes any number of ids (bounded only by URL length —
+     * hundreds of coins), so this costs one request per refresh at two coins
+     * and at a hundred. Only the two figures the live display needs are asked
+     * for; everything else stays on the five-minute market dataset.
+     *
+     * @param Coin[] $coins
+     * @return array<string, array{price:float, change24h:?float, updatedAt:?int}> keyed by CoinGecko id
+     */
+    public function ticker(array $coins): array
+    {
+        $ids = [];
+        foreach ($coins as $coin) {
+            if ($coin->coingeckoId !== '') {
+                $ids[$coin->coingeckoId] = true;
+            }
+        }
+        if ($ids === []) {
+            return [];
+        }
+
+        // The one call allowed into CoinGecko's reserved per-minute slot.
+        $this->reserved = true;
+        try {
+            $raw = $this->get('/simple/price', [
+                'ids'                     => implode(',', array_keys($ids)),
+                'vs_currencies'           => 'usd',
+                'include_24hr_change'     => 'true',
+                'include_last_updated_at' => 'true',
+            ]);
+        } finally {
+            $this->reserved = false;
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $id => $row) {
+            if (!isset($ids[$id]) || !is_array($row) || !isset($row['usd']) || !is_numeric($row['usd']) || (float) $row['usd'] <= 0) {
+                continue;   // a price of zero or nothing is not a price
+            }
+            $out[(string) $id] = [
+                'price'     => (float) $row['usd'],
+                'change24h' => isset($row['usd_24h_change']) && is_numeric($row['usd_24h_change']) ? (float) $row['usd_24h_change'] : null,
+                'updatedAt' => isset($row['last_updated_at']) && is_numeric($row['last_updated_at']) ? (int) $row['last_updated_at'] : null,
+            ];
+        }
+        return $out;
+    }
+
     /** Per-request memo of /coins/{id}, keyed by CoinGecko id. */
     private array $coinMemo = [];
 

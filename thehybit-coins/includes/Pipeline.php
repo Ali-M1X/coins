@@ -244,6 +244,49 @@ final class Pipeline
         return $written;
     }
 
+    /**
+     * Refresh the live price for every coin — one request.
+     *
+     * Merged over the previous entry, so a coin CoinGecko omitted this time
+     * keeps its last price (and its older timestamp says so) instead of
+     * disappearing from the display.
+     *
+     * @param Coin[] $coins
+     * @return int coins written
+     */
+    public function warmTicker(array $coins): int
+    {
+        $collector = $this->collectors['coingecko'] ?? null;
+        $eligible = array_values(array_filter(
+            $coins,
+            fn(Coin $c): bool => $c->usesProvider('coingecko', $this->config)
+        ));
+        if (!$collector instanceof Collectors\CoinGecko || !$collector->isEnabled() || $eligible === []) {
+            return 0;
+        }
+
+        try {
+            $rows = $collector->ticker($eligible);
+        } catch (\Throwable $e) {
+            error_log('[thb] live price refresh failed: ' . $e->getMessage());
+            return 0;
+        }
+        if ($rows === []) {
+            return 0;
+        }
+
+        $key = $this->cache->keyFor('ticker');
+        $previous = $this->cache->peek('ticker', $key);
+        $prices = is_array($previous['data']['prices'] ?? null) ? $previous['data']['prices'] : [];
+        $now = time();
+        foreach ($rows as $id => $row) {
+            $prices[$id] = $row + ['fetchedAt' => $now];
+        }
+        $this->cache->put('ticker', $key, ['prices' => $prices]);
+
+        return count($rows);
+    }
+
     /** Refresh one chart window through the cache. */
     private function chartWindow(Coin $coin, string $dataset): void
     {

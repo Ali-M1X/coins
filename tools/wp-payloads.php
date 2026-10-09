@@ -97,6 +97,17 @@ function probe_payload(string $url): array
         ];
     }
 
+    /* ---- CoinGecko: the live ticker. Echoes every id; one with a zero price
+       must be dropped, not shown as $0. ---- */
+    if (str_contains($path, '/simple/price')) {
+        $out = [];
+        foreach (array_filter(explode(',', (string) ($q['ids'] ?? ''))) as $i => $id) {
+            $out[$id] = ['usd' => $id === 'bitcoin' ? 62012.5 : 3251.04 + $i, 'usd_24h_change' => 2.61 - $i, 'last_updated_at' => Clock::$now - 20];
+        }
+        $out['zero-coin'] = ['usd' => 0];
+        return $out;
+    }
+
     /* ---- CoinGecko: batched markets. Echoes back every id asked for. ---- */
     if (str_contains($path, '/coins/markets')) {
         $ids = array_filter(explode(',', (string) ($q['ids'] ?? '')));

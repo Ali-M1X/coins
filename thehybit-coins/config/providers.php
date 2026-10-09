@@ -34,6 +34,23 @@ return [
            coins do not need faster polling than this, and every value below is
            still at or above the rate at which the underlying figure moves. */
         'market'     => 5 * MINUTE_IN_SECONDS,   // price, market cap, 24h change/volume
+
+        /* The LIVE PRICE: price and 24h change for every coin in ONE
+           /simple/price request, refreshed on every scheduler tick.
+
+           50 seconds is not "how fresh we would like it" — it is the value that
+           makes the entry due on EVERY tick. Ticks come from the minute crontab
+           about every 55–60s (see `scheduler.interval`); a TTL of 60 would find
+           the entry still fresh on some ticks and silently halve the cadence to
+           two minutes. Effective refresh: once a minute.
+
+           Faster is pointless, not just expensive: CoinGecko's public API
+           itself refreshes /simple/price once every 60 seconds, so a 30-second
+           poll would return the same number twice.
+
+           Cost: one request per tick whatever the coin count — about 65 an
+           hour. See docs/LIVE-PRICE.md for the budget arithmetic. */
+        'ticker'     => 50,
         'chart'      => 10 * MINUTE_IN_SECONDS,  // fallback only; see the `chart` block
         'metadata'   => DAY_IN_SECONDS,          // name, links, launch date, contracts
         'historical' => DAY_IN_SECONDS,          // ATH/ATL and other near-static records
@@ -148,6 +165,10 @@ return [
      * ---------------------------------------------------------------- */
     'datasets' => [
         'market'      => ['provider' => 'coingecko',      'scope' => 'coin',  'priority' => 1, 'batch' => true],
+        /* Site-wide: one entry holding every coin's live price. Warmed by the
+           scheduler's own step, never queued per coin, never fetched on a page
+           render or by the live-price endpoint. */
+        'ticker'      => ['provider' => 'coingecko',      'scope' => 'site',  'priority' => 1, 'batch' => true, 'render' => 'cache'],
         'chart.24h'   => ['provider' => 'coingecko',      'scope' => 'coin',  'priority' => 2],
         'chart.7d'    => ['provider' => 'coingecko',      'scope' => 'coin',  'priority' => 2],
         'chart.30d'   => ['provider' => 'coingecko',      'scope' => 'coin',  'priority' => 3],
@@ -378,12 +399,16 @@ return [
                why it lives in config. Four leaves headroom under the five we
                saw succeed. */
             'budget'    => ['per_minute' => 4, 'per_hour' => 200, 'per_day' => 4000],
+            /* One of the four per-minute calls is held for the live price
+               ticker, so the rest of the scheduler's CoinGecko work can never
+               crowd it out: everything else gets three a minute. */
+            'reserve_per_minute' => 1,
             /* After a 429, stop calling this provider entirely for a while.
                Hammering a rate-limited endpoint cannot succeed and only extends
                the limit; the cache serves its last good data meanwhile. A
                Retry-After header, when sent, wins over this default. */
             'cooldown'  => 5 * MINUTE_IN_SECONDS,
-            'datasets'  => ['market', 'chart', 'metadata', 'historical', 'global', 'categories', 'structure', 'peers'],
+            'datasets'  => ['market', 'chart', 'metadata', 'historical', 'global', 'categories', 'structure', 'peers', 'ticker'],
         ],
 
         'defillama' => [

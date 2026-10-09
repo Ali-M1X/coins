@@ -127,7 +127,7 @@ final class Model
         $v = [
             'brand'      => self::brand(),
             'coin'       => $this->coin($coin, $m),
-            'hero'       => $this->hero($m),
+            'hero'       => $this->hero($m, $coin),
             'chart'      => $this->chart($m),
             'keyMetrics' => $this->keyMetrics($m),
             'ecosystem'  => $this->ecosystem($m, $protocols),
@@ -158,6 +158,7 @@ final class Model
             'symbol'  => $v['coin']['symbol'] ?? '',
             'slug'    => $v['coin']['slug'] ?? '',
             'chart'   => $v['chart']['client'] ?? [],
+            'live'    => $v['hero']['live'] ?? null,
             'story'   => $v['priceStory']['client'] ?? null,
             'ecosystem' => array_map(
                 static fn($p) => array_intersect_key($p, array_flip(['name', 'categoryFa', 'group', 'fees', 'change', 'share'])),
@@ -195,10 +196,27 @@ final class Model
         ];
     }
 
-    private function hero(array $m): array
+    private function hero(array $m, Coin $coin): array
     {
         $mk = (array) ($m['market'] ?? []);
+
+        /* The live ticker, when it is newer than the five-minute market entry:
+           the first paint already shows the minute-fresh price, so the script's
+           first update is a real change rather than a correction. */
+        $tick = $this->cache->peek('ticker', $this->cache->keyFor('ticker'))['data']['prices'][$coin->coingeckoId] ?? null;
+        if (is_array($tick) && isset($tick['price'])) {
+            $mk['price'] = (float) $tick['price'];
+            $mk['change24h'] = $tick['change24h'] ?? ($mk['change24h'] ?? null);
+        }
+        $live = (new \TheHybit\Coins\LivePrice($this->config, new \TheHybit\Coins\CoinRepository(), $this->cache))->read($coin);
+
         return [
+            'live'       => [
+                'url'           => \TheHybit\Coins\LivePrice::url($coin->slug),
+                'nextRefreshAt' => $live['nextRefreshAt'] ?? null,
+                'fetchedAt'     => $live['fetchedAt'] ?? null,
+                'interval'      => \TheHybit\Coins\Scheduler::interval($this->config),
+            ],
             'price'      => $mk['price'] ?? null,
             'change24h'  => $mk['change24h'] ?? null,
             'marketCap'  => $mk['marketCap'] ?? null,

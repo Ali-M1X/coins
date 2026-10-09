@@ -29,18 +29,22 @@ $ch = $v['chart'];
       <p class="v2-tagline"><?= esc_html($c['tagline']) ?></p>
     <?php endif; ?>
 
+    <?php /* data-v2-live-*: the three figures v2.js updates in place from
+       /wp-json/thehybit/v1/price/{slug} once a minute. Not an aria-live region:
+       a price announced every minute would drown a screen reader. */ ?>
     <div class="v2-price">
       <?php if ($h['price'] !== null) : ?>
         <span class="v2-price__value" data-v2-price><?= View::n(Format::usd((float) $h['price'])) ?></span>
-        <span class="v2-delta v2-delta--<?= View::dir($h['change24h']) ?>">
-          <?= esc_html(Format::arrow($h['change24h'])) ?> <?= View::n(Format::pct($h['change24h'])) ?> <small>۲۴ ساعت</small>
+        <span class="v2-delta v2-delta--<?= View::dir($h['change24h']) ?>" data-v2-live-change>
+          <span data-v2-live-arrow><?= esc_html(Format::arrow($h['change24h'])) ?></span> <?= View::n(Format::pct($h['change24h'])) ?> <small>۲۴ ساعت</small>
         </span>
       <?php else : ?>
         <?= View::na('pending') ?>
       <?php endif; ?>
     </div>
-    <?php if (!empty($h['toman']) && $h['toman'] !== '—') : ?>
-      <p class="v2-toman">≈ <?= View::n($h['toman']) ?> تومان</p>
+    <p class="v2-toman"<?= empty($h['toman']) || $h['toman'] === '—' ? ' hidden' : '' ?> data-v2-live-toman>≈ <?= View::n((string) $h['toman']) ?> تومان</p>
+    <?php if (!empty($h['live']['fetchedAt'])) : ?>
+      <p class="v2-live-stamp" data-v2-live-stamp>به‌روزرسانی <?= View::n(Format::tehranTime($h['live']['fetchedAt'])) ?> · هر دقیقه</p>
     <?php endif; ?>
 
     <div class="v2-actions">

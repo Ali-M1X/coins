@@ -61,14 +61,23 @@ final class Budget
      * log and on the diagnostics screen, where "why did nothing happen" is the
      * question being asked.
      */
-    public function refuse(string $provider): ?string
+    public function refuse(string $provider, bool $reserved = false): ?string
     {
         $cooling = $this->cooldownRemaining($provider);
         if ($cooling > 0) {
             return sprintf('cooling down for %ds after a 429', $cooling);
         }
 
+        /* RESERVED CALLS. A provider may hold back part of its per-minute
+           budget (`reserve_per_minute`) for calls that must not be crowded
+           out — the live price ticker. Ordinary calls stop short of the
+           reserve; a reserved call may use the whole minute. */
+        $reserve = $reserved ? 0 : max(0, (int) ($this->settings($provider)['reserve_per_minute'] ?? 0));
+
         foreach ($this->limits($provider) as $window => $max) {
+            if ($window === 'per_minute') {
+                $max = max(1, $max - $reserve);
+            }
             $used = $this->used($provider, $window);
             if ($used >= $max) {
                 return sprintf('%s budget spent (%d/%d)', $window, $used, $max);
@@ -87,6 +96,22 @@ final class Budget
 
             $entry = get_transient($key);
             $now = time();
+
+            /* The MINUTE window slides: it keeps the request times themselves.
+               A bucket that resets every 60s lets four calls at its end and
+               four at the start of the next land inside one real minute —
+               eight, against a provider measured to refuse the sixth. The
+               hour and day windows are long enough that a bucket's edge does
+               not matter, and stay cheap counters. */
+            if ($window === 'per_minute') {
+                $stamps = array_values(array_filter(
+                    (array) ($entry['stamps'] ?? []),
+                    static fn($t) => $now - (int) $t < $seconds
+                ));
+                $stamps[] = $now;
+                set_transient($key, ['stamps' => $stamps], $seconds * 2);
+                continue;
+            }
 
             // A rolling window, reset when the bucket's period has elapsed.
             if (!is_array($entry) || ($now - (int) ($entry['since'] ?? 0)) >= $seconds) {
@@ -141,6 +166,10 @@ final class Budget
         $entry = get_transient($this->counterKey($provider, $window));
         if (!is_array($entry)) {
             return 0;
+        }
+        if (isset($entry['stamps'])) {
+            $now = time();
+            return count(array_filter((array) $entry['stamps'], static fn($t) => $now - (int) $t < self::WINDOWS[$window]));
         }
         if ((time() - (int) ($entry['since'] ?? 0)) >= self::WINDOWS[$window]) {
             return 0;   // the bucket has rolled over

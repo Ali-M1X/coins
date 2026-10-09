@@ -389,6 +389,20 @@ final class Scheduler
             return $progress;
         }
 
+        /* ---- 0. The live price: one request for every coin, every tick ----
+         *
+         * First in the tick on purpose: it is the figure visitors watch change,
+         * and at one request a tick it cannot crowd anything out. The budget
+         * refuses it like any other call, in which case the page keeps showing
+         * the last price with its age. */
+        if ($this->overdue('ticker', (new Cache($this->config))->keyFor('ticker')) >= 1.0) {
+            if (($refusal = $this->budget->refuse('coingecko', reserved: true)) !== null) {
+                $progress['skipped'][] = 'ticker: ' . $refusal;
+            } else {
+                $progress['ticker'] = $this->pipeline->warmTicker($coins);
+            }
+        }
+
         /* ---- 1. The batch, which serves every coin at once ---- */
         if ($this->batchDue($coins)) {
             if (($refusal = $this->budget->refuse('coingecko')) !== null) {
@@ -727,7 +741,8 @@ final class Scheduler
     {
         $out = [];
         foreach ($this->datasets->forCoin($coin) as $dataset) {
-            if ($dataset === 'market' && $this->datasets->isBatched($dataset)) {
+            // Batched datasets (market, the live ticker) have their own step.
+            if ($this->datasets->isBatched($dataset)) {
                 continue;
             }
             $out[] = $dataset;

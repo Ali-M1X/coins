@@ -29,6 +29,9 @@ abstract class Collector
     }
 
     /** Provider id, matching a key in config/providers.php. */
+    /** Set around a call that may use the provider's reserved budget. See Budget::refuse(). */
+    protected bool $reserved = false;
+
     abstract public function id(): string;
 
     /** Datasets this collector can produce. */
@@ -113,7 +116,7 @@ abstract class Collector
            a 429, and a 429 we do not earn cannot start a cooldown. Throwing here
            means Cache::remember() serves the last good payload, exactly as it
            does for any other failure. */
-        $refusal = $this->budget()->refuse($this->id());
+        $refusal = $this->budget()->refuse($this->id(), $this->reserved);
         if ($refusal !== null) {
             throw new \RuntimeException($this->id() . ': ' . $refusal);
         }

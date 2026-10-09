@@ -261,7 +261,98 @@ function initCentred() {
   });
 }
 
+/* ------------------------------------------------------------ live price */
+
+/* The price and 24h change, refreshed in place.
+ *
+ * Polls OUR server (/wp-json/thehybit/v1/price/{slug}), which only reads the
+ * cache — never CoinGecko. The server refreshes that cache once a minute, so
+ * polling faster would fetch the same number again. Instead each response
+ * says when the next refresh is due, and the next poll is timed a few seconds
+ * after it: one request per real change, about one a minute.
+ *
+ * Paused while the tab is hidden; on return, it polls at once if a refresh
+ * was missed. Errors back off (1, 2, 4… up to 5 minutes) rather than retry. */
+function initLivePrice() {
+  const live = data.live;
+  const priceEl = $('[data-v2-price] .v2-num');
+  if (!live?.url || !priceEl) return;
+  const changeEl = $('[data-v2-live-change]');
+  const tomanEl = $('[data-v2-live-toman]');
+  const stampEl = $('[data-v2-live-stamp]');
+  const MIN = 15000;
+  const FALLBACK = Math.max(60, Number(live.interval) || 60) * 1000;
+  let timer = null;
+  let failures = 0;
+  let nextAt = Date.parse(live.nextRefreshAt || '') || Date.now() + FALLBACK;
+
+  const tehran = (iso) => {
+    try {
+      return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
+    } catch { return ''; }
+  };
+
+  const render = (d) => {
+    const old = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, ''));
+    priceEl.textContent = usd(d.price);
+    const host = priceEl.parentElement;
+    if (isFinite(old) && old !== d.price) {
+      host.classList.remove('is-tick-up', 'is-tick-down');
+      host.classList.add(d.price > old ? 'is-tick-up' : 'is-tick-down');
+      setTimeout(() => host.classList.remove('is-tick-up', 'is-tick-down'), 1500);
+    }
+    if (changeEl && d.change24h != null) {
+      const dir = d.change24h > 0 ? 'up' : d.change24h < 0 ? 'down' : 'flat';
+      changeEl.className = `v2-delta v2-delta--${dir}`;
+      const num = $('.v2-num', changeEl);
+      if (num) num.textContent = (d.change24h > 0 ? '+' : d.change24h < 0 ? '−' : '') + Math.abs(d.change24h).toFixed(2) + '%';
+      const arrow = $('[data-v2-live-arrow]', changeEl);
+      if (arrow) arrow.textContent = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '•';
+    }
+    if (tomanEl && d.toman != null) {
+      const num = $('.v2-num', tomanEl);
+      if (num) num.textContent = Math.round(d.toman).toLocaleString('en-US');
+      tomanEl.hidden = false;
+    }
+    if (stampEl && d.fetchedAt) {
+      const num = $('.v2-num', stampEl);
+      if (num) num.textContent = tehran(d.fetchedAt);
+    }
+  };
+
+  const schedule = () => {
+    clearTimeout(timer);
+    if (document.hidden) return;
+    const wait = failures
+      ? Math.min(300000, FALLBACK * 2 ** (failures - 1))
+      : Math.max(MIN, nextAt - Date.now() + 5000);   // a few seconds after the server's refresh
+    timer = setTimeout(poll, wait);
+  };
+
+  const poll = async () => {
+    try {
+      const res = await fetch(live.url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      if (!res.ok) throw new Error(String(res.status));
+      const d = await res.json();
+      if (typeof d.price !== 'number') throw new Error('no price');
+      render(d);
+      failures = 0;
+      nextAt = Date.parse(d.nextRefreshAt || '') || Date.now() + FALLBACK;
+    } catch {
+      failures++;
+    }
+    schedule();
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { clearTimeout(timer); return; }
+    if (Date.now() >= nextAt) poll(); else schedule();
+  });
+  schedule();
+}
+
 initChart();
+initLivePrice();
 initTimeline();
 initCentred();
 initWatchlist();
