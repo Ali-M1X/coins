@@ -42,6 +42,10 @@ defined('ABSPATH') || exit;
 
 final class Budget
 {
+    /** Exception code for a call WE declined to send (budget or cooldown) —
+        as opposed to one the provider refused. */
+    public const REFUSED = 4290;
+
     private const PREFIX = 'thb_budget_';
 
     /** Rolling windows, in seconds, mapped to their config key. */
@@ -65,7 +69,9 @@ final class Budget
     {
         $cooling = $this->cooldownRemaining($provider);
         if ($cooling > 0) {
-            return sprintf('cooling down for %ds after a 429', $cooling);
+            $entry = get_transient($this->cooldownKey($provider));
+            $status = is_array($entry) ? (int) ($entry['status'] ?? 429) : 429;
+            return sprintf('cooling down for %ds after a %d', $cooling, $status);
         }
 
         /* RESERVED CALLS. A provider may hold back part of its per-minute
@@ -131,20 +137,26 @@ final class Budget
      * an hour so a provider asking us to wait a day cannot freeze the site's
      * data for a day.
      */
-    public function startCooldown(string $provider, int $retryAfter = 0): int
+    public function startCooldown(string $provider, int $retryAfter = 0, int $status = 429, int $seconds = 0): int
     {
-        $default = (int) ($this->settings($provider)['cooldown'] ?? 0);
-        if ($default <= 0 && $retryAfter <= 0) {
-            return 0;
+        /* $seconds, when given, is the caller's own pause — a provider that
+           answers "your IP is blocked" (Blockchair's 430/434) is not asking
+           for a minute's patience, and its own configured block pause wins
+           over the 429 default and its one-hour cap. */
+        if ($seconds <= 0) {
+            $default = (int) ($this->settings($provider)['cooldown'] ?? 0);
+            if ($default <= 0 && $retryAfter <= 0) {
+                return 0;
+            }
+            $seconds = max(1, min($retryAfter > 0 ? $retryAfter : $default, HOUR_IN_SECONDS));
         }
-
-        $seconds = max(1, min($retryAfter > 0 ? $retryAfter : $default, HOUR_IN_SECONDS));
 
         set_transient($this->cooldownKey($provider), [
             'until'      => time() + $seconds,
             'seconds'    => $seconds,
             'retryAfter' => $retryAfter,
             'startedAt'  => time(),
+            'status'     => $status,
         ], $seconds);
 
         return $seconds;

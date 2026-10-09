@@ -460,7 +460,7 @@ function wp_remote_get(string $url, array $args = [])
         return [
             'response' => ['code' => $code],
             'headers'  => Probe::$responseHeaders[$host] ?? [],
-            'body'     => '{}',
+            'body'     => (string) ($GLOBALS['thb_probe_fail_bodies'][$host] ?? '{}'),
         ];
     }
 

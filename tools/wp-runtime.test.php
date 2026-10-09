@@ -1060,6 +1060,72 @@ foreach (['gas', 'supply', 'network', 'staking', 'development'] as $dataset) {
     ok(str_contains($diag, '<code>' . $dataset . '</code>'), "the dataset table lists {$dataset}");
 }
 
+/* ------------------------------------------------------------------
+ * Provider refusals: the reason is kept, and a ban is not prolonged.
+ * ---------------------------------------------------------------- */
+section('provider refusals');
+
+reset_world($config);
+$eth = ethereum();
+$rCache = new Cache($config);
+$rBudget = new \TheHybit\Coins\Budget($config);
+$whalesKey = $rCache->keyFor('whales', $eth);
+$GLOBALS['thb_probe_fail_hosts'] = ['api.blockchair.com' => 430];
+$GLOBALS['thb_probe_fail_bodies'] = ['api.blockchair.com' => '{"data":null,"context":{"code":430,"error":"Your IP address is temporary blacklisted due to exceeding usage of API resources."}}'];
+$fetchWhales = static fn() => (new C\Blockchair($config))->fetch($eth, 'whales');
+
+$rCache->remember('whales', $whalesKey, $fetchWhales);
+$err = Cache::lastErrors()['whales']['message'] ?? '';
+ok(str_contains($err, 'HTTP 430') && str_contains($err, 'temporary blacklisted'),
+   'a Blockchair 430 is recorded with the provider\'s own words: ' . $err);
+ok($rBudget->cooldownRemaining('blockchair') >= HOUR_IN_SECONDS - 5,
+   'and pauses Blockchair for an hour, not the five-minute 429 cooldown (' . $rBudget->cooldownRemaining('blockchair') . 's)');
+ok(str_contains((string) $rBudget->refuse('blockchair'), 'after a 430'), 'the budget says why it is paused: ' . $rBudget->refuse('blockchair'));
+
+$before = Probe::count('api.blockchair.com');
+foreach ([600, 1200, 1800] as $_) {
+    Clock::advance(600);
+    $rCache->remember('whales', $whalesKey, $fetchWhales);
+}
+ok(Probe::count('api.blockchair.com') === $before, 'no request reaches Blockchair while the ban pause runs (30 minutes later: still ' . $before . ')');
+$kept = Cache::lastErrors()['whales'] ?? [];
+ok(str_contains($kept['message'] ?? '', 'temporary blacklisted') && str_contains($kept['paused'] ?? '', 'cooling down'),
+   'the declined attempts do not bury the provider\'s answer; the pause is noted beside it');
+
+foreach ([402, 434] as $code) {
+    reset_world($config);
+    $GLOBALS['thb_probe_fail_hosts'] = ['api.blockchair.com' => $code];
+    try { (new C\Blockchair($config))->fetch($eth, 'network'); } catch (\Throwable $e) {}
+    ok((new \TheHybit\Coins\Budget($config))->cooldownRemaining('blockchair') >= HOUR_IN_SECONDS - 5, "a Blockchair {$code} also pauses it for an hour");
+}
+
+reset_world($config);
+$GLOBALS['thb_probe_fail_hosts'] = ['api.blockchair.com' => 500];
+try { (new C\Blockchair($config))->fetch($eth, 'network'); } catch (\Throwable $e) {}
+ok((new \TheHybit\Coins\Budget($config))->cooldownRemaining('blockchair') === 0, 'an ordinary server error (500) starts no pause');
+
+/* A WAF's HTML page is reduced to its text; keys never leak. */
+reset_world($config);
+$GLOBALS['thb_probe_fail_hosts'] = ['community-api.coinmetrics.io' => 403];
+$GLOBALS['thb_probe_fail_bodies'] = ['community-api.coinmetrics.io' => '<!DOCTYPE html><html><head><title>Access denied</title><style>body{color:red}</style><script>var x = "noise";</script></head><body><h1>Error 1009</h1><p>The owner of this website has banned the country or region your IP address is in (XX) from accessing this website.</p>' . str_repeat('<p>padding text</p>', 40) . '</body></html>'];
+$cmMsg = '';
+try { (new C\CoinMetrics($config))->fetch($eth, 'chainstats'); } catch (\Throwable $e) { $cmMsg = $e->getMessage(); }
+preg_match('/"(.*?)"(?: \||$)/u', $cmMsg, $ex);
+ok(str_contains($cmMsg, 'HTTP 403') && str_contains($cmMsg, 'Error 1009 The owner') && str_contains($cmMsg, 'banned the country'),
+   'a 403 carries the refusal page\'s text: ' . mb_substr($cmMsg, 0, 160) . '…');
+ok(!str_contains($cmMsg, 'noise') && !str_contains($cmMsg, 'color:red') && !str_contains($cmMsg, '<'), 'as plain text: no markup, scripts or styles');
+ok(isset($ex[1]) && mb_strlen($ex[1]) <= 201, 'cut to about 200 characters (' . mb_strlen($ex[1] ?? '') . ')');
+
+update_option(Settings::OPTION, ['etherscan_key' => 'ETHERSCANKEY1234567890ABCDEF']);
+$keyedR = Settings::apply($config);
+$GLOBALS['thb_probe_fail_hosts'] = ['api.etherscan.io' => 403];
+$GLOBALS['thb_probe_fail_bodies'] = ['api.etherscan.io' => '{"message":"Invalid API Key: ETHERSCANKEY1234567890ABCDEF"}'];
+$esMsg = '';
+try { (new C\Etherscan($keyedR))->fetch($eth, 'gas'); } catch (\Throwable $e) { $esMsg = $e->getMessage(); }
+ok(str_contains($esMsg, 'Invalid API Key') && !str_contains($esMsg, 'ETHERSCANKEY1234567890ABCDEF'),
+   'a key echoed back in the body is scrubbed before it is stored: ' . $esMsg);
+unset($GLOBALS['thb_probe_fail_hosts'], $GLOBALS['thb_probe_fail_bodies']);
+
 update_option(Settings::OPTION, []);
 
 

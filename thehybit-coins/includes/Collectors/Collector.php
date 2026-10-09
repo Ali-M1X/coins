@@ -118,7 +118,7 @@ abstract class Collector
            does for any other failure. */
         $refusal = $this->budget()->refuse($this->id(), $this->reserved);
         if ($refusal !== null) {
-            throw new \RuntimeException($this->id() . ': ' . $refusal);
+            throw new \RuntimeException($this->id() . ': ' . $refusal, \TheHybit\Coins\Budget::REFUSED);
         }
 
         $this->throttle((int) ($settings['min_interval'] ?? 1));
@@ -163,10 +163,21 @@ abstract class Collector
                 $retryAfter > 0 ? $retryAfter . 's' : 'absent',
                 $seconds
             ));
-            throw new \RuntimeException($this->id() . ': rate limited (429)');
+            throw new \RuntimeException($this->id() . ': rate limited (429)' . $this->excerpt($body));
+        }
+        /* A refusal that means "this IP is blocked", not "slow down" —
+           Blockchair's 430/434 (and 402, its daily quota). Calling again a
+           minute later is what extends such a ban, so the provider is paused
+           for its configured `block_cooldown` instead of the 429 default. */
+        if (in_array($code, (array) ($settings['block_statuses'] ?? []), true)) {
+            $seconds = $this->budget()->startCooldown($this->id(), 0, $code,
+                max(MINUTE_IN_SECONDS, (int) ($settings['block_cooldown'] ?? HOUR_IN_SECONDS)));
+            error_log(sprintf('[thb] %s returned %d (IP blocked or quota spent) — pausing calls for %ds', $this->id(), $code, $seconds));
+            throw new \RuntimeException(sprintf('%s: HTTP %d — blocked by the provider, paused %d min', $this->id(), $code, intdiv($seconds, 60))
+                . $this->excerpt($body));
         }
         if ($code < 200 || $code >= 300) {
-            throw new \RuntimeException($this->id() . ": HTTP {$code}");
+            throw new \RuntimeException($this->id() . ": HTTP {$code}" . $this->excerpt($body));
         }
 
         $decoded = json_decode($body, true);
@@ -186,6 +197,27 @@ abstract class Collector
      * The body is passed last and only inspected by a listener that asks for
      * it; nothing here retains it.
      */
+    /**
+     * The first ~200 characters of a refusal's body, as plain text: the
+     * provider's own words for why it said no ("country blocked", "invalid
+     * key", "IP blacklisted"), which the status code alone never says.
+     * HTML pages (Cloudflare and other WAFs) are reduced to their text; any
+     * configured key is scrubbed before it can reach the diagnostics screen.
+     */
+    private function excerpt(string $body): string
+    {
+        $text = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#is', ' ', $body) ?? $body;
+        $text = html_entity_decode(strip_tags((string) preg_replace('/</', ' <', $text)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+        if ($text === '') {
+            return '';
+        }
+        if (mb_strlen($text) > 200) {
+            $text = rtrim(mb_substr($text, 0, 200)) . '…';
+        }
+        return ' — "' . \TheHybit\Coins\Settings::scrub($text, $this->settings()) . '"';
+    }
+
     private function trace(
         string $url,
         int $code,

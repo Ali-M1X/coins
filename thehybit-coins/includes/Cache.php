@@ -148,7 +148,7 @@ final class Cache
 
         } catch (\Throwable $e) {
             error_log('[thb] refresh failed for ' . $dataset . '/' . $key . ': ' . $e->getMessage());
-            self::noteError($dataset, $e->getMessage());
+            self::noteError($dataset, $e->getMessage(), $e->getCode() === Budget::REFUSED);
 
             if ($previous !== null) {
                 $entry['stale'] = true;
@@ -175,11 +175,22 @@ final class Cache
      * ---------------------------------------------------------------- */
     public const OPTION_ERRORS = 'thb_coins_last_errors';
 
-    private static function noteError(string $dataset, string $message): void
+    private static function noteError(string $dataset, string $message, bool $ourRefusal = false): void
     {
         $all = get_option(self::OPTION_ERRORS, []);
         $all = is_array($all) ? $all : [];
-        $all[$dataset] = ['at' => gmdate('c', time()), 'message' => mb_substr($message, 0, 300)];
+        /* While a provider is paused, every attempt is declined by our own
+           budget ("cooling down for 3412s after a 430"). That must not bury
+           the provider's actual answer — the reason for the pause — so the
+           original error is kept and the pause is noted beside it. */
+        if ($ourRefusal && isset($all[$dataset]['message'])) {
+            if (($all[$dataset]['paused'] ?? null) === $message) {
+                return;
+            }
+            $all[$dataset]['paused'] = mb_substr($message, 0, 200);
+        } else {
+            $all[$dataset] = ['at' => gmdate('c', time()), 'message' => mb_substr($message, 0, 600)];
+        }
         update_option(self::OPTION_ERRORS, $all, false);
     }
 
@@ -192,7 +203,7 @@ final class Cache
         }
     }
 
-    /** @return array<string, array{at:string, message:string}> */
+    /** @return array<string, array{at:string, message:string, paused?:string}> */
     public static function lastErrors(): array
     {
         $all = get_option(self::OPTION_ERRORS, []);

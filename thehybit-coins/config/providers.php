@@ -623,6 +623,11 @@ return [
             'budget'   => ['per_minute' => 2, 'per_hour' => 40, 'per_day' => 1200],
             'cooldown' => 5 * MINUTE_IN_SECONDS,
             'auth'     => ['in' => 'query', 'name' => 'key'],
+            /* Blockchair's own codes: 430/434 "your IP is (temporarily)
+               blacklisted", 402 "daily limit spent". Not a 429: retrying in
+               five minutes extends the ban, so these pause it for an hour. */
+            'block_statuses' => [402, 430, 434],
+            'block_cooldown' => HOUR_IN_SECONDS,
             'chains'   => ['Ethereum', 'Bitcoin'],
             /* Blockchair names chains its own way — an eighth identifier for one
                coin, stored rather than derived, for the same reason as the other

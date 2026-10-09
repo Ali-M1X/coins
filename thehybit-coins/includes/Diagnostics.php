@@ -389,8 +389,9 @@ final class Diagnostics
             foreach ((array) ($this->config['providers'] ?? []) as $ps) {
                 $message = Settings::scrub($message, (array) $ps);
             }
-            printf('<tr><td><code>%s</code></td><td>%s</td><td dir="ltr" style="text-align:left">%s</td></tr>',
-                esc_html($dataset), esc_html($e['at']), esc_html($message));
+            $paused = isset($e['paused']) ? '<br><small>now: ' . esc_html((string) $e['paused']) . '</small>' : '';
+            printf('<tr><td><code>%s</code></td><td>%s</td><td dir="ltr" style="text-align:left">%s%s</td></tr>',
+                esc_html($dataset), esc_html($e['at']), esc_html($message), $paused);
         }
         $this->close();
     }
@@ -477,14 +478,15 @@ final class Diagnostics
 
             $cooldownCell = $cooling > 0
                 ? sprintf(
-                    '%ds باقی‌مانده%s',
+                    '%ds باقی‌مانده (پس از HTTP %d)%s',
                     $cooling,
+                    (int) ($detail['status'] ?? 429),
                     !empty($detail['retryAfter'])
                         ? sprintf(' (Retry-After: %ds)', (int) $detail['retryAfter'])
                         : ''
                 )
                 : (!empty($detail['startedAt'])
-                    ? sprintf('آخرین 429: %s', esc_html(gmdate('H:i:s', (int) $detail['startedAt'])))
+                    ? sprintf('آخرین %d: %s', (int) ($detail['status'] ?? 429), esc_html(gmdate('H:i:s', (int) $detail['startedAt'])))
                     : '—');
 
             printf(
