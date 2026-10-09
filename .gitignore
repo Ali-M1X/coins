@@ -17,3 +17,10 @@ package-lock.json
 # Packaged plugin zips are built on demand by tools/package.sh.
 thehybit-coins-*.zip
 classic-themed.html
+
+# Intermediate captures from tools/v2-screens.mjs; v2-compare.mjs merges them into screen-*.png
+docs/v2-screens/ethereum-desktop-*.png
+docs/v2-screens/ethereum-mobile-*.png
+docs/v2-screens/bitcoin-mobile-full.png
+docs/v2-screens/header-*.png
+!docs/v2-screens/ethereum-desktop-full.png
