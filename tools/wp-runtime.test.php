@@ -1056,6 +1056,8 @@ ok($threw === null, 'the diagnostics screen renders without an error' . ($threw 
 ok(str_contains($diag, 'کلیدهای API'), 'it shows the API key status table');
 ok(!str_contains($diag, 'ETHERSCANKEY1234567890ABCDEF'), 'without ever printing the stored key');
 ok(str_contains($diag, 'ETHE') , 'only its masked hint');
+ok(str_contains($diag, 'منابع داده صفحه') && str_contains($diag, 'CoinGecko'),
+   'the per-figure data sources list (moved off the public page) is on the diagnostics screen');
 foreach (['gas', 'supply', 'network', 'staking', 'development'] as $dataset) {
     ok(str_contains($diag, '<code>' . $dataset . '</code>'), "the dataset table lists {$dataset}");
 }

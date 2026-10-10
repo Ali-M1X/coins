@@ -83,7 +83,8 @@ final class Scheduler
         private array $config,
         private CoinRepository $coins,
         private Pipeline $pipeline,
-        private History $history
+        private History $history,
+        private ?Listing $listing = null
     ) {
         $this->datasets = new Datasets($config);
         $this->budget   = new Budget($config);
@@ -400,6 +401,24 @@ final class Scheduler
                 $progress['skipped'][] = 'ticker: ' . $refusal;
             } else {
                 $progress['ticker'] = $this->pipeline->warmTicker($coins);
+            }
+        }
+
+        /* ---- 0b. One page of the /coins/ list, when one is due ----
+         *
+         * At most ONE request a tick, after the live price and through the
+         * same budget (never the ticker's reserve), so the list can neither
+         * crowd the ticker out nor burst the per-minute limit. Page 1 every
+         * five minutes, the others every thirty: ~20 requests an hour. */
+        if ($this->listing !== null && ($page = $this->listing->due()) !== null) {
+            if (($refusal = $this->budget->refuse('coingecko')) !== null) {
+                $progress['skipped'][] = 'listing page ' . $page . ': ' . $refusal;
+            } else {
+                try {
+                    $progress['listing'] = ['page' => $page, 'rows' => $this->listing->refresh($page)];
+                } catch (\Throwable $e) {
+                    $progress['skipped'][] = 'listing page ' . $page . ': ' . $e->getMessage();
+                }
             }
         }
 

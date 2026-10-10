@@ -108,6 +108,43 @@ function probe_payload(string $url): array
         return $out;
     }
 
+    /* ---- CoinGecko: the market-wide list (/coins/), a page at a time. No
+       `ids`: ordered by market cap. Bitcoin and Ethereum lead page 1 so the
+       links to our own pages can be checked; every 37th row has no 7-day
+       figure and every 53rd no price (skipped by the collector). ---- */
+    if (str_contains($path, '/coins/markets') && !isset($q['ids'])) {
+        $per = (int) ($q['per_page'] ?? 100);
+        $page = (int) ($q['page'] ?? 1);
+        $named = [1 => ['bitcoin', 'btc', 'Bitcoin', 62012.5], 2 => ['ethereum', 'eth', 'Ethereum', 3245.67],
+                  3 => ['tether', 'usdt', 'Tether', 1.0], 4 => ['solana', 'sol', 'Solana', 148.2]];
+        $rows = [];
+        for ($i = 0; $i < $per; $i++) {
+            $rank = ($page - 1) * $per + $i + 1;
+            if ($rank > 1200) {
+                break;
+            }
+            [$id, $sym, $name, $price] = $named[$rank] ?? ['coin-' . $rank, 'c' . $rank, 'Coin ' . $rank, round(50 / $rank, 6)];
+            $c7 = $rank === 3 ? 0.01 : round(sin($rank * 1.7) * 9 + 1.5, 2);
+            $start = $price / (1 + $c7 / 100);
+            $spark = [];
+            for ($h = 0; $h < 168; $h++) {
+                $spark[] = $start + ($price - $start) * $h / 167 + sin($h / 9 + $rank) * $price * 0.004;
+            }
+            $rows[] = [
+                'id' => $id, 'symbol' => $sym, 'name' => $name,
+                'image' => 'https://coin-images.coingecko.com/coins/images/' . $rank . '/large/' . $id . '.png',
+                'current_price' => $rank % 53 === 0 ? null : $price,
+                'market_cap' => round(1.2e12 / ($rank ** 1.3)), 'market_cap_rank' => $rank,
+                'total_volume' => round(3.1e10 / ($rank ** 1.1)),
+                'price_change_percentage_24h' => round(cos($rank) * 4, 2),
+                'price_change_percentage_24h_in_currency' => round(cos($rank) * 4, 2),
+                'price_change_percentage_7d_in_currency' => $rank % 37 === 0 ? null : $c7,
+                'sparkline_in_7d' => ['price' => $spark],
+            ];
+        }
+        return $rows;
+    }
+
     /* ---- CoinGecko: batched markets. Echoes back every id asked for. ---- */
     if (str_contains($path, '/coins/markets')) {
         $ids = array_filter(explode(',', (string) ($q['ids'] ?? '')));

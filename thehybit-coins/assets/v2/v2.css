@@ -547,13 +547,6 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-heat__label { font-size: 13px; }
 .v2-heat__pct { color: var(--v2-muted); font-size: 12px; }
 .v2-pulse__side { display: grid; gap: var(--v2-gap); align-content: start; min-width: 0; }
-.v2-provenance { margin-top: var(--v2-gap); }
-.v2-provenance summary { cursor: pointer; font-weight: 600; color: var(--v2-muted); }
-.v2-provenance[open] summary { margin-bottom: 8px; color: var(--v2-text); }
-.v2-provenance .v2-sources { columns: 2 260px; }
-.v2-sources li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 5px 0; font-size: 13px; }
-.v2-sources__time { color: var(--v2-accent); font-weight: 600; }
-.v2-sources li.is-missing { color: var(--v2-muted); }
 .v2-tldr__list li { padding: 6px 0; font-size: 14px; border-bottom: 1px solid var(--v2-line); }
 .v2-tldr__list { margin-bottom: 10px; }
 .v2-tldr__text { font-size: clamp(18px, 2vw, 24px); font-weight: 700; color: var(--v2-accent); text-align: center; padding: 14px; border: 1px solid var(--v2-line); border-radius: 12px; }
@@ -653,3 +646,4 @@ html:has(.thb-v2) { overflow-x: clip; }
   .v2-supply__grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); }
   .v2-supply__grid .v2-cockpit { grid-column: auto; }
 }
+.v2-about .v2-note { margin-top: var(--v2-gap); }

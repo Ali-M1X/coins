@@ -115,6 +115,9 @@ return [
         'lidoapr'      => HOUR_IN_SECONDS,
         /* Replacements for the two geo-blocked sources (2.0.5). Both are
            daily figures; asking more often returns the same row. */
+        /* The /coins/ list's cache entries live this long; how often each
+           page is REFRESHED is set under 'listing' below (page 1 more often). */
+        'listing'      => 30 * MINUTE_IN_SECONDS,
         'activity'     => 6 * HOUR_IN_SECONDS,
         'stakingyield' => 6 * HOUR_IN_SECONDS,
         'whales'       => 10 * MINUTE_IN_SECONDS,
@@ -806,6 +809,21 @@ return [
                which supplied it, is location-blocked). */
             'supply'  => ['interval' => 6 * HOUR_IN_SECONDS,  'retain' => YEAR_IN_SECONDS],
         ],
+    ],
+
+    /* ------------------------------------------------------------------
+     * The coin list at /coins/ (includes/Listing.php). One CoinGecko
+     * /coins/markets request per page of `per_page` coins:
+     *   page 1 every 5 min (12/h) + pages 2–5 every 30 min (8/h) = 20/h.
+     * The rest of the plugin uses ~100 of CoinGecko's 200/h (docs/LIVE-PRICE.md).
+     * More pages cost 2 requests/hour each.
+     * ---------------------------------------------------------------- */
+    'listing' => [
+        'enabled'   => true,
+        'per_page'  => 100,
+        'pages'     => 5,
+        'ttl_first' => 5 * MINUTE_IN_SECONDS,
+        'ttl_rest'  => 30 * MINUTE_IN_SECONDS,
     ],
 
     /* How many articles the news section shows. The approved UI expects 4. */

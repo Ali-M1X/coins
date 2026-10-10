@@ -100,6 +100,12 @@ final class Pipeline
         private News $news
     ) {}
 
+    /** A registered collector by provider id, or null. */
+    public function collector(string $id): ?Collector
+    {
+        return $this->collectors[$id] ?? null;
+    }
+
     public function register(Collector $collector): void
     {
         $this->collectors[$collector->id()] = $collector;

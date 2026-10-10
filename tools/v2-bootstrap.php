@@ -22,7 +22,7 @@ function plugin_dir_url(string $file): string { return 'https://thehybit.com/wp-
 function register_activation_hook(string $f, $cb): void {}
 function register_deactivation_hook(string $f, $cb): void {}
 function locate_template($t, bool $load = false, bool $once = true): string { return ''; }
-function is_singular($t = ''): bool { return true; }
+function is_singular($t = ''): bool { return empty($GLOBALS['thb_is_list']); }
 function get_the_ID(): int { return (int) ($GLOBALS['thb_current_post'] ?? 10); }
 function register_post_type(string $t, array $a) { return null; }
 function wp_enqueue_style(...$a): void { $GLOBALS['thb_enqueued'][] = $a[0]; }
@@ -36,14 +36,18 @@ function flush_rewrite_rules(bool $hard = true): void {}
 function get_header(...$a): void
 {
     $plugin = \TheHybit\Coins\Plugin::instance();
-    $coin = $plugin->coins->find(get_the_ID());
-    $title = $coin ? 'قیمت ' . $coin->name . ' (' . $coin->symbol . ') امروز — های‌بیت' : 'های‌بیت';
+    $coin = empty($GLOBALS['thb_is_list']) ? $plugin->coins->find(get_the_ID()) : null;
+    $title = !empty($GLOBALS['thb_is_list']) ? \TheHybit\Coins\Seo::listTitle(\TheHybit\Coins\Listing::currentPage())
+        : ($coin ? 'قیمت ' . $coin->name . ' (' . $coin->symbol . ') امروز — های‌بیت' : 'های‌بیت');
     echo "<!DOCTYPE html>\n<html lang=\"fa\" dir=\"rtl\">\n<head>\n";
     echo "<meta charset=\"utf-8\">\n";
     echo "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
     echo "<meta name=\"robots\" content=\"noindex, follow\">\n";
     echo "<title>" . htmlspecialchars($title) . "</title>\n";
     echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/v2.css\">\n";
+    if (!empty($GLOBALS['thb_is_list'])) {
+        echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/list.css\">\n";
+    }
     echo "</head>\n<body>\n";
     /* Like the live theme: the page box, header included, is sized by its
        content (fit-content). The classic page makes it 1320px wide; v2 must
@@ -126,5 +130,30 @@ function v2_render(int $postId): string
     require $template;
     $html = (string) ob_get_clean();
     unset($_GET['thb_design']);
+    return $html;
+}
+
+/** Fill the /coins/ list cache: one CoinGecko request per page, as the scheduler would. */
+function v2_warm_list(): void
+{
+    $plugin = \TheHybit\Coins\Plugin::instance();
+    $GLOBALS['thb_probe_background'] = true;
+    for ($p = 1; $p <= $plugin->listing->pages(); $p++) {
+        (new \TheHybit\Coins\Budget($plugin->config))->reset('coingecko');
+        $plugin->listing->refresh($p);
+    }
+    $GLOBALS['thb_probe_background'] = false;
+}
+
+/** Render the /coins/ list, page $page, as a visitor would get it. */
+function v2_render_list(int $page = 1): string
+{
+    $GLOBALS['thb_is_list'] = true;
+    $GLOBALS['thb_paged'] = $page;
+    $template = \TheHybit\Coins\Plugin::instance()->listing->template('');
+    ob_start();
+    require $template;
+    $html = (string) ob_get_clean();
+    unset($GLOBALS['thb_is_list'], $GLOBALS['thb_paged']);
     return $html;
 }

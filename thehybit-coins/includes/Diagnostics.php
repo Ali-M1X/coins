@@ -188,6 +188,7 @@ final class Diagnostics
         $this->errorsTable();
         $this->budgetTable();
         $this->datasetTable($coin);
+        $this->sourcesTable($coin);
         $this->schedulerTable();
         $this->probeSummary();
         $this->burstResult();
@@ -396,7 +397,29 @@ final class Diagnostics
         $this->close();
     }
 
-        private function keysTable(): void
+    /**
+     * What used to be the public page's «منابع داده» footnote: which source
+     * each figure on the coin page came from, and when it was fetched. An
+     * admin record, not reading matter — so it lives here. Built from the same
+     * cached view model the page renders; it never asks a provider itself.
+     */
+    private function sourcesTable(Coin $coin): void
+    {
+        $this->open('منابع داده صفحه ' . $coin->name . ' و زمان آخرین به‌روزرسانی', ['داده', 'منبع', 'دریافت (تهران)', 'دریافت (UTC)']);
+        $sources = (array) (Plugin::instance()->v2($coin)['sources'] ?? []);
+        if ($sources === []) {
+            echo '<tr><td colspan="4">هنوز داده‌ای در حافظه نیست.</td></tr>';
+        }
+        foreach ($sources as $src) {
+            printf('<tr><td>%s</td><td dir="ltr" style="text-align:left">%s</td><td dir="ltr">%s</td><td dir="ltr">%s</td></tr>',
+                esc_html((string) $src['what']), esc_html((string) $src['who']),
+                $src['time'] !== null ? esc_html((string) $src['time']) : '—',
+                $src['at'] ? esc_html((string) $src['at']) : 'هنوز دریافت نشده');
+        }
+        $this->close();
+    }
+
+    private function keysTable(): void
     {
         $this->open('کلیدهای API', ['ارائه‌دهنده', 'وضعیت', 'کلید ذخیره‌شده', 'سقف رایگان', 'اثر']);
 

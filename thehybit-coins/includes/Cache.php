@@ -175,7 +175,7 @@ final class Cache
      * ---------------------------------------------------------------- */
     public const OPTION_ERRORS = 'thb_coins_last_errors';
 
-    private static function noteError(string $dataset, string $message, bool $ourRefusal = false): void
+    public static function noteError(string $dataset, string $message, bool $ourRefusal = false): void
     {
         $all = get_option(self::OPTION_ERRORS, []);
         $all = is_array($all) ? $all : [];
@@ -194,7 +194,7 @@ final class Cache
         update_option(self::OPTION_ERRORS, $all, false);
     }
 
-    private static function clearError(string $dataset): void
+    public static function clearError(string $dataset): void
     {
         $all = get_option(self::OPTION_ERRORS, []);
         if (is_array($all) && isset($all[$dataset])) {

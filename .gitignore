@@ -6,9 +6,12 @@
 # be tested against.
 classic.html
 v2.html
+coins-list.html
 
 # Showcase pages for design screenshots (tools/v2-showcase.php) — test data.
 v2-ethereum.html
+v2-coins.html
+v2-coins-2.html
 v2-bitcoin.html
 
 node_modules/

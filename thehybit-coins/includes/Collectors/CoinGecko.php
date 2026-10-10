@@ -446,6 +446,60 @@ final class CoinGecko extends Collector
     }
 
     /**
+     * One page of the market-wide coin list for /coins/: the top coins by
+     * market cap, `perPage` at a time, in ONE /coins/markets request per page.
+     * Everything the list shows — and the "vs the market" figure derived from
+     * it — comes from this one response; nothing is asked per coin.
+     *
+     * @return array<int, array> rows in market-cap order
+     */
+    public function listing(int $page, int $perPage): array
+    {
+        $rows = $this->get('/coins/markets', [
+            'vs_currency'             => 'usd',
+            'order'                   => 'market_cap_desc',
+            'per_page'                => (string) max(1, min(250, $perPage)),
+            'page'                    => (string) max(1, $page),
+            'sparkline'               => 'true',
+            'price_change_percentage' => '24h,7d',
+        ]);
+        if (!is_array($rows) || !array_is_list($rows)) {
+            throw new \RuntimeException('coins/markets page ' . $page . ': not a list');
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r) || empty($r['id']) || !isset($r['current_price']) || !is_numeric($r['current_price'])) {
+                continue;   // a row without a price has nothing to list
+            }
+            $num = static fn(string $key): ?float =>
+                isset($r[$key]) && is_numeric($r[$key]) ? (float) $r[$key] : null;
+
+            $spark = array_values(array_filter((array) ($r['sparkline_in_7d']['price'] ?? []), 'is_numeric'));
+            $step = max(1, (int) floor(count($spark) / 42));
+            $thin = [];
+            for ($i = 0; $i < count($spark); $i += $step) {
+                $thin[] = round((float) $spark[$i], 10);
+            }
+
+            $out[] = [
+                'id'        => (string) $r['id'],
+                'symbol'    => strtoupper((string) ($r['symbol'] ?? '')),
+                'name'      => (string) ($r['name'] ?? $r['id']),
+                'image'     => is_string($r['image'] ?? null) && str_starts_with($r['image'], 'https://') ? $r['image'] : null,
+                'rank'      => isset($r['market_cap_rank']) && is_numeric($r['market_cap_rank']) ? (int) $r['market_cap_rank'] : null,
+                'price'     => (float) $r['current_price'],
+                'marketCap' => $num('market_cap'),
+                'volume24h' => $num('total_volume'),
+                'change24h' => $num('price_change_percentage_24h_in_currency') ?? $num('price_change_percentage_24h'),
+                'change7d'  => $num('price_change_percentage_7d_in_currency'),
+                'sparkline' => $thin,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * The live price: price, 24h change and CoinGecko's own update time for
      * every coin, in ONE /simple/price request.
      *

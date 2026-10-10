@@ -684,9 +684,24 @@ ok(substr_count($html15, 'class="v2-pin__box"') >= 6, '#6 market events are mark
 ok(str_contains($html15, 'marker-end="url(#v2-arrowhead)"') && str_contains($html15, 'سقوط ترا/لونا'),
    '#6 each with an arrow to the price on the day and its label above');
 
-/* #7 — provenance is a collapsed footnote, not a pulse card. */
-ok(!str_contains($html15, 'چرا این گزارش؟') && str_contains($html15, '<details class="v2-card v2-provenance">'),
-   '#7 the provenance list is a collapsed footnote under About, not a card in the daily pulse');
+/* #7, then 2.2.0 — provenance is an admin record: not on the public page at all. */
+ok(!str_contains($html15, 'چرا این گزارش؟') && !str_contains($html15, 'v2-provenance')
+   && !str_contains($html15, 'منابع داده و زمان آخرین به‌روزرسانی') && !str_contains($html15, 'v2-sources'),
+   'the data-sources list is not in the public page\'s markup (it is on the diagnostics screen)');
+$islandR = Model::client($plugin->v2($ethR));
+ok(!array_key_exists('sources', $islandR) && !str_contains((string) json_encode($islandR, JSON_UNESCAPED_UNICODE), 'انتقال‌های بزرگ'),
+   'nor in the page\'s data island');
+
+/* 2.2.0 — the launch date is Gregorian from a fixed table, never ICU's mix. */
+ok(str_contains($html15, '<time datetime="2015-07-30">30 ژوئیه 2015</time>'),
+   'the launch date reads «30 ژوئیه 2015», marked up as <time datetime="2015-07-30">');
+foreach (['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','آبان','آذر','بهمن','اسفند'] as $jm) {
+    if (preg_match('#<dt>راه‌اندازی</dt><dd>[^<]*<time[^>]*>[^<]*' . $jm . '#u', $html15)) {
+        ok(false, "a Jalali month ({$jm}) appears in the launch date");
+    }
+}
+ok(\TheHybit\Coins\Format::gregorian('2009-01-03') === '3 ژانویه 2009' && \TheHybit\Coins\Format::gregorian('2024-08-15') === '15 اوت 2024'
+   && \TheHybit\Coins\Format::gregorian(null) === '—', 'Format::gregorian: day, Gregorian month name, year — for any date');
 
 /* #8 — exchange concentration falls back to the labelled wallets. */
 $cfgNoCm = $plugin->config;
@@ -710,8 +725,108 @@ unset($GLOBALS['thb_pages'], $GLOBALS['thb_coin_fields'][78], $GLOBALS['thb_coin
 /* Item 4 data correctness: Etherscan's Eth2Staking is not the stake. */
 ok(!str_contains($html15, '4.38M ETH') && str_contains($html15, '34.20M ETH'), 'staked ETH comes from beaconcha.in, not from Etherscan\'s rewards field');
 
+/* =====================================================================
+ * 16. The coin list at /coins/
+ * ================================================================== */
+section('coin list (/coins/)');
+
+use TheHybit\Coins\Listing;
+use TheHybit\Coins\Seo;
+
+$lst = $plugin->listing;
+foreach (array_keys($plugin->config['providers']) as $p) { (new TheHybit\Coins\Budget($plugin->config))->reset($p); }
+for ($p = 1; $p <= 6; $p++) { $plugin->cache->forget(Listing::DATASET, 'page:' . $p); }
+Probe::reset(keepCache: true);
+$coldList = v2_render_list(1);
+ok(Probe::count() === 0, 'a cold list render makes no provider request (' . Probe::count() . ')');
+ok(str_contains($coldList, 'در حال دریافت داده') && !str_contains($coldList, '<table class="list-table"'),
+   'and says the list is being fetched — no empty table, no zeros');
+ok($lst->due() === 1, 'the scheduler refreshes page 1 first');
+
+Probe::reset(keepCache: true);
+v2_warm_list();
+ok(Probe::count('/coins/markets') === $lst->pages() && Probe::count() === $lst->pages(),
+   'filling all ' . $lst->pages() . ' pages costs ' . Probe::count() . ' requests — one per page of 100 coins, none per coin');
+$call1 = (string) Probe::$calls[0]['url'];
+ok(str_contains($call1, 'order=market_cap_desc') && str_contains($call1, 'per_page=100') && str_contains($call1, 'page=1')
+   && !str_contains($call1, 'ids='), 'each is /coins/markets ordered by market cap, 100 a page');
+ok($lst->due() === null, 'and then nothing is due');
+
+Probe::reset(keepCache: true);
+$l1 = v2_render_list(1);
+ok(Probe::count() === 0, 'a warm list render makes no provider request');
+preg_match_all('#<tr(?: class="is-ours")?>\s*<td class="c-rank">#', $l1, $trs);
+ok(count($trs[0]) === 99, 'page 1 lists the 100 top coins less the one CoinGecko sent without a price (' . count($trs[0]) . ' rows)');
+ok(substr_count($l1, '<h1') === 1 && substr_count($l1, '<h2') >= 2 && str_contains($l1, '<th scope="col"') && str_contains($l1, '<th scope="row"'),
+   'one h1, section h2s, and a real table with column and row headers');
+ok(str_contains($l1, '<caption'), 'with a caption for screen readers');
+foreach (['$62,012.50' => 'price', '$1.20T' => 'market cap', '$31.00B' => '24h volume', '+2.16%' => '24h change', '+10.42%' => '7d change'] as $needle => $what) {
+    ok(str_contains($l1, $needle), "bitcoin's {$what} is in the first response ({$needle})");
+}
+ok(str_contains($l1, 'href="https://thehybit.com/post/10">اتریوم</a>') && str_contains($l1, 'href="https://thehybit.com/post/11">بیت‌کوین</a>'),
+   'coins with a page on the site link to it, under their Persian name');
+ok(!str_contains($l1, 'href="https://thehybit.com/post/0"') && str_contains($l1, '<span class="list-coin__name">Tether</span>'),
+   'coins without a page are listed but not linked');
+ok(substr_count($l1, 'class="list-spark') >= 95, '7-day sparklines are drawn on the server');
+ok(!preg_match('#api\.coingecko#', $l1), 'no API URL in the markup');
+
+/* The distinctive column: 7-day change minus the market's (top 100, cap-weighted). */
+$rowsP1 = $lst->entry(1)['data']['rows'];
+$w = 0.0; $sum = 0.0;
+foreach ($rowsP1 as $r) { if ($r['change7d'] !== null && $r['marketCap'] > 0) { $sum += $r['change7d'] * $r['marketCap']; $w += $r['marketCap']; } }
+$mkt = $sum / $w;
+ok(abs($lst->market7d() - $mkt) < 1e-9, 'the market\'s 7-day change is the cap-weighted mean of page 1 (' . round($mkt, 2) . '%)');
+$v1 = $lst->view(1);
+$btcRow = $v1['rows'][0];
+ok(abs($btcRow['vsMarket'] - ($btcRow['change7d'] - $mkt)) < 1e-9
+   && str_contains($l1, \TheHybit\Coins\Format::pct($btcRow['vsMarket'], true, 1)),
+   'each row shows its 7-day change minus the market\'s (bitcoin: ' . round($btcRow['vsMarket'], 1) . ' points)');
+$noWeek = array_values(array_filter($v1['rows'], static fn($r) => $r['change7d'] === null));
+ok($noWeek !== [] && $noWeek[0]['vsMarket'] === null, 'a coin with no 7-day figure gets no comparison, not a zero');
+ok(str_contains($l1, 'میانگین وزنی ۱۰۰ ارز بزرگ'), 'the market figure is labelled with what it is');
+
+/* Pagination: real links, page 2 is ranks 101–200, beyond the last page is a 404. */
+$l2 = v2_render_list(2);
+ok(str_contains($l2, '<td class="c-rank"><bdi class="v2-num" dir="ltr">101</bdi>') && !str_contains($l2, '>100</bdi></td>'),
+   'page 2 starts at rank 101');
+ok(str_contains($l2, 'href="https://thehybit.com/coins/" rel="prev"') && str_contains($l2, 'href="https://thehybit.com/coins/page/3/" rel="next"')
+   && str_contains($l2, 'aria-current="page"><bdi class="v2-num" dir="ltr">2</bdi>'),
+   'with crawlable prev/next links and the current page marked');
+$GLOBALS['thb_is_list'] = true;
+$GLOBALS['thb_paged'] = 5;
+ok($lst->keepPage(false, null) === true, 'page 5 is a real page (WordPress would otherwise 404 it: the archive has only our few coin posts)');
+$GLOBALS['thb_paged'] = 6;
+ok($lst->keepPage(false, null) === false, 'page 6 is beyond the list and 404s');
+$GLOBALS['thb_paged'] = 2;
+$seo = new Seo($plugin->coins, $plugin->pipeline);
+ok($seo->title('x') === 'قیمت ارزهای دیجیتال — صفحه 2 | های بیت' && str_contains($seo->description('x'), 'رتبه 101 تا 200'),
+   'page 2 has its own title and description (Yoast filters)');
+ok($seo->documentTitle(['title' => 'x'])['title'] === Seo::listTitle(2), 'and the theme\'s own <title> without Yoast');
+unset($GLOBALS['thb_is_list'], $GLOBALS['thb_paged']);
+ok($seo->title('kept') === 'kept' || $seo->title('kept') !== Seo::listTitle(1), 'outside the list the titles are untouched');
+
+/* Request cost over an hour: page 1 every 5 minutes, pages 2–5 every 30. */
+Clock::advance(3600);
+Probe::reset(keepCache: true);
+$listCalls = 0;
+for ($minute = 0; $minute < 120; $minute++) {
+    if (($pg = $lst->due()) !== null) { (new TheHybit\Coins\Budget($plugin->config))->reset('coingecko'); $GLOBALS['thb_probe_background'] = true; $lst->refresh($pg); $listCalls++; }
+    Clock::advance(60);
+}
+$GLOBALS['thb_probe_background'] = false;
+$perHour = $listCalls / 2;
+ok($perHour >= 18 && $perHour <= 22, "the list costs {$perHour} CoinGecko requests an hour (one a tick at most; ~20 expected)");
+
+/* The scheduler: one list page a tick, through the budget, after the ticker. */
+$schedSrc = (string) file_get_contents(THB_COINS_DIR . 'includes/Scheduler.php');
+ok(strpos($schedSrc, '0b. One page of the /coins/ list') > strpos($schedSrc, '0. The live price')
+   && str_contains($schedSrc, "\$this->listing->due()") && str_contains($schedSrc, "refuse('coingecko')"),
+   'the scheduler asks for at most one list page a tick, after the live price and through the CoinGecko budget');
+
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);
+    // The /coins/ list, for the browser suite: the same folder, coins-list.html.
+    file_put_contents(dirname((string) getenv('THB_DUMP_HTML')) . '/coins-list.html', $l1);
 }
 
 echo $failed ? "\n{$failed} FAILED\n" : "\nAll v2 render tests passed.\n";

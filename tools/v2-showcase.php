@@ -2,7 +2,8 @@
 /**
  * Render v2 pages for design screenshots.
  *
- *   php tools/v2-showcase.php            writes v2-ethereum.html, v2-bitcoin.html
+ *   php tools/v2-showcase.php            writes v2-ethereum.html, v2-bitcoin.html,
+ *                                        v2-coins.html and v2-coins-2.html (the list)
  *
  * Uses the SHOWCASE payloads (tools/showcase-payloads.php): plausible shapes,
  * not real figures. Every page is stamped with a visible banner saying so.
@@ -31,4 +32,12 @@ foreach ([10 => 'ethereum', 11 => 'bitcoin'] as $id => $slug) {
     $html = preg_replace('#<body>#', '<body>' . $banner, $html, 1);
     file_put_contents(__DIR__ . "/../v2-{$slug}.html", $html);
     echo "wrote v2-{$slug}.html (" . number_format(strlen($html)) . " bytes)\n";
+}
+
+v2_warm_list();
+foreach ([1 => 'v2-coins.html', 2 => 'v2-coins-2.html'] as $page => $file) {
+    $html = v2_render_list($page);
+    $html = preg_replace('#<body>#', '<body>' . $banner, $html, 1);
+    file_put_contents(__DIR__ . "/../{$file}", $html);
+    echo "wrote {$file} (" . number_format(strlen($html)) . " bytes)\n";
 }

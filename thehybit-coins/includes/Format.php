@@ -181,6 +181,26 @@ final class Format
     }
 
     /**
+     * Gregorian, "30 ژوئیه 2015" — day, the Gregorian month's Persian name,
+     * year — built from a fixed table, NOT from ICU.
+     *
+     * gregorianFa() asks ICU for fa_IR with the calendar overridden to
+     * Gregorian. Hosts whose ICU honours the locale's default (Persian)
+     * calendar for the month names render a Gregorian day and year around a
+     * Jalali month — a date in two calendars at once. A table cannot do that.
+     * Used by the v2 page; the classic page keeps gregorianFa(), frozen.
+     */
+    public static function gregorian(?string $iso): string
+    {
+        $ts = self::stamp($iso);
+        if ($ts === null) {
+            return self::EMPTY;
+        }
+        $months = ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر'];
+        return self::digits(gmdate('j', $ts) . ' ' . $months[(int) gmdate('n', $ts) - 1] . ' ' . gmdate('Y', $ts));
+    }
+
+    /**
      * ICU locale for a calendar, including the NUMBERING SYSTEM.
      *
      * Without `numbers=latn`, ICU renders "fa_IR" dates with Persian digits

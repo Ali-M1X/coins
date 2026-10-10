@@ -43,6 +43,8 @@ const THEMES = {
      which is why the theme header shrank on v2 pages. */
   'v2-fit.html':     ['<div id="page" style="width:fit-content;max-width:1400px;margin:0 auto;background:#fff">', '</div>'],
 };
+/* The /coins/ list inside the live theme's fit-content box. */
+THEMES['list-fit.html'] = THEMES['v2-fit.html'];
 /* The same wrappers around the CLASSIC page, so the theme box can be compared
    with the one the classic design gets — they must be identical. */
 for (const name of ['v2-boxed.html', 'v2-shrink.html', 'v2-fit.html']) {
@@ -54,7 +56,8 @@ const server = createServer(async (req, res) => {
     const name = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
     if (THEMES[name]) {
       const [open, close] = THEMES[name];
-      const html = (await readFile(join(ROOT, name.startsWith('classic-') ? 'classic.html' : 'v2.html'), 'utf8'))
+      const src = name.startsWith('classic-') ? 'classic.html' : (name.startsWith('list-') ? 'coins-list.html' : 'v2.html');
+      const html = (await readFile(join(ROOT, src), 'utf8'))
         .replace('<body>', '<body>' + open).replace('</body>', close + '</body>');
       res.writeHead(200, { 'Content-Type': TYPES['.html'] });
       res.end(html);
@@ -181,6 +184,25 @@ for (const width of [1440, 900]) {
 {
   const j = await joins(390);
   ok(j.perRow === 1 && j.ends.length === 0, 'timeline at 390px: one event per line, no connectors drawn');
+}
+
+/* ---- the /coins/ list: columns by width, never a sideways scroll ---- */
+for (const [width, cols] of [[1440, 9], [900, 7], [390, 4]]) {
+  const p = await browser.newPage({ viewport: { width, height: 900 } });
+  await p.goto(`http://localhost:${PORT}/list-fit.html`, { waitUntil: 'load' });
+  const r = await p.evaluate(() => {
+    const row = document.querySelector('.list-table tbody tr');
+    const visible = [...row.children].filter((c) => getComputedStyle(c).display !== 'none' && c.getBoundingClientRect().width > 0);
+    const table = document.querySelector('.list-table').getBoundingClientRect();
+    const card = document.querySelector('.list-card').getBoundingClientRect();
+    return { cols: visible.length, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+             fits: table.right <= card.right + 0.5 && table.left >= card.left - 0.5,
+             vs: visible.some((c) => c.classList.contains('c-vs')), h1: document.querySelectorAll('h1').length };
+  });
+  ok(r.cols === cols && r.vs, `coin list at ${width}px: ${r.cols} columns (expected ${cols}), "vs market" among them`);
+  ok(r.overflow <= 0 && r.fits, `coin list at ${width}px: no horizontal scroll, the table fits its card (${r.overflow}px)`);
+  if (width === 390) ok(r.h1 === 1, 'coin list: one h1');
+  await p.close();
 }
 
 /* ---- interactions, desktop ---- */

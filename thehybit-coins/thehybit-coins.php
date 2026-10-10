@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.1.0
+ * Version:     2.2.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.1.0');
+define('THB_COINS_VERSION', '2.2.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -35,6 +35,7 @@ require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';
 require_once THB_COINS_DIR . 'includes/Cache.php';
 require_once THB_COINS_DIR . 'includes/History.php';
+require_once THB_COINS_DIR . 'includes/Listing.php';
 require_once THB_COINS_DIR . 'includes/Overrides.php';
 require_once THB_COINS_DIR . 'includes/Derive.php';
 require_once THB_COINS_DIR . 'includes/Context.php';
@@ -78,6 +79,7 @@ final class Plugin
     public History $history;
     public News $news;
     public Pipeline $pipeline;
+    public Listing $listing;
 
     public static function instance(): Plugin
     {
@@ -95,6 +97,7 @@ final class Plugin
         $this->history  = new History($this->config);
         $this->news     = new News($this->config);
         $this->pipeline = new Pipeline($this->config, $this->cache, $this->history, $this->news);
+        $this->listing  = new Listing($this->config, $this->cache, $this->pipeline, $this->coins);
 
         foreach ([
             Collectors\CoinGecko::class,
@@ -162,7 +165,10 @@ final class Plugin
            request path — see includes/Diagnostics.php. */
         (new Diagnostics($this->coins, $this->pipeline, $this->config))->register();
 
-        (new Scheduler($this->config, $this->coins, $this->pipeline, $this->history))->register();
+        /* The coin list at /coins/ (the post type's archive). */
+        $this->listing->register();
+
+        (new Scheduler($this->config, $this->coins, $this->pipeline, $this->history, $this->listing))->register();
         (new Seo($this->coins, $this->pipeline))->register();
         (new Schema($this->coins, $this->pipeline))->register();
     }
@@ -172,6 +178,14 @@ final class Plugin
      */
     public function assets(): void
     {
+        /* The coin list shares v2's stylesheet (tokens, fonts, the theme-box
+           breakout) and adds its own table styles. No script: it is a plain,
+           server-rendered table with link pagination. */
+        if (is_post_type_archive(CoinRepository::POST_TYPE)) {
+            wp_enqueue_style('thb-v2', THB_COINS_URL . 'assets/v2/v2.css', [], THB_COINS_VERSION);
+            wp_enqueue_style('thb-list', THB_COINS_URL . 'assets/v2/list.css', ['thb-v2'], THB_COINS_VERSION);
+            return;
+        }
         if (!is_singular(CoinRepository::POST_TYPE)) {
             return;
         }

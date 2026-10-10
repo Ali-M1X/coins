@@ -1,0 +1,91 @@
+/*
+ * The coin list at /coins/ — on top of v2.css (tokens, fonts, breakout).
+ *
+ * Columns by the page's own width (container queries on `v2`, like the coin
+ * page), so the table never scrolls sideways:
+ *   phone   (< 600px)   #, coin, price (24h under it), vs market
+ *   tablet  (600–1119)  + 24h, 7d, market cap
+ *   desktop (≥ 1120)    + volume, 7-day chart
+ */
+.thb-list .screen-reader-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.list-head { margin: 8px 0 18px; }
+.list-head__title { font-size: 26px; font-weight: 800; line-height: 1.4; }
+.list-head__sub { color: var(--v2-muted); font-size: 14px; margin-top: 4px; }
+.list-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.list-stat { display: grid; gap: 2px; padding: 10px 14px; border: 1px solid var(--v2-line); border-radius: 12px; background: var(--v2-surface); min-width: 0; }
+.list-stat__label { color: var(--v2-muted); font-size: 12px; }
+.list-stat__value { font-size: 18px; font-weight: 700; }
+.list-stat__note { color: var(--v2-muted); font-size: 11px; }
+.list-stat__value.v2-delta--up .v2-num { color: var(--v2-accent); }
+.list-stat__value.v2-delta--down .v2-num { color: var(--v2-red); }
+
+.list-card { padding: 8px 4px 4px; }
+.list-card__title { font-size: 16px; font-weight: 700; padding: 8px 12px 6px; }
+
+.list-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.list-table th, .list-table td { padding: 10px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--v2-line); font-weight: 400; }
+.list-table thead th { color: var(--v2-muted); font-size: 12px; font-weight: 600; }
+.list-table tbody tr:last-child > * { border-bottom: 0; }
+.list-table tbody tr:hover { background: rgba(148, 163, 184, .05); }
+.list-table .c-num { text-align: left; font-variant-numeric: tabular-nums; }
+.list-table td.v2-delta--up .v2-num, .list-sub.v2-delta--up .v2-num { color: var(--v2-accent); }
+.list-table td.v2-delta--down .v2-num, .list-sub.v2-delta--down .v2-num { color: var(--v2-red); }
+.list-table .c-rank { width: 1%; color: var(--v2-muted); font-size: 12px; text-align: center; }
+.list-table .c-vs, .list-table .c-spark { text-align: center; }
+.list-table abbr { text-decoration: none; border-bottom: 1px dotted var(--v2-muted); cursor: help; }
+
+.list-coin { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.list-coin__logo { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--v2-surface-2); object-fit: cover; }
+.list-coin__logo--none { display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--v2-muted); }
+.list-coin__text { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.list-coin__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: 18ch; }
+a.list-coin__name { text-decoration: none; color: var(--v2-text); }
+a.list-coin__name:hover { color: var(--v2-accent); }
+.list-coin__sym { color: var(--v2-muted); font-size: 12px; }
+/* Coins with a full page on the site carry a small accent mark. */
+.list-table tr.is-ours .list-coin__name::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-inline-start: 6px; border-radius: 50%; background: var(--v2-accent); vertical-align: middle; }
+
+.list-vs { display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.list-vs--up { color: var(--v2-accent); background: rgba(25, 227, 177, .1); }
+.list-vs--down { color: var(--v2-red); background: rgba(244, 63, 94, .1); }
+.list-vs--flat { color: var(--v2-muted); background: rgba(148, 163, 184, .1); }
+.list-vs__word { font-size: 11px; font-weight: 400; }
+
+.list-spark { width: 100px; height: 32px; margin: 0 auto; }
+.list-spark path { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.list-spark--up path { stroke: var(--v2-accent); }
+.list-spark--down path { stroke: var(--v2-red); }
+.list-spark--flat path { stroke: var(--v2-muted); }
+
+.list-sub { display: block; font-size: 12px; }
+
+.list-pages { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 18px 0; }
+.list-pages__list { display: flex; gap: 6px; }
+.list-pages__link, .list-pages__step { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; padding: 0 12px; border: 1px solid var(--v2-line-2); border-radius: 10px; text-decoration: none; font-weight: 600; }
+.list-pages__link:hover, .list-pages__step:hover { border-color: var(--v2-accent); color: var(--v2-accent); }
+.list-pages__link.is-current { background: var(--v2-accent); border-color: var(--v2-accent); color: var(--v2-accent-ink); }
+.list-pages__link.is-current .v2-num { color: var(--v2-accent-ink); }
+
+.list-about { padding: 12px 16px 16px; margin-top: var(--v2-gap); }
+.list-about p { color: var(--v2-text); font-size: 14px; margin-top: 6px; }
+.list-about .list-card__title { padding: 0; }
+
+/* phone: #, coin, price (24h under it), vs market */
+.list-table .c-24h, .list-table .c-7d, .list-table .c-cap, .list-table .c-vol, .list-table .c-spark { display: none; }
+.list-table th, .list-table td { padding: 9px 4px; }
+.list-coin__name { max-width: 11ch; }
+.list-vs__word { display: none; }
+
+@container v2 (min-width: 600px) {
+  .list-table .c-24h, .list-table .c-7d, .list-table .c-cap { display: table-cell; }
+  .list-sub { display: none; }
+  .list-vs__word { display: inline; }
+  .list-table th, .list-table td { padding: 10px 8px; }
+  .list-coin__name { max-width: 16ch; }
+}
+@container v2 (min-width: 1120px) {
+  .list-table .c-vol, .list-table .c-spark { display: table-cell; }
+  .list-head__title { font-size: 30px; }
+  .list-coin__name { max-width: 22ch; }
+}
