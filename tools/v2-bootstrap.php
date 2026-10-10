@@ -101,8 +101,8 @@ function v2_warm(int $postId): void
     $datasets = array_merge(
         array_map(static fn($p) => 'chart.' . $p, array_keys($config['chart']['windows'])),
         ['market', 'metadata', 'historical', 'defi', 'dex', 'fx', 'global', 'categories', 'sentiment',
-         'chains', 'stablecoins', 'structure', 'gas', 'supply', 'network', 'staking', 'development',
-         'peers', 'protocols', 'longchart', 'chainstats', 'lidoapr', 'whales', 'ethlocations', 'interest']
+         'chains', 'stablecoins', 'structure', 'gas', 'supply', 'network', 'staking', 'development'],
+        array_keys(\TheHybit\Coins\Pipeline::V2_DATASETS)
     );
     foreach ($datasets as $dataset) {
         foreach (array_keys($config['providers']) as $provider) {

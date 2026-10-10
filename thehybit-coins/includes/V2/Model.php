@@ -95,7 +95,10 @@ final class Model
     /** The second-round datasets, peeked once per build. @var array<string, array> */
     private array $x = [];
 
-    public function __construct(private array $config, private Cache $cache)
+    private ?Coin $coin = null;
+
+    /** @param History|null $history our own stored readings (net inflation from Etherscan supply) */
+    public function __construct(private array $config, private Cache $cache, private ?\TheHybit\Coins\History $history = null)
     {
         $this->sets = new Datasets($config);
     }
@@ -109,9 +112,12 @@ final class Model
         $protocols = $this->peek('protocols', $coin, 'DefiLlama');
         $long      = $this->peek('longchart', $coin, 'DefiLlama');
         $bench     = $this->benchmarkYear($coin);
+        $this->coin = $coin;
         $this->x = [
             'chainstats'   => $this->peek('chainstats', $coin, 'CoinMetrics'),
             'lidoapr'      => $this->peek('lidoapr', $coin, 'Lido'),
+            'activity'     => $this->peek('activity', $coin, 'growthepie'),
+            'stakingyield' => $this->peek('stakingyield', $coin, 'DefiLlama'),
             'whales'       => $this->peek('whales', $coin, 'Blockchair'),
             'ethlocations' => $this->peek('ethlocations', $coin, 'Etherscan'),
             'interest'     => $this->peek('interest', $coin, 'Wikimedia'),
@@ -277,9 +283,9 @@ final class Model
         $staking = (array) ($m['staking'] ?? []);
         $stable = (array) ($m['context']['stablecoinSupply'] ?? []);
         $apr = $this->stakingApr($m);
-        $active = $this->cm('AdrActCnt');
+        $active = $this->activeAddresses();
 
-        return [
+        $rows = [
             self::metric('ارزش کل قفل‌شده (TVL)', isset($defi['tvl']) ? Format::usdCompact((float) $defi['tvl']) : null,
                 $defi['tvlChange7d'] ?? null, '۷ روز', 'DefiLlama', $m['defi'] ? null : 'این زنجیره داده دیفای ندارد'),
             self::metric('کارمزد پرداختی (۲۴ ساعت)', isset($defi['fees24h']) ? Format::usdCompact((float) $defi['fees24h']) : null,
@@ -289,10 +295,16 @@ final class Model
                 ($staking['state'] ?? '') === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : 'در حال دریافت داده', $apr['detail'] ?? null),
             self::metric('عرضه استیبل‌کوین روی زنجیره', ($stable['available'] ?? false) ? Format::usdCompact((float) $stable['value']) : null,
                 null, null, 'DefiLlama', self::stateNote('unavailable')),
-            self::metric('آدرس‌های فعال روزانه', $active ? Format::num($active['latest'], 0) : null,
-                $active ? self::change($active['latest'], $active['weekAgo']) : null, '۷ روز', 'CoinMetrics',
-                self::stateNote($this->x['chainstats']['state'] ?? 'pending'), $active ? 'روز ' . Format::jalaliShort($active['date']) . ' · CoinMetrics' : null),
         ];
+        /* Shown while its source has a figure (or has not been asked yet);
+           left out entirely when no source can supply one — no permanent
+           empty row. */
+        if ($active || $this->awaiting('activity')) {
+            $rows[] = self::metric('آدرس‌های فعال روزانه', $active ? Format::num($active['latest'], 0) : null,
+                $active ? self::change($active['latest'], $active['weekAgo']) : null, '۷ روز', $active['source'] ?? 'growthepie',
+                self::stateNote('pending'), $active ? 'روز ' . Format::jalaliShort($active['date']) . ' · ' . $active['source'] : null);
+        }
+        return $rows;
     }
 
     /* ------------------------------------------------------------------
@@ -430,9 +442,11 @@ final class Model
             ['label' => 'تراکنش‌های در انتظار', 'value' => isset($nd['mempool']) ? Format::num((float) $nd['mempool'], 0) : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair'],
             ['label' => 'تراکنش‌ها (۲۴ ساعت)', 'value' => isset($nd['transactions24h']) ? Format::compact((float) $nd['transactions24h']) : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair'],
         ];
-        $active = $this->cm('AdrActCnt');
-        $pulse[] = ['label' => 'آدرس‌های فعال (روز گذشته)', 'value' => $active ? Format::num($active['latest'], 0) : null,
-                    'state' => $this->x['chainstats']['state'] ?? 'pending', 'source' => 'CoinMetrics'];
+        $active = $this->activeAddresses();
+        if ($active || $this->awaiting('activity')) {
+            $pulse[] = ['label' => 'آدرس‌های فعال (روز گذشته)', 'value' => $active ? Format::num($active['latest'], 0) : null,
+                        'state' => 'pending', 'source' => $active['source'] ?? 'growthepie'];
+        }
         if ($isPos) {
             $pulse[] = ['label' => 'اعتبارسنج‌های فعال', 'value' => isset($sd['validators']) ? Format::num((float) $sd['validators'], 0) : null,
                         'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in'];
@@ -883,7 +897,7 @@ final class Model
                 'dir' => Format::direction($defi['feesChange24h'] ?? null),
             ];
         }
-        $active = $this->cm('AdrActCnt');
+        $active = $this->activeAddresses();
         if ($active && $active['weekAgo']) {
             $c7 = self::change($active['latest'], $active['weekAgo']);
             $lines[] = [
@@ -1103,25 +1117,21 @@ final class Model
                 $missing[] = ['در پل‌های لایه ۲', 'از Etherscan هنوز نرسیده'];
             }
         }
-        $ex = $this->cm('SplyExNtv');
-        $cur = $this->cm('SplyCur');
         $onExchanges = $this->exchangeShare($total);
         if ($onExchanges !== null) {
             $slices[] = ['label' => $onExchanges['label'], 'pct' => $onExchanges['pct'], 'tone' => 'pink', 'source' => $onExchanges['source']];
         } else {
-            $missing[] = ['روی صرافی‌های متمرکز', 'نه CoinMetrics پاسخ داد و نه موجودی کیف پول‌های صرافی‌ها از Etherscan رسید'];
+            $missing[] = ['روی صرافی‌های متمرکز', 'موجودی کیف پول‌های صرافی‌ها هنوز از Etherscan نرسیده'];
         }
-        $act = $this->cm('SplyAct1yr');
-        if ($act && $cur && $cur['latest'] > 0) {
-            $slices[] = ['label' => 'بدون جابه‌جایی در یک سال اخیر (نگهدارندگان بلندمدت)',
-                         'pct' => max(0.0, 100 - $act['latest'] / $cur['latest'] * 100), 'tone' => 'teal', 'source' => 'CoinMetrics'];
-        } else {
-            $missing[] = ['کیف پول‌های بلندمدت', 'سن کوین‌ها را رایگان فقط CoinMetrics منتشر می‌کند و هنوز از آن پاسخی نرسیده'];
-        }
+        /* Long-term holders (coin age) are not shown: the only free source,
+           CoinMetrics, refuses this server by location, and the alternatives
+           (Glassnode, CryptoQuant, IntoTheBlock) are paid. No row, rather than
+           a permanent "unavailable". */
 
         $aprInfo = $this->stakingApr($m);
         $apr = $aprInfo['value'] ?? null;
-        $inflation = $this->inflation();
+        $infl = $this->inflation();
+        $inflation = $infl['value'] ?? null;
 
         $dd = $m['derived']['drawdownFromAth']['value'] ?? null;
         $hhi = ($m['context']['cexConcentration']['available'] ?? false) ? (float) $m['context']['cexConcentration']['value'] : null;
@@ -1155,6 +1165,7 @@ final class Model
             'aprKind'  => $aprInfo['kind'] ?? null,
             'aprState' => $staking['state'] ?? 'unavailable',
             'inflation' => $inflation,
+            'inflationSource' => $infl['source'] ?? null,
             'inflationDate' => $cur['date'] ?? null,
             'realYield' => $apr !== null && $inflation !== null ? $apr - $inflation : null,
             'validators' => $staking['data']['validators'] ?? null,
@@ -1207,9 +1218,11 @@ final class Model
             ['پروتکل‌ها', 'DefiLlama', $extra['protocols']['fetchedAt']],
             ['قیمت از ابتدا', 'DefiLlama', $extra['longchart']['fetchedAt']],
             ['فعالیت توسعه', 'GitHub', $m['development']['fetchedAt'] ?? null],
+            ['آدرس‌های فعال', 'growthepie', $extra['activity']['fetchedAt'] ?? null],
             ['آدرس‌های فعال و عرضه', 'CoinMetrics', $extra['chainstats']['fetchedAt'] ?? null],
             ['انتقال‌های بزرگ', 'Blockchair', $extra['whales']['fetchedAt'] ?? null],
             ['WETH و پل‌های لایه ۲', 'Etherscan', $extra['ethlocations']['fetchedAt'] ?? null],
+            ['بازده stETH', 'DefiLlama Yields', $extra['stakingyield']['fetchedAt'] ?? null],
             ['بازده stETH', 'Lido', $extra['lidoapr']['fetchedAt'] ?? null],
             ['علاقه عمومی', 'Wikipedia', $extra['interest']['fetchedAt'] ?? null],
         ];
@@ -1526,7 +1539,7 @@ final class Model
     {
         if ($share === null) {
             return self::risk('تمرکز روی صرافی‌ها', null, null, null,
-                'نه CoinMetrics این شاخص را برگرداند و نه موجودی کیف پول‌های صرافی‌ها از Etherscan رسید');
+                'موجودی کیف پول‌های صرافی‌ها هنوز از Etherscan نرسیده');
         }
         $row = self::risk($share['floor'] ? 'تمرکز روی صرافی‌ها (حداقل)' : 'تمرکز روی صرافی‌ها', Format::pct($share['pct'], false, 1),
             self::exchangeTone($share['pct']), $share['source']);
@@ -1554,7 +1567,8 @@ final class Model
      * The staking yield, from the best source that answered — always named.
      *
      *   1. beaconcha.in: the network-wide realised APR (measured);
-     *   2. Lido: stETH's 7-day average APR (measured, one provider's yield);
+     *   2. stETH's 7-day average yield, from DefiLlama Yields (or Lido's own
+     *      API where it is reachable) — measured, one provider's yield;
      *   3. the consensus-layer reward formula applied to the ETH actually
      *      staked (Etherscan) — the protocol's own arithmetic, labelled as a
      *      calculation and as the maximum, because it assumes every validator
@@ -1572,6 +1586,11 @@ final class Model
             return ['value' => (float) $staking['data']['apr'], 'source' => 'beaconcha.in',
                     'detail' => 'میانگین کل شبکه · beaconcha.in', 'kind' => 'measured'];
         }
+        $steth = $this->x['stakingyield']['data']['apy7d'] ?? null;
+        if (is_numeric($steth)) {
+            return ['value' => (float) $steth, 'source' => 'DefiLlama (stETH لیدو)',
+                    'detail' => 'بازده stETH لیدو، میانگین ۷ روزه · DefiLlama', 'kind' => 'measured'];
+        }
         $lido = $this->x['lidoapr']['data']['smaApr'] ?? null;
         if (is_numeric($lido)) {
             return ['value' => (float) $lido, 'source' => 'Lido',
@@ -1580,7 +1599,7 @@ final class Model
         $staked = $staking['data']['stakedEth'] ?? null;
         if (is_numeric($staked) && $staked > 0) {
             return ['value' => self::consensusApr((float) $staked), 'source' => 'محاسبه از فرمول پروتکل',
-                    'detail' => 'حداکثر نظری لایه اجماع، از کل اتر سپرده‌شده (Etherscan)', 'kind' => 'formula'];
+                    'detail' => 'حداکثر نظری لایه اجماع، از کل اتر سپرده‌شده (beaconcha.in)', 'kind' => 'formula'];
         }
         return null;
     }
@@ -1602,13 +1621,59 @@ final class Model
      * week apart — issuance minus burn, as it actually happened. Negative when
      * more was burned than issued.
      */
-    private function inflation(): ?float
+    private function inflation(): ?array
     {
         $s = $this->cm('SplyCur');
-        if (!$s || !isset($s['weekAgo']) || $s['weekAgo'] <= 0) {
+        if ($s && isset($s['weekAgo']) && $s['weekAgo'] > 0) {
+            return ['value' => ($s['latest'] - $s['weekAgo']) / $s['weekAgo'] * (365 / 7) * 100, 'source' => 'CoinMetrics'];
+        }
+        /* Our own Etherscan total-supply readings (History keeps one every
+           six hours). Needs two at least six days apart, so it appears about
+           a week after the history starts; until then the card shows the APR
+           alone and says why. */
+        if ($this->history === null || $this->coin === null) {
             return null;
         }
-        return ($s['latest'] - $s['weekAgo']) / $s['weekAgo'] * (365 / 7) * 100;
+        $rows = $this->history->series($this->coin->slug, 'supply', '-9 days');
+        $points = [];
+        foreach ($rows as $r) {
+            $v = $r['payload']['totalSupply'] ?? null;
+            $t = strtotime($r['capturedAt'] . ' UTC');
+            if (is_numeric($v) && $v > 0 && $t) {
+                $points[] = [$t, (float) $v];
+            }
+        }
+        if (count($points) < 2) {
+            return null;
+        }
+        [$t0, $v0] = $points[0];
+        [$t1, $v1] = $points[count($points) - 1];
+        $days = ($t1 - $t0) / 86400;
+        if ($days < 6) {
+            return null;
+        }
+        return ['value' => ($v1 - $v0) / $v0 * (365 / $days) * 100, 'source' => 'Etherscan'];
+    }
+
+    /** Daily active addresses with the source that supplied them, or null. */
+    private function activeAddresses(): ?array
+    {
+        $g = $this->x['activity']['data'] ?? null;
+        if (is_array($g) && isset($g['latest'])) {
+            return $g + ['source' => 'growthepie'];
+        }
+        $c = $this->cm('AdrActCnt');
+        return $c ? $c + ['source' => 'CoinMetrics'] : null;
+    }
+
+    /**
+     * True only while a figure's source has simply not been asked yet. A
+     * source that failed, is switched off or does not cover this chain makes
+     * the row disappear instead of standing empty.
+     */
+    private function awaiting(string $dataset): bool
+    {
+        return ($this->x[$dataset]['state'] ?? '') === 'pending' && !isset(Cache::lastErrors()[$dataset]);
     }
 
     private static function risk(string $label, ?string $value, ?string $tone, ?string $source, ?string $note = null): array

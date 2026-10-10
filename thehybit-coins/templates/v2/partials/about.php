@@ -52,5 +52,5 @@ $c = $v['coin'];
     </details>
   <?php endif; ?>
 
-  <p class="v2-note">داده‌ها از CoinGecko، DefiLlama، Kraken، Etherscan، beaconcha.in، Blockchair، CoinMetrics، Lido، GitHub، ویکی‌پدیا و Alternative.me دریافت و در سرور <?= esc_html($v['brand']) ?> ذخیره می‌شوند؛ مرورگر شما مستقیماً با هیچ‌کدام تماس نمی‌گیرد. جایی که داده‌ای منبع معتبر ندارد، همین را می‌نویسیم و عددی نمی‌سازیم.</p>
+  <p class="v2-note">داده‌ها از CoinGecko، DefiLlama، Kraken، Etherscan، beaconcha.in، Blockchair، growthepie، GitHub، ویکی‌پدیا و Alternative.me دریافت و در سرور <?= esc_html($v['brand']) ?> ذخیره می‌شوند؛ مرورگر شما مستقیماً با هیچ‌کدام تماس نمی‌گیرد. جایی که داده‌ای منبع معتبر ندارد، همین را می‌نویسیم و عددی نمی‌سازیم.</p>
 </section>

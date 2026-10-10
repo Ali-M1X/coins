@@ -351,7 +351,7 @@ final class ProviderProbe
             ],
             [
                 'provider' => 'coinmetrics',
-                'label'    => 'on-chain daily metrics (in use — v2 chainstats)',
+                'label'    => 'on-chain daily metrics (OFF — location-blocked from the production server; was v2 chainstats)',
                 'url'      => 'https://community-api.coinmetrics.io/v4/timeseries/asset-metrics',
                 'query'    => [
                     'assets' => 'eth', 'frequency' => '1d', 'page_size' => '3',
@@ -364,11 +364,29 @@ final class ProviderProbe
             ],
             [
                 'provider' => 'lido',
-                'label'    => 'stETH APR, 7-day average (in use — v2 lidoapr)',
+                'label'    => 'stETH APR, 7-day average (OFF — location-blocked from the production server; was v2 lidoapr)',
                 'url'      => 'https://eth-api.lido.fi/v1/protocol/steth/apr/sma',
                 'query'    => [],
                 'needsKey' => false,
                 'expects'  => ['data.smaApr'],
+            ],
+            [
+                'provider' => 'growthepie',
+                'label'    => 'daily active addresses (in use — v2 activity)',
+                'url'      => 'https://api.growthepie.com/v1/fundamentals.json',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['0.metric_key', '0.origin_key', '0.date', '0.value'],
+                'note'     => 'a large file (all chains, ~90 days); the collector keeps only metric_key "daa" for origin_key "ethereum"',
+            ],
+            [
+                'provider' => 'llamayields',
+                'label'    => 'stETH pool yield (in use — v2 stakingyield)',
+                'url'      => 'https://yields.llama.fi/chart/747c1d2a-c668-4682-b9f9-296708a3dd90',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['status', 'data.0.timestamp', 'data.0.apy'],
+                'note'     => 'DefiLlama pool "stETH — Lido"; replaces Lido\'s own API',
             ],
             [
                 'provider' => 'blockchair',

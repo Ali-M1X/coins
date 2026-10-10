@@ -216,6 +216,31 @@ function probe_payload(string $url): array
         return ['data' => $rows];
     }
 
+    /* ---- growthepie fundamentals: flat rows, every chain and metric.
+       Ethereum's daa ends at 498,000, 480,000 a week earlier; other
+       chains and metrics are there to be filtered out. ---- */
+    if (str_contains($url, 'api.growthepie.com/v1/fundamentals.json')) {
+        $rows = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $date = gmdate('Y-m-d', Clock::$now - ($i + 1) * 86400);
+            $rows[] = ['metric_key' => 'daa', 'origin_key' => 'ethereum', 'date' => $date, 'value' => $i === 0 ? 498000.0 : ($i === 7 ? 480000.0 : 470000.0 + $i)];
+            $rows[] = ['metric_key' => 'daa', 'origin_key' => 'base', 'date' => $date, 'value' => 1900000.0];
+            $rows[] = ['metric_key' => 'txcount', 'origin_key' => 'ethereum', 'date' => $date, 'value' => 1210000.0];
+        }
+        return $rows;
+    }
+
+    /* ---- DefiLlama Yields: the stETH pool's daily chart. The last seven
+       days average 2.87%. ---- */
+    if (str_contains($url, 'yields.llama.fi/chart/')) {
+        $rows = [];
+        for ($i = 59; $i >= 0; $i--) {
+            $apy = $i < 7 ? [2.8, 2.9, 2.85, 2.89, 2.88, 2.87, 2.9][$i] : 3.1;
+            $rows[] = ['timestamp' => gmdate('Y-m-d', Clock::$now - $i * 86400) . 'T23:01:52.103Z', 'tvlUsd' => 2.5e10, 'apy' => $apy, 'apyBase' => $apy, 'apyReward' => null];
+        }
+        return ['status' => 'success', 'data' => $rows];
+    }
+
     if (str_contains($url, 'eth-api.lido.fi')) {
         return ['data' => ['aprs' => [['timeUnix' => Clock::$now, 'apr' => 2.9]], 'smaApr' => 2.87], 'meta' => ['symbol' => 'stETH']];
     }

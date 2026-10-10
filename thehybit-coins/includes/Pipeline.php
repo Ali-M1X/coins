@@ -80,6 +80,8 @@ final class Pipeline
         'longchart' => 'llamaprices',
         'chainstats'   => 'coinmetrics',
         'lidoapr'      => 'lido',
+        'activity'     => 'growthepie',
+        'stakingyield' => 'llamayields',
         'whales'       => 'blockchair',
         'ethlocations' => 'etherscan',
         'interest'     => 'wikimedia',

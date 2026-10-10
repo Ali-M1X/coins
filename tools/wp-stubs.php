@@ -366,7 +366,21 @@ final class FakeWpdb extends wpdb
     }
 
     public function get_var(string $sql) { $this->queries++; return null; }
-    public function get_results(string $sql, $mode = null): array { $this->queries++; return []; }
+    public function get_results(string $sql, $mode = null): array
+    {
+        $this->queries++;
+        /* History::series() reads back what History::record() inserted —
+           only when a test asks for it, so every other suite keeps the empty
+           history it was written against. */
+        if (empty($GLOBALS['thb_history_reads'])
+            || !preg_match("/coin_slug = '(.*?)' AND dataset = '(.*?)' AND captured_at >= '(.*?)'/", $sql, $m)) {
+            return [];
+        }
+        $rows = array_values(array_filter($this->historyRows,
+            static fn($r) => $r['coin_slug'] === $m[1] && $r['dataset'] === $m[2] && $r['captured_at'] >= $m[3]));
+        usort($rows, static fn($a, $b) => strcmp($a['captured_at'], $b['captured_at']));
+        return array_map(static fn($r) => ['captured_at' => $r['captured_at'], 'payload' => $r['payload']], $rows);
+    }
     public function get_charset_collate(): string { return ''; }
 
     public function insert(string $t, array $d, array $f = []): int

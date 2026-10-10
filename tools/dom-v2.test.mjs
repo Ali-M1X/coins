@@ -142,6 +142,47 @@ for (const file of Object.keys(THEMES).filter((f) => f.startsWith('v2-'))) {
   }
 }
 
+/* ---- timeline: wrapped lines are joined into one continuous rail ---- */
+const joins = async (width) => {
+  const p = await browser.newPage({ viewport: { width, height: 900 } });
+  await p.goto(URL_, { waitUntil: 'networkidle' });
+  await p.evaluate(() => document.fonts.ready);
+  const r = await p.evaluate(() => {
+    const card = document.querySelector('.v2-timeline');
+    const c = card.getBoundingClientRect();
+    const items = [...card.querySelectorAll('.v2-timeline__item')].map((li) => li.getBoundingClientRect());
+    const tops = [...new Set(items.map((i) => Math.round(i.top)))].sort((a, b) => a - b);
+    const ends = [...card.querySelectorAll('.v2-timeline__join')].map((pa) => {
+      const len = pa.getTotalLength();
+      const a = pa.getPointAtLength(0);
+      const b = pa.getPointAtLength(len);
+      return { a: [a.x, a.y], b: [b.x, b.y] };
+    });
+    const rows = tops.map((t) => items.filter((i) => Math.round(i.top) === t));
+    const expect = rows.slice(0, -1).map((row, k) => ({
+      a: [Math.max(...row.map((i) => i.right)) - c.left, t0(row) + 10],
+      b: [Math.min(...rows[k + 1].map((i) => i.left)) - c.left, t0(rows[k + 1]) + 10],
+    }));
+    function t0(row) { return Math.round(row[0].top - c.top); }
+    return { rows: rows.length, perRow: rows[0].length, ends, expect,
+             overflow: card.scrollWidth - card.clientWidth };
+  });
+  await p.close();
+  return r;
+};
+for (const width of [1440, 900]) {
+  const j = await joins(width);
+  const near = (p, q) => Math.abs(p[0] - q[0]) < 1.5 && Math.abs(p[1] - q[1]) < 1.5;
+  ok(j.rows >= 2 && j.ends.length === j.rows - 1, `timeline at ${width}px: ${j.rows} lines, joined by ${j.ends.length} connector(s)`);
+  ok(j.ends.every((e, k) => near(e.a, j.expect[k].a) && near(e.b, j.expect[k].b)),
+     `timeline at ${width}px: each connector starts where a line's rail ends and ends where the next line's rail starts`);
+  ok(j.overflow <= 0, `timeline at ${width}px: no horizontal scroll (${j.overflow}px)`);
+}
+{
+  const j = await joins(390);
+  ok(j.perRow === 1 && j.ends.length === 0, 'timeline at 390px: one event per line, no connectors drawn');
+}
+
 /* ---- interactions, desktop ---- */
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const requests = [];

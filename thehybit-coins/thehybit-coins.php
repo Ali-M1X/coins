@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.0.4
+ * Version:     2.0.5
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.0.4');
+define('THB_COINS_VERSION', '2.0.5');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -65,6 +65,8 @@ require_once THB_COINS_DIR . 'includes/Collectors/LlamaPrices.php';
 require_once THB_COINS_DIR . 'includes/Collectors/CoinMetrics.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Lido.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Wikimedia.php';
+require_once THB_COINS_DIR . 'includes/Collectors/GrowThePie.php';
+require_once THB_COINS_DIR . 'includes/Collectors/LlamaYields.php';
 
 final class Plugin
 {
@@ -110,6 +112,8 @@ final class Plugin
             Collectors\CoinMetrics::class,
             Collectors\Lido::class,
             Collectors\Wikimedia::class,
+            Collectors\GrowThePie::class,
+            Collectors\LlamaYields::class,
         ] as $class) {
             $this->pipeline->register(new $class($this->config));
         }
@@ -271,7 +275,7 @@ final class Plugin
      */
     public function v2(Coin $coin): array
     {
-        return $this->v2Memo[$coin->slug] ??= (new V2\Model($this->config, $this->cache))
+        return $this->v2Memo[$coin->slug] ??= (new V2\Model($this->config, $this->cache, $this->history))
             ->build($coin, $this->pipeline->viewModel($coin));
     }
 

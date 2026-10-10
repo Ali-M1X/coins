@@ -236,16 +236,69 @@ function initTabs() {
 
 /* ------------------------------------------------------------- timeline */
 
-/* Bring the featured event into view inside the timeline's own scroller.
-   scrollBy with a measured delta works under both RTL scrollLeft
-   conventions, and never scrolls the page itself. */
+/* The timeline wraps onto new lines (CSS grid), and each event draws its own
+   piece of rail. Where a line ends, this joins the end of its rail to the
+   start of the next line's rail with one continuous curve: down the right
+   margin, back along the gap between the lines, and down into the first
+   event — a carriage return, in the rail's own colour. Where the lines
+   break depends on the width, so it is measured and redrawn on resize. No
+   JavaScript: the events still read correctly, just without the joins. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
 function initTimeline() {
-  const box = $('.v2-timeline');
-  const item = $('.v2-timeline__item.is-featured');
-  if (!box || !item || box.scrollWidth <= box.clientWidth) return;
-  const b = box.getBoundingClientRect();
-  const i = item.getBoundingClientRect();
-  box.scrollBy({ left: (i.left + i.width / 2) - (b.left + b.width / 2) });
+  const card = $('.v2-timeline');
+  const list = card && $('.v2-timeline__list', card);
+  if (!card || !list) return;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'v2-timeline__joins');
+  svg.setAttribute('aria-hidden', 'true');
+  card.appendChild(svg);
+
+  const draw = () => {
+    svg.replaceChildren();
+    const c = card.getBoundingClientRect();
+    svg.setAttribute('width', String(c.width));
+    svg.setAttribute('height', String(c.height));
+    const rows = [];
+    [...list.children].forEach((li) => {
+      const r = li.getBoundingClientRect();
+      const top = Math.round(r.top - c.top);
+      const row = rows.find((x) => Math.abs(x.top - top) < 4);
+      if (row) row.items.push({ li, r }); else rows.push({ top, items: [{ li, r }] });
+    });
+    // One event per line (a phone): every rail is its own line; no joins.
+    if (rows.length < 2 || rows[0].items.length < 2) return;
+    for (let i = 0; i + 1 < rows.length; i++) {
+      const a = rows[i];
+      const b = rows[i + 1];
+      const last = a.items.reduce((m, x) => (x.r.right > m.r.right ? x : m));
+      const first = b.items.reduce((m, x) => (x.r.left < m.r.left ? x : m));
+      const x1 = last.r.right - c.left;          // where this line's rail ends
+      const y1 = a.top + 10;                      // rail centre (top 9px, 2px high)
+      const x2 = first.r.left - c.left;          // where the next line's rail starts
+      const y2 = b.top + 10;
+      const bottom = Math.max(...a.items.map((x) => x.r.bottom - c.top));
+      const ym = (bottom + b.top) / 2;           // midway through the gap
+      const rr = Math.min(12, (ym - y1) / 2);    // right turn radius
+      const rl = Math.min(12, (y2 - ym) / 2);    // left turn radius
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', [
+        `M${x1} ${y1}`,
+        `Q${x1 + rr} ${y1} ${x1 + rr} ${y1 + rr}`,
+        `L${x1 + rr} ${ym - rr}`,
+        `Q${x1 + rr} ${ym} ${x1} ${ym}`,
+        `L${x2} ${ym}`,
+        `Q${x2 - rl} ${ym} ${x2 - rl} ${ym + rl}`,
+        `L${x2 - rl} ${y2 - rl}`,
+        `Q${x2 - rl} ${y2} ${x2} ${y2}`,
+      ].join(' '));
+      path.setAttribute('class', 'v2-timeline__join' + (first.li.classList.contains('is-planned') ? ' is-planned' : ''));
+      svg.appendChild(path);
+    }
+  };
+  draw();
+  if ('ResizeObserver' in window) new ResizeObserver(draw).observe(list);
+  else window.addEventListener('resize', draw);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
 }
 
 /* On a phone, wide charts scroll inside their card. Graphs organised around

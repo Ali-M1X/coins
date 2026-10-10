@@ -210,7 +210,7 @@ foreach (['939 TH/s', '$72.4B', '989,423', '14.2 Gwei', '683.2K', '$3,261.48', '
 /* Every section that showed "data not available" in the first build now
    carries its figure — from a named source, never estimated. */
 foreach ([
-    '498,000'                      => 'daily active addresses (CoinMetrics)',
+    '498,000'                      => 'daily active addresses (growthepie)',
     'آخرین انتقال‌های دست‌کم'      => 'whale radar lists large transfers (Blockchair)',
     '2,000 ETH'                    => 'and shows the largest of them',
     '1,500 ETH'                    => 'in whole coins, not rounded to "2K"',
@@ -220,9 +220,8 @@ foreach ([
     'بازدید ویکی‌پدیای فارسی'      => 'public interest from Wikipedia page views',
     'رپ‌شده به WETH'               => 'WETH share of supply (Etherscan)',
     'در پل‌های رسمی لایه ۲'        => 'L2 canonical bridge share (Etherscan)',
-    'روی صرافی‌های متمرکز'         => 'share of supply on exchanges (CoinMetrics)',
-    'نگهدارندگان بلندمدت'          => 'supply unmoved for a year (CoinMetrics)',
-    'خروج خالص از صرافی‌ها'        => 'net exchange flow (CoinMetrics)',
+    'کیف پول بزرگ صرافی‌ها (حداقل)' => 'share of supply on exchanges (Etherscan labelled wallets, a floor)',
+    'growthepie'                   => 'and named as its source',
     'پیدایش'                       => 'the editorial timeline',
     'قرارداد هوشمند'               => 'the learn-in-60-seconds cards',
 ] as $needle => $label) {
@@ -232,23 +231,41 @@ ok(!str_contains($html, 'Google Trends'), 'search interest no longer claims ther
 ok(str_contains($html, 'v2-cockpit__value">ندارد<'), 'the unlock calendar states "none" for Ethereum, from the editorial field');
 ok(!preg_match('#<img[^>]+src="Array"#', $html), 'article thumbnails are real URLs, not "Array"');
 
-/* Real yield: Lido's 2.87% minus the measured supply change (+50 ETH a day,
-   annualised over the 7 days CoinMetrics returns). */
+/* Geo-blocked sources are off; what they fed is replaced or not drawn. */
+ok(!str_contains($html, 'نگهدارندگان بلندمدت') && !str_contains($html, 'کیف پول‌های بلندمدت'),
+   'long-term holders: no row at all — its only free source is location-blocked');
+ok(!str_contains($html, 'CoinMetrics') && !str_contains($html, 'eth-api.lido'), 'CoinMetrics is not named anywhere on the page');
+ok(!str_contains($html, 'خروج خالص از صرافی‌ها') && !str_contains($html, 'ورود خالص به صرافی‌ها'), 'exchange flows (CoinMetrics only) are not drawn');
+
+/* Real yield: inflation from our own Etherscan supply readings a week apart. */
 $vv = $plugin->v2($plugin->coins->find(10));
+ok($vv['supply']['inflation'] === null && $vv['supply']['realYield'] === null && str_contains($html, 'دست‌کم ۶ روز فاصله'),
+   'with no week of supply history yet, the card shows the APR alone and says why — no inflation figure invented');
+// The readings warm-up recorded are replaced by two a week apart.
+$GLOBALS['wpdb']->historyRows = array_values(array_filter($GLOBALS['wpdb']->historyRows, static fn($r) => $r['dataset'] !== 'supply'));
+$GLOBALS['wpdb']->historyRows[] = ['coin_slug' => 'ethereum', 'dataset' => 'supply', 'provider' => 'etherscan',
+    'captured_at' => gmdate('Y-m-d H:i:s', time() - 7 * 86400), 'payload' => json_encode(['totalSupply' => 120530000])];
+$GLOBALS['wpdb']->historyRows[] = ['coin_slug' => 'ethereum', 'dataset' => 'supply', 'provider' => 'etherscan',
+    'captured_at' => gmdate('Y-m-d H:i:s', time() - 60), 'payload' => json_encode(['totalSupply' => 120530350])];
+$GLOBALS['thb_history_reads'] = true;
+$vv = (new Model($plugin->config, $plugin->cache, new \TheHybit\Coins\History($plugin->config)))->build($plugin->coins->find(10), $plugin->pipeline->viewModel($plugin->coins->find(10)));
 $infl = $vv['supply']['inflation'];
-$expected = 350 / (120530000 + 2 * 50) * 365 / 7 * 100;
-ok($infl !== null && abs($infl - $expected) < 0.0001,
-   'inflation is the annualised 7-day change in CoinMetrics supply (' . round((float) $infl, 3) . '%)');
+$expected = 350 / 120530000 * 365 / ((7 * 86400 - 60) / 86400) * 100;
+ok($infl !== null && abs($infl - $expected) < 0.0001 && $vv['supply']['inflationSource'] === 'Etherscan',
+   'inflation is the annualised change between our Etherscan supply readings a week apart (' . round((float) $infl, 3) . '%)');
 ok($vv['supply']['realYield'] !== null && abs($vv['supply']['realYield'] - ($vv['supply']['apr'] - $infl)) < 1e-9,
    'real yield = staking APR − inflation (' . round((float) $vv['supply']['realYield'], 2) . '%)');
-/* The APR source chain: beaconcha.in, then Lido, then the protocol formula. */
+unset($GLOBALS['thb_history_reads']);
+/* The APR source chain: beaconcha.in, then stETH via DefiLlama, then the protocol formula. */
 $noBeacon = $vm = $plugin->pipeline->viewModel($plugin->coins->find(10));
 $noBeacon['staking'] = ['available' => false, 'state' => 'unavailable', 'data' => null, 'source' => 'beaconcha.in', 'fetchedAt' => null];
 $lidoBuild = (new Model($plugin->config, $plugin->cache))->build($plugin->coins->find(10), $noBeacon);
-ok(abs($lidoBuild['supply']['apr'] - 2.87) < 1e-9 && str_contains((string) $lidoBuild['supply']['aprSource'], 'لیدو'),
-   'without beaconcha.in, the APR is Lido\'s published stETH figure, labelled as Lido\'s');
+ok(abs($lidoBuild['supply']['apr'] - 2.87) < 1e-9 && str_contains((string) $lidoBuild['supply']['aprSource'], 'DefiLlama')
+   && str_contains((string) $lidoBuild['supply']['aprSource'], 'لیدو'),
+   'without beaconcha.in, the APR is stETH\'s 7-day yield from DefiLlama Yields, labelled as Lido\'s pool via DefiLlama');
 $cfgNoLido = $plugin->config;
 $cfgNoLido['datasets']['lidoapr']['enabled'] = false;
+$cfgNoLido['datasets']['stakingyield']['enabled'] = false;
 /* The formula needs the staked total, which only beaconcha.in reports
    (Etherscan's Eth2Staking is rewards): a stake figure without an APR. */
 $stakeOnly = $noBeacon;
@@ -451,13 +468,51 @@ try {
 unset($GLOBALS['thb_probe_override']);
 
 $free();
+$gp = (new C\GrowThePie($cfg2))->fetch($eth2, 'activity');
+ok($gp['latest'] === 498000.0 && $gp['weekAgo'] === 480000.0 && count($gp['series']) === 30,
+   'growthepie: Ethereum\'s daa rows only, latest and a week earlier (other chains and metrics filtered out)');
+ok((new C\GrowThePie($cfg2))->fetch($btc2, 'activity') === null, 'and Bitcoin is not asked about');
+try {
+    C\GrowThePie::extract([['metric_key' => 'daa', 'origin_key' => 'base', 'date' => '2026-10-01', 'value' => 1]], 'ethereum', 'daa');
+    ok(false, 'a file with no Ethereum rows is an error, not a zero');
+} catch (\RuntimeException $e) {
+    ok(str_contains($e->getMessage(), 'no "daa" rows for "ethereum"'), 'a file with no Ethereum rows is an error, not a zero');
+}
+$free();
+$yl = (new C\LlamaYields($cfg2))->fetch($eth2, 'stakingyield');
+ok(abs($yl['apy7d'] - 2.87) < 1e-9 && $yl['apy'] === 2.8 && str_contains((string) end(Probe::$calls)['url'], 'yields.llama.fi/chart/747c1d2a-c668-4682-b9f9-296708a3dd90'),
+   'DefiLlama Yields: the stETH pool\'s 7-day mean (2.87%) from its daily chart');
+try {
+    C\LlamaYields::extract(['data' => [['timestamp' => '2026-10-01T00:00:00Z', 'apy' => 287]]], 'p');
+    ok(false, 'a stETH APY of 287% is rejected');
+} catch (\RuntimeException $e) {
+    ok(str_contains($e->getMessage(), 'implausible'), 'a stETH APY of 287% is rejected as a unit error');
+}
+ok(empty($cfg2['providers']['coinmetrics']['enabled']) && empty($cfg2['providers']['lido']['enabled']),
+   'CoinMetrics and Lido are switched off (location-blocked from the production server)');
+
+/* A replacement source that fails takes its row with it. */
+$failCfg = $plugin->config;
+update_option(\TheHybit\Coins\Cache::OPTION_ERRORS, ['activity' => ['at' => 'x', 'message' => 'growthepie: HTTP 403']]);
+$plugin->cache->put('activity', $plugin->cache->keyFor('activity', $eth2), []);
+$GLOBALS['thb_transients'] = $GLOBALS['thb_transients'] ?? null;
+$vmF = $plugin->pipeline->viewModel($eth2);
+$cacheKeyA = $plugin->cache->keyFor('activity', $eth2);
+delete_transient('thb_' . md5('activity|' . $cacheKeyA));
+$failBuild = (new Model($failCfg, new \TheHybit\Coins\Cache($failCfg)))->build($eth2, $vmF);
+$labels = array_merge(array_column($failBuild['keyMetrics'], 'label'), array_column($failBuild['flow']['pulse'], 'label'));
+ok(!in_array('آدرس‌های فعال روزانه', $labels, true) && !in_array('آدرس‌های فعال (روز گذشته)', $labels, true),
+   'when growthepie fails, the active-address rows are left out, not shown as "unavailable"');
+update_option(\TheHybit\Coins\Cache::OPTION_ERRORS, []);
+
+$free();
 $int = (new C\Wikimedia($cfg2))->fetch($eth2, 'interest');
 ok(isset($int['fa'], $int['en']) && $int['fa']['title'] === 'اتریوم' && $int['en']['title'] === 'Ethereum', 'Wikipedia: Persian and English articles counted separately');
 ok($int['fa']['last7'] === array_sum(array_map(static fn($i) => 900 + $i * 10, range(8, 14))), 'the last seven full days, summed');
 $GLOBALS['thb_probe_background'] = false;
 
 $probeSrc2 = (string) file_get_contents(THB_COINS_DIR . 'includes/ProviderProbe.php');
-foreach (['v2 chainstats', 'v2 lidoapr', 'v2 whales', 'v2 ethlocations', 'v2 interest', 'v2 revenue'] as $entry) {
+foreach (['v2 activity', 'v2 stakingyield', 'v2 whales', 'v2 ethlocations', 'v2 interest', 'v2 revenue'] as $entry) {
     ok(str_contains($probeSrc2, $entry), "the Provider Probe has an entry for {$entry}");
 }
 

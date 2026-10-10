@@ -113,6 +113,10 @@ return [
            are the one fast-moving list here. */
         'chainstats'   => 6 * HOUR_IN_SECONDS,
         'lidoapr'      => HOUR_IN_SECONDS,
+        /* Replacements for the two geo-blocked sources (2.0.5). Both are
+           daily figures; asking more often returns the same row. */
+        'activity'     => 6 * HOUR_IN_SECONDS,
+        'stakingyield' => 6 * HOUR_IN_SECONDS,
         'whales'       => 10 * MINUTE_IN_SECONDS,
         'ethlocations' => HOUR_IN_SECONDS,
         'interest'     => 12 * HOUR_IN_SECONDS,
@@ -256,6 +260,8 @@ return [
            cache-only, so a render still costs exactly what it did. */
         'chainstats'   => ['provider' => 'coinmetrics', 'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
         'lidoapr'      => ['provider' => 'lido',        'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
+        'activity'     => ['provider' => 'growthepie',  'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
+        'stakingyield' => ['provider' => 'llamayields', 'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
         'whales'       => ['provider' => 'blockchair',  'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
         'ethlocations' => ['provider' => 'etherscan',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
         'interest'     => ['provider' => 'wikimedia',   'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
@@ -663,9 +669,16 @@ return [
            where the community tier includes them — exchange balances and
            flows, and supply untouched for a year). One request per coin per
            six hours. Its published limit is 10 requests per 6 seconds per IP. */
+        /* CoinMetrics and Lido refuse the production server by LOCATION
+           (Cloudflare 1009 "the site owner has banned the visitor's country";
+           Lido: "Access to our services from your current location is
+           unavailable"). No key or plan changes that, and routing around it
+           is not something this plugin does. Both stay switched off; their
+           figures come from growthepie and DefiLlama Yields, or are not shown.
+           Set 'enabled' back to true only on a server they serve. */
         'coinmetrics' => [
             'label'    => 'CoinMetrics',
-            'enabled'  => true,
+            'enabled'  => false,
             'base'     => 'https://community-api.coinmetrics.io/v4',
             'timeout'  => 12,
             'headers'  => [],
@@ -689,7 +702,7 @@ return [
            labelled as Lido's on the page. */
         'lido' => [
             'label'    => 'Lido',
-            'enabled'  => true,
+            'enabled'  => false,   // location-blocked; see CoinMetrics above
             'base'     => 'https://eth-api.lido.fi/v1',
             'timeout'  => 10,
             'headers'  => [],
@@ -698,6 +711,44 @@ return [
             'cooldown' => 10 * MINUTE_IN_SECONDS,
             'chains'   => ['Ethereum'],
             'datasets' => ['lidoapr'],
+        ],
+
+        /* growthepie — Ethereum ecosystem analytics, keyless. Daily active
+           addresses on mainnet, from its flat fundamentals export (every chain
+           and metric for ~90 days in one file). Public guidance: ≤ 10 calls a
+           minute; this asks four times a day. */
+        'growthepie' => [
+            'label'    => 'growthepie',
+            'enabled'  => true,
+            'base'     => 'https://api.growthepie.com/v1',
+            'timeout'  => 20,
+            'headers'  => [],
+            'min_interval' => 6,
+            'budget'   => ['per_minute' => 1, 'per_hour' => 6, 'per_day' => 24],
+            'cooldown' => 30 * MINUTE_IN_SECONDS,
+            'chains'   => ['Ethereum'],
+            'datasets' => ['activity'],
+            'origins'  => ['Ethereum' => 'ethereum'],   // growthepie origin_key by DefiLlama chain name
+            'metric'   => 'daa',                        // daily active addresses
+        ],
+
+        /* DefiLlama Yields — the stETH pool's daily yield, computed by
+           DefiLlama from on-chain data. Same organisation and network path as
+           the DefiLlama endpoints this server already reaches. */
+        'llamayields' => [
+            'label'    => 'DefiLlama Yields',
+            'enabled'  => true,
+            'base'     => 'https://yields.llama.fi',
+            'timeout'  => 15,
+            'headers'  => [],
+            'min_interval' => 2,
+            'budget'   => ['per_minute' => 2, 'per_hour' => 10, 'per_day' => 60],
+            'cooldown' => 15 * MINUTE_IN_SECONDS,
+            'chains'   => ['Ethereum'],
+            'datasets' => ['stakingyield'],
+            /* DefiLlama pool id by chain: "stETH — Lido"
+               (defillama.com/yields/pool/747c1d2a-c668-4682-b9f9-296708a3dd90). */
+            'pools'    => ['Ethereum' => '747c1d2a-c668-4682-b9f9-296708a3dd90'],
         ],
 
         /* Wikipedia page views (Wikimedia REST API) — free, keyless, official.
@@ -750,6 +801,10 @@ return [
             'dex'     => ['interval' => 6 * HOUR_IN_SECONDS,  'retain' => YEAR_IN_SECONDS],
             'l2'      => ['interval' => DAY_IN_SECONDS,       'retain' => 2 * YEAR_IN_SECONDS],
             'fx'      => ['interval' => 6 * HOUR_IN_SECONDS,  'retain' => 2 * YEAR_IN_SECONDS],
+            /* Etherscan's total ETH supply, kept so net inflation can be
+               measured from our own readings a week apart (2.0.5: CoinMetrics,
+               which supplied it, is location-blocked). */
+            'supply'  => ['interval' => 6 * HOUR_IN_SECONDS,  'retain' => YEAR_IN_SECONDS],
         ],
     ],
 

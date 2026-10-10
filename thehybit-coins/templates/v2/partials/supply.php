@@ -7,11 +7,11 @@
  * all-time high, 30-day volatility and the 90-day correlation with Bitcoin
  * (CoinGecko series), venue concentration (CoinGecko tickers).
  *
- * WHAT IS NOT: how much sits on exchanges, in DeFi contracts, in bridges or in
- * long-term wallets. Those need labelled-address datasets that are sold, not
- * published. They are listed by name as unavailable. Real yield needs an
- * inflation rate, which needs two supply readings far enough apart; until the
- * history table has them, only the APR is shown.
+ * WHAT IS NOT: how much sits in long-term wallets. Coin age has no free
+ * source this server can reach, so that row is not drawn at all. A slice
+ * whose source is merely late is listed by name as unavailable. Real yield
+ * needs an inflation rate, which needs two supply readings far enough apart;
+ * until the history table has them, only the APR is shown.
  */
 use TheHybit\Coins\Format;
 use TheHybit\Coins\V2\View;
@@ -46,7 +46,7 @@ $c = $v['coin'];
           <?php endforeach; ?>
         </ul>
       <?php endif; ?>
-      <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم یک سال جابه‌جا نشده باشد. منابع: Etherscan (استیکینگ، سوزاندن، WETH، پل‌ها) و CoinMetrics (صرافی‌ها، نگهداری بلندمدت).</p>
+      <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم در WETH. منابع: beaconcha.in (استیکینگ) و Etherscan (سوزاندن، WETH، پل‌ها، کیف پول‌های صرافی‌ها).</p>
     </div>
 
     <div class="v2-card v2-yield">
@@ -56,10 +56,10 @@ $c = $v['coin'];
           − تورم خالص عرضه <?= $s['inflation'] !== null ? View::n(Format::pct($s['inflation'], true, 2)) : '<span class="v2-muted">؟</span>' ?></p>
         <?php if ($s['realYield'] !== null) : ?>
           <p class="v2-yield__big"><?= View::n(Format::pct($s['realYield'], false, 2)) ?></p>
-          <p class="v2-muted">بازده واقعی سالانه = بازده استیکینگ منهای تغییر سالانه‌شده عرضه در ۷ روز گذشته (انتشار منهای سوزاندن، CoinMetrics)</p>
+          <p class="v2-muted">بازده واقعی سالانه = بازده استیکینگ منهای تغییر سالانه‌شده عرضه در ۷ روز گذشته (انتشار منهای سوزاندن، <bdi><?= esc_html((string) $s['inflationSource']) ?></bdi>)</p>
         <?php else : ?>
           <p class="v2-yield__big"><?= View::n(Format::pct($s['apr'], false, 2)) ?></p>
-          <p class="v2-muted">بازده استیکینگ؛ تورم عرضه هنوز دریافت نشده، پس بازده واقعی محاسبه نشده است.</p>
+          <p class="v2-muted">بازده استیکینگ؛ بازده واقعی وقتی محاسبه می‌شود که دو اندازه‌گیری عرضه با دست‌کم ۶ روز فاصله ثبت شده باشد.</p>
         <?php endif; ?>
         <p class="v2-source">بازده: <?= esc_html((string) $s['aprSource']) ?><?= $s['validators'] ? ' · ' . View::n(Format::num((float) $s['validators'], 0)) . ' اعتبارسنج' : '' ?></p>
         <?php if ($s['aprKind'] === 'formula') : ?>
@@ -68,7 +68,7 @@ $c = $v['coin'];
       <?php elseif ($s['inflation'] !== null) : ?>
         <p class="v2-yield__eq">این شبکه استیکینگ ندارد؛ تورم سالانه عرضه:</p>
         <p class="v2-yield__big"><?= View::n(Format::pct($s['inflation'], true, 2)) ?></p>
-        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته · <bdi>CoinMetrics</bdi></p>
+        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته · <bdi><?= esc_html((string) $s['inflationSource']) ?></bdi></p>
       <?php else : ?>
         <?= View::na($s['aprState'] === 'not_applicable' ? 'not_applicable' : 'pending', $s['aprState'] === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : 'بازده استیکینگ هنوز از هیچ منبعی نرسیده است') ?>
       <?php endif; ?>
