@@ -191,6 +191,8 @@ await page.goto(URL_, { waitUntil: 'networkidle' });
 const before = requests.length;
 
 ok(await page.evaluate(() => typeof window.__THB_V2__ === 'object' && !!window.__THB_V2__.chart), 'the v2 data island reached the page');
+ok(await page.$eval('a.v2-btn--primary', (a) => getComputedStyle(a).color) === 'rgb(3, 32, 25)',
+   'a primary button that is a link keeps its dark text on the teal fill (contrast), not the inherited light text');
 
 const d0 = await page.getAttribute('[data-v2-line]', 'd');
 await page.click('[data-v2-range="24h"]');
