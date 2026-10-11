@@ -67,6 +67,9 @@ final class CoinRepository
         'thb_unlocks'             => 'meta.unlocks',
         'thb_wikipedia'           => 'meta.wikipedia',
         'thb_price_events'        => 'meta.priceEvents',
+        // per-coin SEO, written by hand: unique title and meta description
+        'thb_seo_title'           => 'meta.seoTitle',
+        'thb_meta_description'    => 'meta.metaDescription',
 
         // per-coin provider toggles
         'thb_enable_defi'         => 'flags.defillama',

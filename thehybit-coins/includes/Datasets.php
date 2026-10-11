@@ -182,19 +182,32 @@ final class Datasets
     public function forCoin(Coin $coin): array
     {
         $out = [];
-        foreach ($this->all() as $dataset => $spec) {
-            $provider = $spec['provider'] ?? null;
-            if ($provider === null || !$coin->usesProvider($provider, $this->config)) {
-                continue;
+        foreach (array_keys($this->all()) as $dataset) {
+            if ($this->covers($dataset, $coin)) {
+                $out[] = $dataset;
             }
-            if (!$this->isEnabled($dataset)) {
-                continue;
-            }
-            if (!$this->servesChain($provider, $coin)) {
-                continue;
-            }
-            $out[] = $dataset;
         }
         return $out;
+    }
+
+    /**
+     * Does this dataset exist for this coin at all: its provider is on and not
+     * switched off for the coin, it covers the coin's chain, and the coin has
+     * the identifier the dataset needs (`requires`, a coin meta key — a
+     * GitHub repository for `development`). The scheduler queues only these,
+     * and the v2 page draws only these.
+     */
+    public function covers(string $dataset, Coin $coin): bool
+    {
+        $spec = $this->all()[$dataset] ?? null;
+        $provider = $spec['provider'] ?? null;
+        if ($provider === null || !$coin->usesProvider($provider, $this->config) || !$this->isEnabled($dataset)) {
+            return false;
+        }
+        if (!$this->servesChain($provider, $coin)) {
+            return false;
+        }
+        $requires = $spec['requires'] ?? null;
+        return $requires === null || trim((string) $coin->meta($requires, '')) !== '';
     }
 }

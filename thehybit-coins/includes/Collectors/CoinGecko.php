@@ -388,7 +388,11 @@ final class CoinGecko extends Collector
      */
     private function peers(): ?array
     {
-        $ids = array_values(array_filter(array_map('strval', (array) ($this->config['peers'] ?? []))));
+        $ids = (array) ($this->config['peers'] ?? []);
+        foreach ((array) ($this->config['peer_groups'] ?? []) as $group) {
+            $ids = array_merge($ids, (array) $group);
+        }
+        $ids = array_values(array_unique(array_filter(array_map('strval', $ids))));
         if ($ids === []) {
             return null;
         }

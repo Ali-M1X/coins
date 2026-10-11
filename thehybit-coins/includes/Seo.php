@@ -89,6 +89,12 @@ final class Seo
             return $title;
         }
 
+        // The coin's own, hand-written title when there is one.
+        $own = trim((string) $coin->meta('seoTitle', ''));
+        if ($own !== '') {
+            return $own;
+        }
+
         return sprintf(
             'قیمت %s (%s) — نمودار، تحلیل و اخبار | %s',
             $coin->name,
@@ -110,6 +116,12 @@ final class Seo
         $manual = get_post_meta($coin->postId, '_yoast_wpseo_metadesc', true);
         if (is_string($manual) && trim($manual) !== '') {
             return $desc;
+        }
+
+        // The coin's own, hand-written description when there is one.
+        $own = trim((string) $coin->meta('metaDescription', ''));
+        if ($own !== '') {
+            return $own;
         }
 
         // Built from live values so the description reflects the actual page.

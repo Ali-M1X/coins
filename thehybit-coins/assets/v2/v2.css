@@ -647,3 +647,13 @@ html:has(.thb-v2) { overflow-x: clip; }
   .v2-supply__grid .v2-cockpit { grid-column: auto; }
 }
 .v2-about .v2-note { margin-top: var(--v2-gap); }
+
+/* 2.3.0 — sections that adapt to what a coin has a source for. */
+@container v2 (min-width: 768px) {
+  .v2-flow__grid.v2-flow__grid--nosankey { grid-template-columns: minmax(0, 1fr); }
+  .v2-flow__grid--nosankey .v2-flow__side { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .v2-supply__grid.v2-supply__grid--1 { grid-template-columns: minmax(0, 1fr); }
+}
+@container v2 (min-width: 1120px) {
+  .v2-supply__grid.v2-supply__grid--2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}

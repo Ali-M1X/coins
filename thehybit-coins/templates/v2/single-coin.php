@@ -37,7 +37,7 @@ $parts = THB_COINS_DIR . 'templates/v2/partials/';
 $nav = [
     'overview'   => 'نگاه کلی',
     'ecosystem'  => 'اکوسیستم',
-    'flow'       => 'جریان زنجیره',
+    'flow'       => $v['flow']['showSankey'] ? 'جریان زنجیره' : 'شبکه',
     'story'      => 'داستان',
     'dna'        => 'DNA',
     'price-story' => 'قیمت به‌روایت',
@@ -81,21 +81,21 @@ get_header();
 
     <nav class="v2-tabs" aria-label="بخش‌های صفحه">
       <ul class="v2-tabs__list">
-        <?php foreach ($nav as $id => $label) : ?>
+        <?php foreach ($nav as $id => $label) : if (!($v['sections'][$id]['show'] ?? true)) { continue; } ?>
           <li><a class="v2-tabs__link" href="#<?= esc_attr($id) ?>" data-v2-tab="<?= esc_attr($id) ?>"><?= esc_html($label) ?></a></li>
         <?php endforeach; ?>
       </ul>
     </nav>
 
     <?php
-    require $parts . 'ecosystem.php';
-    require $parts . 'flow.php';
-    require $parts . 'story.php';
-    require $parts . 'dna.php';
-    require $parts . 'price-story.php';
-    require $parts . 'pulse.php';
-    require $parts . 'peers.php';
-    require $parts . 'supply.php';
+    /* A section with nothing this coin has a source for is left out, tab
+       and all (Model::sections()): no stablecoin page carries an empty
+       "chain flow". */
+    foreach (['ecosystem', 'flow', 'story', 'dna', 'price-story', 'pulse', 'peers', 'supply'] as $section) {
+        if ($v['sections'][$section]['show'] ?? true) {
+            require $parts . $section . '.php';
+        }
+    }
     require $parts . 'about.php';
     ?>
 

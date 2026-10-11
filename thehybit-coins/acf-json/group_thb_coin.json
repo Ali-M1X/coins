@@ -387,6 +387,24 @@
             "new_lines": ""
         },
         {
+            "key": "field_thb_seo_title",
+            "label": "عنوان سئو",
+            "name": "thb_seo_title",
+            "type": "text",
+            "instructions": "عنوان صفحه در نتایج جستجو، مخصوص همین ارز. خالی = «قیمت نام (نماد) — نمودار، تحلیل و اخبار». عنوان دستی Yoast همیشه مقدم است.",
+            "required": 0
+        },
+        {
+            "key": "field_thb_meta_description",
+            "label": "توضیحات متا",
+            "name": "thb_meta_description",
+            "type": "textarea",
+            "instructions": "توضیح صفحه در نتایج جستجو (حدود ۱۵۰ کاراکتر)، مخصوص همین ارز. خالی = متن عمومی. توضیح دستی Yoast همیشه مقدم است.",
+            "required": 0,
+            "rows": 3,
+            "new_lines": ""
+        },
+        {
             "key": "field_thb_learn",
             "label": "یادگیری در ۶۰ ثانیه",
             "name": "thb_learn",

@@ -320,9 +320,13 @@ section('bitcoin');
 
 $btc = v2_render(11);
 ok(!str_contains($btc, 'Warning:') && str_contains($btc, 'id="supply"'), 'the Bitcoin v2 page renders');
-ok(str_contains($btc, 'داده دیفای برای این ارز خاموش است'), 'its ecosystem says DeFi is switched off for it, not "loading"');
+ok(!str_contains($btc, 'id="ecosystem"') && !str_contains($btc, 'data-v2-tab="ecosystem"') && !str_contains($btc, 'داده دیفای برای این ارز خاموش است'),
+   'it has no ecosystem section or tab at all — DeFi has no source for Bitcoin (2.3.0)');
+ok(str_contains($btc, 'شبکه بیت‌کوین') && !str_contains($btc, 'v2-flow__sankey') && !str_contains($btc, 'گس پیشنهادی'),
+   'its flow section is «شبکه بیت‌کوین»: network pulse and whales, no fee Sankey and no Ethereum gas row');
 ok(!str_contains($btc, '1,062,000'), 'and it shows no Ethereum validator count');
-ok(str_contains($btc, 'کاربرد ندارد'), 'staking and gas are "not applicable" on Bitcoin');
+ok(str_contains($btc, 'این شبکه استیکینگ ندارد') || !str_contains($btc, 'بازده استیکینگ (APR)'),
+   'staking is not presented as missing data on Bitcoin: no APR row, and proof of work is named as the reason where supply growth shows');
 
 /* =====================================================================
  * 10. Model arithmetic
@@ -389,7 +393,9 @@ ok(!in_array('protocols', $sets->forCoin($btcCoin), true), 'but no protocol list
 $GLOBALS['thb_probe_background'] = true;
 foreach (array_keys($cfg['providers']) as $prov) { (new TheHybit\Coins\Budget($cfg))->reset($prov); }
 $peers = (new C\CoinGecko($cfg))->fetch($eth, 'peers');
-ok(count($peers['peers'] ?? []) === count($cfg['peers']), 'peers: one row per configured id, from ONE request');
+$peerIds = $cfg['peers'];
+foreach ($cfg['peer_groups'] as $g) { $peerIds = array_merge($peerIds, $g); }
+ok(count($peers['peers'] ?? []) === count(array_unique($peerIds)), 'peers: one row per id in every peer group (' . count(array_unique($peerIds)) . '), from ONE request');
 ok(Probe::count('/coins/markets') >= 1 && str_contains((string) end(Probe::$calls)['url'] ?? '', 'ids='), 'asked by id list');
 
 $GLOBALS['thb_probe_override'] = [['id' => 'x', 'symbol' => 'x'], ['id' => 'y', 'symbol' => 'y', 'market_cap' => 5, 'sparkline_in_7d' => ['price' => [1, 'bad', 2]]]];
@@ -815,13 +821,14 @@ for ($minute = 0; $minute < 120; $minute++) {
 }
 $GLOBALS['thb_probe_background'] = false;
 $perHour = $listCalls / 2;
-ok($perHour >= 18 && $perHour <= 22, "the list costs {$perHour} CoinGecko requests an hour (one a tick at most; ~20 expected)");
+ok($perHour >= 7 && $perHour <= 9, "the list costs {$perHour} CoinGecko requests an hour (page 1 every 10 min, pages 2–5 every 2 h: ~8 expected)");
 
 /* The scheduler: one list page a tick, through the budget, after the ticker. */
 $schedSrc = (string) file_get_contents(THB_COINS_DIR . 'includes/Scheduler.php');
-ok(strpos($schedSrc, '0b. One page of the /coins/ list') > strpos($schedSrc, '0. The live price')
+ok(strpos($schedSrc, '1b. One page of the /coins/ list') > strpos($schedSrc, '1. The batch, which serves every coin')
+   && strpos($schedSrc, '1. The batch, which serves every coin') > strpos($schedSrc, '0. The live price')
    && str_contains($schedSrc, "\$this->listing->due()") && str_contains($schedSrc, "refuse('coingecko')"),
-   'the scheduler asks for at most one list page a tick, after the live price and through the CoinGecko budget');
+   'the scheduler asks for at most one list page a tick, after the live price AND the market batch, through the CoinGecko budget');
 
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);

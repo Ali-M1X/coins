@@ -125,7 +125,7 @@ abstract class Collector
 
         // Counted before the response arrives: a request that times out still
         // consumed the provider's allowance.
-        $this->budget()->record($this->id());
+        $this->budget()->record($this->id(), $this->reserved);
 
         $started = microtime(true);
         $response = wp_remote_get($url, [

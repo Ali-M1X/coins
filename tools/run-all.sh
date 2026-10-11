@@ -86,6 +86,10 @@ THB_DUMP_HTML="$PWD/v2.html" \
   run "Design v2 — switch, screens, no invented figures, request cost" \
       php tools/v2-render.test.php
 
+THB_TOP20_DIR="$PWD" \
+  run "Top-20 coin pages — config, unique SEO/FAQ, sections by source" \
+      php tools/top20.test.php
+
 if [ -f node_modules/playwright/package.json ]; then
   run "Browser — RTL, responsive, progressive enhancement" \
       node tools/dom.test.mjs

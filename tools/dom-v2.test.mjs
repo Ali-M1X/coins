@@ -205,6 +205,26 @@ for (const [width, cols] of [[1440, 9], [900, 7], [390, 4]]) {
   await p.close();
 }
 
+/* ---- top-20 pages that drop sections: no script errors, no sideways scroll ---- */
+for (const slug of ['tether', 'dogecoin', 'solana']) {
+  for (const width of [1440, 390]) {
+    const p = await browser.newPage({ viewport: { width, height: 900 } });
+    const errors = [];
+    p.on('pageerror', (e) => errors.push(String(e)));
+    await p.goto(`http://localhost:${PORT}/v2-${slug}.html`, { waitUntil: 'load' });
+    const r = await p.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      tabs: [...document.querySelectorAll('[data-v2-tab]')].map((a) => a.dataset.v2Tab),
+      missing: [...document.querySelectorAll('[data-v2-tab]')].map((a) => a.dataset.v2Tab).filter((id) => !document.getElementById(id)),
+    }));
+    const orphan = r.missing;
+    ok(errors.length === 0 && r.overflow <= 0 && orphan.length === 0,
+       `${slug} at ${width}px: no script error, no sideways scroll, every tab has its section (${r.tabs.length} tabs)` +
+       (errors.length ? ' — ' + errors[0] : '') + (orphan.length ? ' orphan: ' + orphan.join(',') : ''));
+    await p.close();
+  }
+}
+
 /* ---- interactions, desktop ---- */
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const requests = [];

@@ -23,7 +23,9 @@ $c = $v['coin'];
 <section class="v2-section v2-supply" id="supply" aria-labelledby="supply-title">
   <?= View::heading('supply', 'تامین و ریسک واقعی', 'چه بخشی از عرضه کجاست، و این دارایی امروز چقدر پرریسک است') ?>
 
-  <div class="v2-supply__grid">
+  <?php $cards = 1 + (int) $s['showDist'] + (int) $s['showYield']; ?>
+  <div class="v2-supply__grid v2-supply__grid--<?= $cards ?>">
+    <?php if ($s['showDist']) : ?>
     <div class="v2-card v2-dist">
       <h3 class="v2-card__title">توزیع عرضه</h3>
       <?php if ($s['slices'] !== []) : ?>
@@ -46,11 +48,17 @@ $c = $v['coin'];
           <?php endforeach; ?>
         </ul>
       <?php endif; ?>
-      <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم در WETH. منابع: beaconcha.in (استیکینگ) و Etherscan (سوزاندن، WETH، پل‌ها، کیف پول‌های صرافی‌ها).</p>
+      <?php if ($s['missing'] !== [] || count($s['slices']) > 2) : ?>
+        <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم در WETH. منابع: beaconcha.in (استیکینگ) و Etherscan (سوزاندن، WETH، پل‌ها، کیف پول‌های صرافی‌ها).</p>
+      <?php else : ?>
+        <p class="v2-muted">منبع: <bdi>CoinGecko</bdi> (عرضه در گردش، کل و سقف عرضه).</p>
+      <?php endif; ?>
     </div>
+    <?php endif; ?>
 
+    <?php if ($s['showYield']) : ?>
     <div class="v2-card v2-yield">
-      <h3 class="v2-card__title">بازده واقعی</h3>
+      <h3 class="v2-card__title"><?= $s['apr'] !== null ? 'بازده واقعی' : 'رشد عرضه' ?></h3>
       <?php if ($s['apr'] !== null) : ?>
         <p class="v2-yield__eq">بازده استیکینگ <?= View::n(Format::pct($s['apr'], false, 2)) ?>
           − تورم خالص عرضه <?= $s['inflation'] !== null ? View::n(Format::pct($s['inflation'], true, 2)) : '<span class="v2-muted">؟</span>' ?></p>
@@ -66,13 +74,14 @@ $c = $v['coin'];
           <p class="v2-muted">این عدد اندازه‌گیری نیست: حداکثر بازده لایه اجماع است که از فرمول پروتکل و کل اتر سپرده‌شده محاسبه شده؛ کارمزد اولویت و MEV در آن نیست.</p>
         <?php endif; ?>
       <?php elseif ($s['inflation'] !== null) : ?>
-        <p class="v2-yield__eq">این شبکه استیکینگ ندارد؛ تورم سالانه عرضه:</p>
+        <p class="v2-yield__eq"><?= $s['isPow'] ? 'این شبکه استیکینگ ندارد؛ ' : '' ?>تورم سالانه‌شده عرضه:</p>
         <p class="v2-yield__big"><?= View::n(Format::pct($s['inflation'], true, 2)) ?></p>
-        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته · <bdi><?= esc_html((string) $s['inflationSource']) ?></bdi></p>
+        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته، از اندازه‌گیری‌های خود سایت · <bdi><?= esc_html((string) $s['inflationSource']) ?></bdi></p>
       <?php else : ?>
-        <?= View::na($s['aprState'] === 'not_applicable' ? 'not_applicable' : 'pending', $s['aprState'] === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : 'بازده استیکینگ هنوز از هیچ منبعی نرسیده است') ?>
+        <?= View::na('pending', 'رشد عرضه از اندازه‌گیری‌هایی با دست‌کم ۶ روز فاصله محاسبه می‌شود') ?>
       <?php endif; ?>
     </div>
+    <?php endif; ?>
 
     <div class="v2-card v2-cockpit">
       <h3 class="v2-card__title">کابین ریسک</h3>

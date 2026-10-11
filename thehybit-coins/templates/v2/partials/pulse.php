@@ -40,6 +40,7 @@ $c = $v['coin'];
         </ul>
       <?php endif; ?>
 
+      <?php if ($p['showHeat']) : ?>
       <div class="v2-card v2-heat">
         <h3 class="v2-card__title">حرارت اکوسیستم امروز</h3>
         <?php if ($p['heat'] !== []) : ?>
@@ -57,6 +58,7 @@ $c = $v['coin'];
           <?= View::na($p['heatState']) ?>
         <?php endif; ?>
       </div>
+      <?php endif; ?>
     </div>
 
     <aside class="v2-pulse__side">

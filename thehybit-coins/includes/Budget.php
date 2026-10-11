@@ -81,10 +81,22 @@ final class Budget
         $reserve = $reserved ? 0 : max(0, (int) ($this->settings($provider)['reserve_per_minute'] ?? 0));
 
         foreach ($this->limits($provider) as $window => $max) {
-            if ($window === 'per_minute') {
-                $max = max(1, $max - $reserve);
-            }
             $used = $this->used($provider, $window);
+            if ($window === 'per_minute' && $reserve > 0) {
+                /* THE RESERVE (2.3.0). What the reserved caller (the live
+                   ticker, once a tick) will find in its window next time is,
+                   roughly, everything since its own last call — so ordinary
+                   calls stop once that leaves too little room for it, while
+                   the minute's total still never passes `per_minute`. The old
+                   rule subtracted the reserve from the TOTAL, which already
+                   held the ticker's own calls: the reserve was counted twice,
+                   and with ticks 55 s apart ordinary work got a slot only
+                   every other tick. */
+                $since = $this->sinceReserved($provider);
+                if ($since >= max(1, $max - $reserve)) {
+                    return sprintf('%s budget spent (%d/%d since the reserved call)', $window, $since, max(1, $max - $reserve));
+                }
+            }
             if ($used >= $max) {
                 return sprintf('%s budget spent (%d/%d)', $window, $used, $max);
             }
@@ -93,8 +105,25 @@ final class Budget
         return null;
     }
 
+    /**
+     * Calls in the current minute made at or after the last reserved call —
+     * all of the minute's calls when there was no reserved call in it.
+     */
+    private function sinceReserved(string $provider): int
+    {
+        $entry = get_transient($this->counterKey($provider, 'per_minute'));
+        $now = time();
+        $stamps = array_filter((array) ($entry['stamps'] ?? []), static fn($t) => $now - (int) $t < 60);
+        $held = array_filter((array) ($entry['reserved'] ?? []), static fn($t) => $now - (int) $t < 60);
+        if ($held === []) {
+            return count($stamps);
+        }
+        $last = max(array_map('intval', $held));
+        return count(array_filter($stamps, static fn($t) => (int) $t >= $last));
+    }
+
     /** Record one outbound request against every window. */
-    public function record(string $provider): void
+    public function record(string $provider, bool $reserved = false): void
     {
         foreach (array_keys($this->limits($provider)) as $window) {
             $seconds = self::WINDOWS[$window];
@@ -115,7 +144,14 @@ final class Budget
                     static fn($t) => $now - (int) $t < $seconds
                 ));
                 $stamps[] = $now;
-                set_transient($key, ['stamps' => $stamps], $seconds * 2);
+                $held = array_values(array_filter(
+                    (array) ($entry['reserved'] ?? []),
+                    static fn($t) => $now - (int) $t < $seconds
+                ));
+                if ($reserved) {
+                    $held[] = $now;
+                }
+                set_transient($key, ['stamps' => $stamps, 'reserved' => $held], $seconds * 2);
                 continue;
             }
 

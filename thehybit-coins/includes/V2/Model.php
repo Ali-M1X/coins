@@ -97,6 +97,9 @@ final class Model
 
     private ?Coin $coin = null;
 
+    /** What each section could not show for this coin, and why: section => [text]. */
+    private array $gaps = [];
+
     /** @param History|null $history our own stored readings (net inflation from Etherscan supply) */
     public function __construct(private array $config, private Cache $cache, private ?\TheHybit\Coins\History $history = null)
     {
@@ -113,6 +116,7 @@ final class Model
         $long      = $this->peek('longchart', $coin, 'DefiLlama');
         $bench     = $this->benchmarkYear($coin);
         $this->coin = $coin;
+        $this->gaps = [];
         $this->x = [
             'chainstats'   => $this->peek('chainstats', $coin, 'CoinMetrics'),
             'lidoapr'      => $this->peek('lidoapr', $coin, 'Lido'),
@@ -156,6 +160,7 @@ final class Model
             'generatedAt' => $m['meta']['generatedAt'] ?? gmdate('c', time()),
         ];
         $v['sources'] = $this->sources($m, ['peers' => $peers, 'protocols' => $protocols, 'longchart' => $long] + $this->x);
+        $v['sections'] = $this->sections($v);
 
         return $v;
     }
@@ -285,17 +290,29 @@ final class Model
         $apr = $this->stakingApr($m);
         $active = $this->activeAddresses();
 
-        $rows = [
-            self::metric('ارزش کل قفل‌شده (TVL)', isset($defi['tvl']) ? Format::usdCompact((float) $defi['tvl']) : null,
-                $defi['tvlChange7d'] ?? null, '۷ روز', 'DefiLlama', $m['defi'] ? null : 'این زنجیره داده دیفای ندارد'),
-            self::metric('کارمزد پرداختی (۲۴ ساعت)', isset($defi['fees24h']) ? Format::usdCompact((float) $defi['fees24h']) : null,
-                $defi['feesChange24h'] ?? null, '۱ روز', 'DefiLlama', $m['defi'] ? null : 'این زنجیره داده کارمزد ندارد'),
-            self::metric('بازده استیکینگ (APR)', $apr ? Format::pct($apr['value'], false) : null,
-                null, null, $apr['source'] ?? null,
-                ($staking['state'] ?? '') === 'not_applicable' ? 'این شبکه استیکینگ ندارد' : 'در حال دریافت داده', $apr['detail'] ?? null),
-            self::metric('عرضه استیبل‌کوین روی زنجیره', ($stable['available'] ?? false) ? Format::usdCompact((float) $stable['value']) : null,
-                null, null, 'DefiLlama', self::stateNote('unavailable')),
-        ];
+        /* A row is drawn only where a source exists for THIS coin. A token
+           that is not a chain has no chain TVL; a chain no free provider
+           reports staking for gets no staking row — not a row saying it has
+           none, which would be false for Solana or Cardano. */
+        $rows = [];
+        if ($this->applies('defi')) {
+            $rows[] = self::metric('ارزش کل قفل‌شده (TVL)', isset($defi['tvl']) ? Format::usdCompact((float) $defi['tvl']) : null,
+                $defi['tvlChange7d'] ?? null, '۷ روز', 'DefiLlama', self::stateNote('pending'));
+            $rows[] = self::metric('کارمزد پرداختی (۲۴ ساعت)', isset($defi['fees24h']) ? Format::usdCompact((float) $defi['fees24h']) : null,
+                $defi['feesChange24h'] ?? null, '۱ روز', 'DefiLlama', self::stateNote('pending'));
+        } else {
+            $this->gap('overview', 'ارزش قفل‌شده، کارمزد و استیبل‌کوین روی زنجیره', 'na');
+        }
+        if ($apr !== null || $this->applies('staking') || $this->applies('stakingyield')) {
+            $rows[] = self::metric('بازده استیکینگ (APR)', $apr ? Format::pct($apr['value'], false) : null,
+                null, null, $apr['source'] ?? null, self::stateNote('pending'), $apr['detail'] ?? null);
+        } else {
+            $this->gap('overview', 'بازده استیکینگ', $this->stakingNa() ? 'na' : 'nosource');
+        }
+        if ($this->applies('defi')) {
+            $rows[] = self::metric('عرضه استیبل‌کوین روی زنجیره', ($stable['available'] ?? false) ? Format::usdCompact((float) $stable['value']) : null,
+                null, null, 'DefiLlama', self::stateNote('pending'));
+        }
         /* Shown while its source has a figure (or has not been asked yet);
            left out entirely when no source can supply one — no permanent
            empty row. */
@@ -303,6 +320,8 @@ final class Model
             $rows[] = self::metric('آدرس‌های فعال روزانه', $active ? Format::num($active['latest'], 0) : null,
                 $active ? self::change($active['latest'], $active['weekAgo']) : null, '۷ روز', $active['source'] ?? 'growthepie',
                 self::stateNote('pending'), $active ? 'روز ' . Format::jalaliShort($active['date']) . ' · ' . $active['source'] : null);
+        } else {
+            $this->gap('overview', 'آدرس‌های فعال روزانه');
         }
         return $rows;
     }
@@ -437,30 +456,33 @@ final class Model
         $isPos = ($staking['state'] ?? '') !== 'not_applicable';
 
         $pulse = [
-            ['label' => 'زمان بلوک (میانگین)', 'value' => isset($nd['blockTime']) ? Format::num((float) $nd['blockTime'], 1) . ' ثانیه' : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair'],
-            ['label' => 'گس پیشنهادی', 'value' => isset($gas['data']['propose']) ? Format::num((float) $gas['data']['propose'], 2) . ' Gwei' : null, 'state' => $gas['state'] ?? 'unavailable', 'source' => 'Etherscan'],
-            ['label' => 'تراکنش‌های در انتظار', 'value' => isset($nd['mempool']) ? Format::num((float) $nd['mempool'], 0) : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair'],
-            ['label' => 'تراکنش‌ها (۲۴ ساعت)', 'value' => isset($nd['transactions24h']) ? Format::compact((float) $nd['transactions24h']) : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair'],
+            ['label' => 'زمان بلوک (میانگین)', 'value' => isset($nd['blockTime']) ? Format::num((float) $nd['blockTime'], 1) . ' ثانیه' : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair', 'ds' => 'network'],
+            ['label' => 'گس پیشنهادی', 'value' => isset($gas['data']['propose']) ? Format::num((float) $gas['data']['propose'], 2) . ' Gwei' : null, 'state' => $gas['state'] ?? 'unavailable', 'source' => 'Etherscan', 'ds' => 'gas'],
+            ['label' => 'تراکنش‌های در انتظار', 'value' => isset($nd['mempool']) ? Format::num((float) $nd['mempool'], 0) : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair', 'ds' => 'network'],
+            ['label' => 'تراکنش‌ها (۲۴ ساعت)', 'value' => isset($nd['transactions24h']) ? Format::compact((float) $nd['transactions24h']) : null, 'state' => $network['state'] ?? 'unavailable', 'source' => 'Blockchair', 'ds' => 'network'],
         ];
         $active = $this->activeAddresses();
         if ($active || $this->awaiting('activity')) {
             $pulse[] = ['label' => 'آدرس‌های فعال (روز گذشته)', 'value' => $active ? Format::num($active['latest'], 0) : null,
-                        'state' => 'pending', 'source' => $active['source'] ?? 'growthepie'];
+                        'state' => 'pending', 'source' => $active['source'] ?? 'growthepie', 'ds' => null];
         }
         if ($isPos) {
             $pulse[] = ['label' => 'اعتبارسنج‌های فعال', 'value' => isset($sd['validators']) ? Format::num((float) $sd['validators'], 0) : null,
-                        'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in'];
+                        'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in', 'ds' => 'staking'];
             /* Proof of stake has no hash rate. Its security budget is the ETH
                at stake, which is what takes the hash-rate row's place. */
             $staked = $sd['stakedEth'] ?? null;   // beaconcha.in: validators' total balance
             $pulse[] = ['label' => 'اتر در استیکینگ (امنیت شبکه)', 'value' => is_numeric($staked) ? Format::compact((float) $staked) . ' ETH' : null,
-                        'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in'];
+                        'state' => $staking['state'] ?? 'unavailable', 'source' => 'beaconcha.in', 'ds' => 'staking'];
         } else {
             $cmHash = $this->cm('HashRate');
             $hash = isset($nd['hashrate']) ? (float) $nd['hashrate'] : ($cmHash ? $cmHash['latest'] * 1e12 : null);   // CoinMetrics reports TH/s
             $pulse[] = ['label' => 'هش‌ریت', 'value' => $hash !== null ? self::hashrate($hash) : null,
-                        'state' => $network['state'] ?? 'unavailable', 'source' => isset($nd['hashrate']) ? 'Blockchair' : 'CoinMetrics'];
+                        'state' => $network['state'] ?? 'unavailable', 'source' => isset($nd['hashrate']) ? 'Blockchair' : 'CoinMetrics', 'ds' => 'network'];
         }
+        /* Only rows a source exists for, for this coin: no Etherscan gas on
+           Solana, no Blockchair figures on a token. */
+        $pulse = array_values(array_filter($pulse, fn($row) => $row['ds'] === null || $this->applies($row['ds'])));
 
         $healthy = null;
         if (($staking['available'] ?? false) && isset($sd['participation'])) {
@@ -500,14 +522,14 @@ final class Model
             'state'     => $this->x['whales']['state'] ?? 'unavailable',
             'min'       => $wd['min'] ?? null,
             'fetchedAt' => $this->x['whales']['fetchedAt'] ?? null,
-            'rows'      => array_map(static fn($t) => [
+            'rows'      => array_map(fn($t) => [
                 // Whole coins below 100,000: "1,500 ETH", never a rounded "2K".
                 'amount' => ($t['amount'] < 100000 ? Format::num((float) $t['amount'], 0) : Format::compact((float) $t['amount'], 1)) . ' ' . $symbol,
                 'usd'    => isset($t['usd']) ? Format::usdCompact((float) $t['usd'], 1) : null,
                 'from'   => isset($t['from']) ? Format::shortAddress($t['from'], 6, 4) : null,
                 'to'     => isset($t['to']) ? Format::shortAddress($t['to'], 6, 4) : null,
                 'time'   => isset($t['time']) ? Format::tehranTime(str_replace(' ', 'T', (string) $t['time']) . 'Z') : null,
-                'url'    => 'https://blockchair.com/' . ($symbol === 'BTC' ? 'bitcoin' : 'ethereum') . '/transaction/' . rawurlencode((string) $t['hash']),
+                'url'    => 'https://blockchair.com/' . $this->blockchairSlug() . '/transaction/' . rawurlencode((string) $t['hash']),
             ], array_slice((array) ($wd['transfers'] ?? []), 0, 6)),
         ];
 
@@ -523,6 +545,8 @@ final class Model
             'ribbonsSources' => $ok ? Svg::ribbons(array_column($left, 'share'), 850, 580, 20, 360, 12, 140, 120) : [],
             'ribbonsDest'    => $ok && $right !== [] ? Svg::ribbons(array_column($right, 'share'), 150, 420, 60, 280, 24, 140, 120, 60) : [],
             'whales'  => $whales,
+            'showSankey' => $this->applies('protocols'),
+            'showWhales' => $this->applies('whales'),
             'exchange' => $exchange,
             'pulse'   => $pulse,
             'healthy' => $healthy,
@@ -678,16 +702,16 @@ final class Model
             'sparks' => [
                 ['label' => 'قیمت', 'span' => '۷ روز', 'd' => Svg::line(Svg::thin((array) ($s7['price'] ?? []), 60), 180, 44, 3), 'tone' => 'green'],
                 ['label' => 'حجم معاملات', 'span' => '۷ روز', 'd' => Svg::line(Svg::thin((array) ($s7['volume'] ?? []), 60), 180, 44, 3), 'tone' => 'violet'],
-                ['label' => 'ارزش قفل‌شده', 'span' => count((array) ($defi['sparkline'] ?? [])) . ' روز', 'd' => Svg::line((array) ($defi['sparkline'] ?? []), 180, 44, 3), 'tone' => 'amber'],
+                ...($this->applies('defi') ? [['label' => 'ارزش قفل‌شده', 'span' => count((array) ($defi['sparkline'] ?? [])) . ' روز', 'd' => Svg::line((array) ($defi['sparkline'] ?? []), 180, 44, 3), 'tone' => 'amber']] : []),
             ],
             'cards' => [
                 ['title' => 'نقدشوندگی', 'value' => isset($mk['volume24h']) ? Format::usdCompact((float) $mk['volume24h'], 1) : null,
                  'sub' => ($m['derived']['volumeToMarketCap']['available'] ?? false)
                     ? 'حجم ۲۴ ساعته · ' . Format::pct((float) $m['derived']['volumeToMarketCap']['value'] * 100, false, 1) . ' از ارزش بازار' : 'حجم ۲۴ ساعته'],
-                ['title' => 'ارزش قفل‌شده', 'value' => isset($defi['tvl']) ? Format::usdCompact((float) $defi['tvl'], 1) : null,
+                ...($this->applies('defi') ? [['title' => 'ارزش قفل‌شده', 'value' => isset($defi['tvl']) ? Format::usdCompact((float) $defi['tvl'], 1) : null,
                  'sub' => ($m['derived']['tvlToMarketCap']['available'] ?? false)
                     ? Format::pct((float) $m['derived']['tvlToMarketCap']['value'] * 100, false, 1) . ' از ارزش بازار' : null,
-                 'note' => isset($defi['tvl']) ? null : 'این زنجیره داده دیفای ندارد'],
+                 'note' => isset($defi['tvl']) ? null : self::stateNote('pending')]] : []),
                 $this->interestCard(),
                 ['title' => 'ریسک نوسان', 'value' => $vol !== null ? Format::pct($vol, false, 0) : null,
                  'sub' => $corr !== null ? 'همبستگی با بیت‌کوین ' . Format::ratio($corr, 2)
@@ -953,6 +977,7 @@ final class Model
             'chips'  => array_slice($chips, 0, 4),
             'heat'   => $heat,
             'heatState' => $protocols['state'],
+            'showHeat' => $this->applies('protocols'),
         ];
     }
 
@@ -977,6 +1002,19 @@ final class Model
 
         // This coin is always in the comparison, with its own (fresher) figures.
         $self = $coin->coingeckoId;
+        /* Compared within its own kind: the first configured group that
+           lists it (stablecoins with stablecoins, memecoins with memecoins);
+           a coin in no group gets the default list. */
+        $group = (array) ($this->config['peers'] ?? []);
+        foreach ((array) ($this->config['peer_groups'] ?? []) as $ids) {
+            if (in_array($self, (array) $ids, true)) {
+                $group = (array) $ids;
+                break;
+            }
+        }
+        $order = array_flip($group);
+        $rows = array_values(array_filter($rows, static fn($r) => isset($order[$r['id']])));
+        usort($rows, static fn($a, $b) => $order[$a['id']] <=> $order[$b['id']]);
         $mk = (array) ($m['market'] ?? []);
         $found = false;
         $list = [];
@@ -1094,6 +1132,14 @@ final class Model
             $issued = (float) $mk['circulatingSupply'] / (float) $mk['maxSupply'] * 100;
             $slices[] = ['label' => 'منتشرشده از سقف عرضه', 'pct' => $issued, 'tone' => 'violet', 'source' => 'CoinGecko'];
             $slices[] = ['label' => 'باقی‌مانده تا سقف', 'pct' => 100 - $issued, 'tone' => 'amber', 'source' => 'CoinGecko'];
+        } elseif (isset($mk['circulatingSupply'], $mk['totalSupply']) && $mk['totalSupply'] > 0
+                  && $mk['circulatingSupply'] < $mk['totalSupply'] * 0.995) {
+            /* No cap, but not all of what exists circulates — escrowed,
+               treasury-held or locked coins (XRP's escrow, a foundation's
+               reserve). CoinGecko's own two figures. */
+            $circ = (float) $mk['circulatingSupply'] / (float) $mk['totalSupply'] * 100;
+            $slices[] = ['label' => 'در گردش (از کل عرضه موجود)', 'pct' => $circ, 'tone' => 'violet', 'source' => 'CoinGecko'];
+            $slices[] = ['label' => 'خارج از گردش (قفل یا ذخیره)', 'pct' => 100 - $circ, 'tone' => 'amber', 'source' => 'CoinGecko'];
         }
 
         /* Where the rest sits — each slice measured, each named for exactly
@@ -1103,7 +1149,8 @@ final class Model
             : ($this->cm('SplyCur')['latest'] ?? ($mk['circulatingSupply'] ?? null));
         $missing = [];
         $loc = (array) ($this->x['ethlocations']['data'] ?? []);
-        $isEthereum = ($m['supplyChain']['state'] ?? '') !== 'not_applicable';
+        // Ethereum's own breakdown (WETH, bridges, exchange wallets) — Etherscan's.
+        $isEthereum = $this->applies('ethlocations');
         if ($isEthereum) {
             if ($total && isset($loc['weth'])) {
                 $slices[] = ['label' => 'رپ‌شده به WETH (برای دیفای)', 'pct' => $loc['weth'] / $total * 100, 'tone' => 'green', 'source' => 'Etherscan'];
@@ -1121,7 +1168,9 @@ final class Model
         if ($onExchanges !== null) {
             $slices[] = ['label' => $onExchanges['label'], 'pct' => $onExchanges['pct'], 'tone' => 'pink', 'source' => $onExchanges['source']];
         } else {
-            $missing[] = ['روی صرافی‌های متمرکز', 'موجودی کیف پول‌های صرافی‌ها هنوز از Etherscan نرسیده'];
+            if ($isEthereum) {
+                $missing[] = ['روی صرافی‌های متمرکز', 'موجودی کیف پول‌های صرافی‌ها هنوز از Etherscan نرسیده'];
+            }
         }
         /* Long-term holders (coin age) are not shown: the only free source,
            CoinMetrics, refuses this server by location, and the alternatives
@@ -1147,9 +1196,10 @@ final class Model
             self::risk('تمرکز صرافی‌ها (شاخص هرفیندال)', $hhi !== null ? Format::num($hhi, 0) : null,
                 $hhi === null ? null : ($hhi < self::HHI_CALM ? 'ok' : ($hhi < self::HHI_WATCH ? 'warn' : 'alert')), 'CoinGecko',
                 $hhi === null ? 'داده بازارهای صرافی هنوز دریافت نشده' : null),
-            $this->exchangeRisk($onExchanges),
+            ...($this->applies('ethlocations') || $onExchanges !== null ? [$this->exchangeRisk($onExchanges)] : []),
             $this->unlocks($coin),
         ];
+        $risk = array_values(array_filter($risk, static fn($r) => $r['value'] !== null || $r['label'] !== 'تقویم آزادسازی توکن'));
 
         $audience = [];
         foreach (self::parseLines((string) $coin->meta('audience', ''), 3) as [$who, $fit, $text]) {
@@ -1166,11 +1216,16 @@ final class Model
             'aprState' => $staking['state'] ?? 'unavailable',
             'inflation' => $inflation,
             'inflationSource' => $infl['source'] ?? null,
-            'inflationDate' => $cur['date'] ?? null,
             'realYield' => $apr !== null && $inflation !== null ? $apr - $inflation : null,
             'validators' => $staking['data']['validators'] ?? null,
             'risk'    => $risk,
             'audience' => $audience,
+            'showDist'  => $slices !== [] || $missing !== [],
+            /* Shown for every coin: supply growth comes from the site's own
+               hourly CoinGecko readings, so it fills in about a week after
+               launch whatever the chain. */
+            'showYield' => $apr !== null || $inflation !== null || $this->history !== null || $this->applies('staking'),
+            'isPow'     => $this->isPow(),
         ];
     }
 
@@ -1634,25 +1689,30 @@ final class Model
         if ($this->history === null || $this->coin === null) {
             return null;
         }
-        $rows = $this->history->series($this->coin->slug, 'supply', '-9 days');
-        $points = [];
-        foreach ($rows as $r) {
-            $v = $r['payload']['totalSupply'] ?? null;
-            $t = strtotime($r['capturedAt'] . ' UTC');
-            if (is_numeric($v) && $v > 0 && $t) {
-                $points[] = [$t, (float) $v];
+        /* Etherscan's total supply (Ethereum) first; otherwise CoinGecko's
+           circulating supply, which History keeps hourly for every coin. Both
+           are our own readings at least six days apart — never a modelled
+           issuance rate. */
+        foreach ([['supply', 'totalSupply', 'Etherscan'], ['market', 'circulatingSupply', 'CoinGecko (عرضه در گردش)']] as [$dataset, $field, $label]) {
+            $points = [];
+            foreach ($this->history->series($this->coin->slug, $dataset, '-9 days') as $r) {
+                $v = $r['payload'][$field] ?? null;
+                $t = strtotime($r['capturedAt'] . ' UTC');
+                if (is_numeric($v) && $v > 0 && $t) {
+                    $points[] = [$t, (float) $v];
+                }
+            }
+            if (count($points) < 2) {
+                continue;
+            }
+            [$t0, $v0] = $points[0];
+            [$t1, $v1] = $points[count($points) - 1];
+            $days = ($t1 - $t0) / 86400;
+            if ($days >= 6) {
+                return ['value' => ($v1 - $v0) / $v0 * (365 / $days) * 100, 'source' => $label];
             }
         }
-        if (count($points) < 2) {
-            return null;
-        }
-        [$t0, $v0] = $points[0];
-        [$t1, $v1] = $points[count($points) - 1];
-        $days = ($t1 - $t0) / 86400;
-        if ($days < 6) {
-            return null;
-        }
-        return ['value' => ($v1 - $v0) / $v0 * (365 / $days) * 100, 'source' => 'Etherscan'];
+        return null;
     }
 
     /** Daily active addresses with the source that supplied them, or null. */
@@ -1699,5 +1759,130 @@ final class Model
             'not_applicable' => 'برای این شبکه کاربرد ندارد',
             default          => 'داده در دسترس نیست',
         };
+    }
+    /* ------------------------------------------------------------------
+     * Per-coin applicability (2.3.0)
+     * ---------------------------------------------------------------- */
+
+    /**
+     * Does a source exist for this dataset FOR THIS COIN — the provider is on,
+     * the coin has not opted out of it, and it covers the coin's chain? Decided
+     * by configuration, not by whether the last fetch worked: a source that is
+     * down shows that it is down; a source that does not exist shows nothing.
+     */
+    private function applies(string $dataset): bool
+    {
+        return $this->coin !== null && $this->sets->covers($dataset, $this->coin);
+    }
+
+    /**
+     * @param string $kind 'nosource' (exists, but no free source — makes the
+     *                     section partial), 'na' (does not exist for this
+     *                     coin) or 'later' (fills in from the site's own
+     *                     stored readings after launch)
+     */
+    private function gap(string $section, string $what, string $kind = 'nosource'): void
+    {
+        $this->gaps[$section][$kind][] = $what;
+    }
+
+    /** No staking to report: proof of work, a stablecoin or a memecoin token. */
+    private function stakingNa(): bool
+    {
+        $tags = array_map('trim', explode(',', $this->coin ? (string) $this->coin->meta('tags', '') : ''));
+        return $this->isPow() || in_array('استیبل‌کوین', $tags, true) || in_array('میم‌کوین', $tags, true);
+    }
+
+    /** Proof of work: no staking exists to report, rather than no source for it. */
+    private function isPow(): bool
+    {
+        return $this->coin !== null && str_contains((string) $this->coin->meta('consensus', ''), 'اثبات کار');
+    }
+
+    private function blockchairSlug(): string
+    {
+        $chain = $this->coin ? (string) $this->coin->meta('defillamaChain', '') : '';
+        return (string) ($this->config['providers']['blockchair']['slugs'][$chain] ?? 'bitcoin');
+    }
+
+    /**
+     * Which sections this coin's page shows, and how complete each is:
+     * `full` (everything the section can show), `partial` (shown, with the
+     * listed pieces missing for want of a source) or `na` (nothing to show —
+     * the section and its tab are left out).
+     *
+     * @return array<string, array{show:bool, status:string, gaps:string[]}>
+     */
+    private function sections(array $v): array
+    {
+        $f = $v['flow'];
+        $flowShown = $f['showSankey'] || $f['pulse'] !== [] || $f['showWhales'];
+        if ($flowShown) {
+            if (!$f['showSankey']) {
+                $this->gap('flow', 'جریان کارمزدها', 'na');
+            }
+            if ($f['pulse'] === []) {
+                $this->gap('flow', 'نبض شبکه (زمان بلوک، تراکنش‌ها)');
+            }
+            if (!$f['showWhales']) {
+                $this->gap('flow', 'رادار نهنگ‌ها');
+            }
+        }
+        if (!$v['pulse']['showHeat']) {
+            $this->gap('pulse', 'حرارت اکوسیستم', 'na');
+        }
+        $s = $v['supply'];
+        if (!$s['showDist']) {
+            $this->gap('supply', 'توزیع عرضه (همه عرضه در گردش است)', 'na');
+        }
+        if ($s['apr'] === null) {
+            $this->gap('supply', 'بازده استیکینگ', $this->stakingNa() ? 'na' : 'nosource');
+        }
+        if ($s['inflation'] === null) {
+            $this->gap('supply', 'رشد عرضه', 'later');
+        }
+        if (!$this->applies('ethlocations')) {
+            $this->gap('supply', 'سهم صرافی‌ها از عرضه');
+        }
+        if (count($v['peers']['rows']) < 2) {
+            $this->gap('peers', 'گروه مقایسه');
+        }
+        $defi = $this->applies('defi');
+        foreach ((array) ($v['dna']['axes'] ?? []) as $axis) {
+            if ($axis['value'] !== null) {
+                continue;
+            }
+            $label = (string) $axis['label'];
+            $isTvl = str_contains($label, 'قفل') || stripos($label, 'tvl') !== false;
+            $kind = $isTvl && !$defi ? 'na' : ($isTvl && str_contains($label, 'رشد') ? 'later' : 'nosource');
+            $this->gap('dna', 'مؤلفه امتیاز: ' . $label, $kind);
+        }
+        if (!$defi) {
+            $this->gap('price-story', 'لایه TVL روی نمودار', 'na');
+        }
+
+        $show = [
+            'overview'    => true,
+            'ecosystem'   => $this->applies('protocols'),
+            'flow'        => $flowShown,
+            'story'       => true,
+            'dna'         => true,
+            'price-story' => true,
+            'pulse'       => true,
+            'peers'       => true,
+            'supply'      => true,
+        ];
+        $out = [];
+        foreach ($show as $id => $on) {
+            $g = $this->gaps[$id] ?? [];
+            $out[$id] = [
+                'show'   => $on,
+                'status' => !$on ? 'na' : (($g['nosource'] ?? []) === [] ? 'full' : 'partial'),
+                'gaps'   => $g['nosource'] ?? [],
+                'na'     => $g['na'] ?? [],
+                'later'  => $g['later'] ?? [],
+            ];
+        }
+        return $out;
     }
 }

@@ -404,24 +404,6 @@ final class Scheduler
             }
         }
 
-        /* ---- 0b. One page of the /coins/ list, when one is due ----
-         *
-         * At most ONE request a tick, after the live price and through the
-         * same budget (never the ticker's reserve), so the list can neither
-         * crowd the ticker out nor burst the per-minute limit. Page 1 every
-         * five minutes, the others every thirty: ~20 requests an hour. */
-        if ($this->listing !== null && ($page = $this->listing->due()) !== null) {
-            if (($refusal = $this->budget->refuse('coingecko')) !== null) {
-                $progress['skipped'][] = 'listing page ' . $page . ': ' . $refusal;
-            } else {
-                try {
-                    $progress['listing'] = ['page' => $page, 'rows' => $this->listing->refresh($page)];
-                } catch (\Throwable $e) {
-                    $progress['skipped'][] = 'listing page ' . $page . ': ' . $e->getMessage();
-                }
-            }
-        }
-
         /* ---- 1. The batch, which serves every coin at once ---- */
         if ($this->batchDue($coins)) {
             if (($refusal = $this->budget->refuse('coingecko')) !== null) {
@@ -435,6 +417,25 @@ final class Scheduler
                     }
                     $progress['batched'] += $this->pipeline->warmBatch($chunk, 'market');
                     $progress['lastDataset'] = 'market (batched)';
+                }
+            }
+        }
+
+        /* ---- 1b. One page of the /coins/ list, when one is due ----
+         *
+         * After the batch (2.3.0: the batch also keeps every coin's charts
+         * current, so it must not lose its slot to the list). At most ONE
+         * request a tick, through the same budget (never the ticker's reserve), so the list can neither
+         * crowd the ticker out nor burst the per-minute limit. Page 1 every
+         * five minutes, the others every thirty: ~20 requests an hour. */
+        if ($this->listing !== null && ($page = $this->listing->due()) !== null) {
+            if (($refusal = $this->budget->refuse('coingecko')) !== null) {
+                $progress['skipped'][] = 'listing page ' . $page . ': ' . $refusal;
+            } else {
+                try {
+                    $progress['listing'] = ['page' => $page, 'rows' => $this->listing->refresh($page)];
+                } catch (\Throwable $e) {
+                    $progress['skipped'][] = 'listing page ' . $page . ': ' . $e->getMessage();
                 }
             }
         }

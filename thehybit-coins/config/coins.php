@@ -1,6 +1,7 @@
 <?php
 /**
- * The two coins for the validation phase.
+ * The coins with a page on the site: Ethereum and Bitcoin here, the other 18
+ * of the top 20 in config/coins-more.php (merged at the end of this file).
  *
  * NOT the runtime source of truth — ACF is. This file exists so the two coins
  * can be created reproducibly (see Seeder below) and so the intended
@@ -43,6 +44,8 @@ return [
             /* v2 editorial content. Dates and events are public record; nothing
                here is a market figure — those come only from the providers. */
             'thb_tagline'             => 'کامپیوتر جهانی؛ بستری برای برنامه‌ها و پول برنامه‌پذیر',
+            'thb_seo_title'           => 'قیمت اتریوم (ETH) امروز — نمودار، استیکینگ، دیفای و ارتقاهای شبکه | های بیت',
+            'thb_meta_description'    => 'قیمت لحظه‌ای اتریوم (ETH)، بازده استیکینگ، ارزش قفل‌شده و جریان کارمزدهای شبکه، سوزاندن اتر و نقشه راه ارتقاها از ادغام تا گلمستردام؛ همراه با پاسخ پرسش‌های رایج درباره اتریوم.',
             /* Timeline: past events, then the roadmap. A date starting with ">"
                marks a PLANNED item — shown with a dashed marker and the label
                «برنامه‌ریزی‌شده», and never pinned on the price chart. The
@@ -152,6 +155,8 @@ return [
                 'هاوینگ چیست؟ | تقریباً هر چهار سال، پاداش استخراج هر بلوک نصف می‌شود؛ آخرین هاوینگ در آوریل ۲۰۲۴ بود.',
             ]),
             'thb_tagline'             => 'نخستین پول دیجیتال غیرمتمرکز جهان',
+            'thb_seo_title'           => 'قیمت بیت‌کوین (BTC) امروز — نمودار، هاوینگ، هش‌ریت و ETFها | های بیت',
+            'thb_meta_description'    => 'قیمت لحظه‌ای بیت‌کوین (BTC)، هش‌ریت و فعالیت شبکه، انتقال‌های بزرگ، سقف ۲۱ میلیونی و برنامه هاوینگ‌ها، و تاریخچه بیت‌کوین از وایت‌پیپر ساتوشی تا ETFهای نقدی.',
             'thb_timeline'            => implode("\n", [
                 '2008-10-31 | وایت‌پیپر | ساتوشی ناکاموتو مقاله «بیت‌کوین: یک سیستم پول نقد همتا به همتا» را منتشر کرد.',
                 '2009-01-03 | بلوک پیدایش | نخستین بلوک بیت‌کوین استخراج شد.',
@@ -200,4 +205,4 @@ return [
             'thb_enable_l2'           => 0,
         ],
     ],
-];
+] + require __DIR__ . '/coins-more.php';

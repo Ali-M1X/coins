@@ -63,8 +63,18 @@ function probe_payload(string $url): array
         };
         $prices = $caps = $vols = [];
         $t = Clock::$now * 1000;
+        /* `thb_probe_chart_realistic` (the capacity probes): CoinGecko's own
+           spacing — 5-minutely, hourly, daily — ending at the request time, as
+           the live API does. Off by default: the frozen classic snapshot was
+           taken against the hourly series below. */
+        $spacing = 3600_000;
+        $end = $t - 3600_000;
+        if (!empty($GLOBALS['thb_probe_chart_realistic'])) {
+            $spacing = $days <= 1 ? 300_000 : ($days <= 90 ? 3600_000 : 86_400_000);
+            $end = $t;
+        }
         for ($i = 0; $i < $n; $i++) {
-            $ts = $t - ($n - $i) * 3600_000;
+            $ts = $end - ($n - 1 - $i) * $spacing;
             $prices[] = [$ts, 3200 + $i * 0.5];
             $caps[]   = [$ts, 3.9e11];
             $vols[]   = [$ts, 1.8e10];
@@ -218,8 +228,8 @@ function probe_payload(string $url): array
      * false statement, so the fixture carries exactly that zero. */
     /* ---- Blockchair: large transfers. One row below the threshold, which
        the collector must drop rather than trust the provider's filter. */
-    if (preg_match('#^/(ethereum|bitcoin)/transactions$#', $path, $m)) {
-        $isBtc = $m[1] === 'bitcoin';
+    if (preg_match('#^/(ethereum|bitcoin|litecoin|dogecoin|bitcoin-cash)/transactions$#', $path, $m)) {
+        $isBtc = $m[1] !== 'ethereum';   // the UTXO chains share Bitcoin's shape
         $rows = [];
         foreach ([1500, 800, 2000, 120] as $i => $amount) {
             $rows[] = $isBtc
@@ -291,8 +301,8 @@ function probe_payload(string $url): array
         return ['items' => $items];
     }
 
-    if (preg_match('#^/(ethereum|bitcoin)/stats$#', $path, $m)) {
-        $isBtc = $m[1] === 'bitcoin';
+    if (preg_match('#^/(ethereum|bitcoin|litecoin|dogecoin|bitcoin-cash)/stats$#', $path, $m)) {
+        $isBtc = $m[1] !== 'ethereum';   // the UTXO chains share Bitcoin's shape
         return ['data' => [
             'blocks'                          => $isBtc ? 865000 : 21000000,
             'blocks_24h'                      => $isBtc ? 144 : 7180,
@@ -466,6 +476,15 @@ function probe_payload(string $url): array
     /* ---- DexScreener ---- */
     if (str_contains($path, '/dex/tokens/') || str_contains($path, '/dex/search')) {
         $symbol = strtoupper((string) ($GLOBALS['thb_probe_dex_symbol'] ?? 'WETH'));
+        /* Asked by a token address: answer with that token's own pairs, as
+           DexScreener does (the top-20 coins with a DEX presence). */
+        foreach (['0xdac17f958d2ee523a2206206994597c13d831ec7' => 'USDT', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' => 'USDC',
+                  '0x514910771af9ca656af840dff83e8264ecf986ca' => 'LINK', '0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce' => 'SHIB',
+                  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c' => 'WBNB', 'so11111111111111111111111111111111111111112' => 'SOL'] as $addr => $sym) {
+            if (str_contains(strtolower($path), $addr)) {
+                $symbol = $sym;
+            }
+        }
         $pairs = [];
         for ($i = 0; $i < 30; $i++) {
             $pairs[] = [

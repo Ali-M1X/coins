@@ -245,11 +245,80 @@ final class Pipeline
 
             $this->cache->put($dataset, $this->cache->keyFor($dataset, $coin), $row);
             $this->history->record($coin, $dataset, 'coingecko', $row);
+            if ($dataset === 'market') {
+                $this->extendCharts($coin, $row);
+            }
             unset($this->memo[$coin->slug]);
             $written++;
         }
 
         return $written;
+    }
+
+    /** Point spacing of each chart window as CoinGecko serves it on the free tier. */
+    private const CHART_STEP = ['24h' => 300, '7d' => 3600, '30d' => 3600, '90d' => 3600, '1y' => 86400];
+
+    /**
+     * Keep the cached chart windows current from the market batch (2.3.0).
+     *
+     * WHY. Every chart window was a CoinGecko request per coin; at twenty
+     * coins that demand (≈8 an hour per coin) is several times what is left of
+     * the per-minute allowance once the live ticker has had its share, so the
+     * windows fell hours behind. The batch already fetches every coin's price,
+     * market cap and 24-hour volume every five minutes in ONE request — the
+     * same figures market_chart returns, at the same 5-minute (1 day) and
+     * hourly (7–90 days) spacing. So each batch row is appended to the
+     * windows already in the cache: the chart's last point moves with the
+     * batch, and a new point starts when a step has passed. A window is only
+     * downloaded in full once, or again after a gap the batch could not fill
+     * (cron down, refusals) — never patched across a hole.
+     */
+    private function extendCharts(Coin $coin, array $row): void
+    {
+        if (!isset($row['price']) || !is_numeric($row['price'])) {
+            return;
+        }
+        $now = time();
+        foreach ((array) ($this->config['chart']['windows'] ?? []) as $period => $window) {
+            $step = self::CHART_STEP[$period] ?? null;
+            if ($step === null) {
+                continue;
+            }
+            $dataset = Cache::CHART_PREFIX . $period;
+            $key = $this->cache->keyFor($dataset, $coin);
+            $entry = $this->cache->peek($dataset, $key);
+            $d = is_array($entry['data'] ?? null) ? $entry['data'] : null;
+            if ($d === null || empty($d['t']) || !is_array($d['t'])) {
+                continue;   // never downloaded: the scheduler fetches it once
+            }
+            $n = count($d['t']);
+            $last = (int) floor($d['t'][$n - 1] / 1000);
+            /* A hole the batch did not see is left to a full refresh — but a
+               few skipped batches (an hour, on the 5-minute window) are not a
+               hole worth a download: the line simply spans them. */
+            if ($now - $last > max(2 * $step + 600, 3600)) {
+                continue;
+            }
+            $prev = $n >= 2 ? (int) floor($d['t'][$n - 2] / 1000) : 0;
+            $point = [$now * 1000, round((float) $row['price'], 6),
+                      isset($row['marketCap']) ? (float) $row['marketCap'] : null,
+                      isset($row['volume24h']) ? (float) $row['volume24h'] : null];
+            if ($n >= 2 && $now - $prev < $step) {
+                $i = $n - 1;   // still inside the current step: the live last point moves
+            } else {
+                $i = $n;       // a step has passed: a new point
+            }
+            [$d['t'][$i], $d['price'][$i], $d['mcap'][$i], $d['volume'][$i]] = $point;
+
+            // Keep the window its own length.
+            $from = ($now - (int) ($window['days'] ?? 1) * 86400) * 1000;
+            while (count($d['t']) > 2 && $d['t'][0] < $from) {
+                foreach (['t', 'price', 'mcap', 'volume'] as $col) {
+                    array_shift($d[$col]);
+                }
+            }
+            $this->cache->put($dataset, $key, $d);
+        }
     }
 
     /**

@@ -13,8 +13,10 @@
  * providers, lenders and stakers who supplied the capital. Both sides come
  * from DefiLlama and both add up to the same total.
  *
- * Whale Radar stays on the screen as an explicit "no source" card, so the gap
- * is visible rather than silently designed out.
+ * Each part is drawn only for coins a source exists for (Model::applies()):
+ * a chain DefiLlama has no fee data for gets the network pulse and whale
+ * radar alone, under the heading «شبکه»; a token with none of the three has
+ * no section at all.
  */
 use TheHybit\Coins\Format;
 use TheHybit\Coins\V2\View;
@@ -25,9 +27,15 @@ $c = $v['coin'];
 $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
 ?>
 <section class="v2-section v2-flow" id="flow" aria-labelledby="flow-title">
-  <?= View::heading('flow', 'جریان زنجیره ' . $c['name'], 'کارمزدهای ۲۴ ساعت گذشته از کجا آمدند و به کجا رفتند؟') ?>
+  <?php if ($f['showSankey']) : ?>
+    <?= View::heading('flow', 'جریان زنجیره ' . $c['name'], 'کارمزدهای ۲۴ ساعت گذشته از کجا آمدند و به کجا رفتند؟') ?>
+  <?php else : ?>
+    <?= View::heading('flow', 'شبکه ' . $c['name'], 'نبض شبکه و انتقال‌های بزرگ روی زنجیره') ?>
+  <?php endif; ?>
 
-  <div class="v2-flow__grid">
+  <?php $hasSide = $f['pulse'] !== [] || $f['showWhales']; ?>
+  <div class="v2-flow__grid<?= $f['showSankey'] && $hasSide ? '' : ' v2-flow__grid--nosankey' ?>">
+    <?php if ($f['showSankey']) : ?>
     <div class="v2-card v2-flow__sankey">
       <?php if ($f['state'] === 'ok') : ?>
         <div class="v2-xscroll" style="--min: 0px">
@@ -88,8 +96,11 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
             $f['state'] === 'disabled' ? 'داده دیفای برای این ارز خاموش است' : 'تفکیک کارمزد این زنجیره هنوز در دسترس نیست') ?>
       <?php endif; ?>
     </div>
+    <?php endif; ?>
 
+    <?php if ($hasSide) : ?>
     <aside class="v2-flow__side">
+      <?php if ($f['pulse'] !== []) : ?>
       <div class="v2-card">
         <h3 class="v2-card__title">نبض شبکه</h3>
         <ul class="v2-kv">
@@ -111,7 +122,10 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
         <?php endif; ?>
       </div>
 
+      <?php endif; ?>
+
       <?php $w = $f['whales']; ?>
+      <?php if ($f['showWhales']) : ?>
       <div class="v2-card v2-whales">
         <h3 class="v2-card__title">رادار نهنگ‌ها</h3>
         <?php if ($w['rows'] !== []) : ?>
@@ -137,7 +151,9 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
           <?= View::na($w['state'], 'فهرست انتقال‌های بزرگ از Blockchair') ?>
         <?php endif; ?>
       </div>
+      <?php endif; ?>
     </aside>
+    <?php endif; ?>
   </div>
 
   <?php if ($f['cards'] !== []) : ?>

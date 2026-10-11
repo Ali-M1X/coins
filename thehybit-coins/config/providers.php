@@ -91,7 +91,11 @@ return [
            counted over a 30-day window, so asking more than four times a day
            cannot change the answer. */
         'gas'         => 5 * MINUTE_IN_SECONDS,
-        'network'     => 10 * MINUTE_IN_SECONDS,
+        /* 2.3.0: five Blockchair chains (ETH, BTC, LTC, DOGE, BCH). Network
+           stats every 15 min + whale transfers every 20 = 7 an hour a chain,
+           35 in all — under the 40/h budget and well under Blockchair's
+           keyless ~1,440/day, which has IP-blocked this server once. */
+        'network'     => 15 * MINUTE_IN_SECONDS,
         'staking'     => 30 * MINUTE_IN_SECONDS,
         'supply'      => HOUR_IN_SECONDS,
         'development' => 6 * HOUR_IN_SECONDS,
@@ -117,10 +121,10 @@ return [
            daily figures; asking more often returns the same row. */
         /* The /coins/ list's cache entries live this long; how often each
            page is REFRESHED is set under 'listing' below (page 1 more often). */
-        'listing'      => 30 * MINUTE_IN_SECONDS,
+        'listing'      => 2 * HOUR_IN_SECONDS,
         'activity'     => 6 * HOUR_IN_SECONDS,
         'stakingyield' => 6 * HOUR_IN_SECONDS,
-        'whales'       => 10 * MINUTE_IN_SECONDS,
+        'whales'       => 20 * MINUTE_IN_SECONDS,
         'ethlocations' => HOUR_IN_SECONDS,
         'interest'     => 12 * HOUR_IN_SECONDS,
     ],
@@ -245,7 +249,7 @@ return [
         'supply'      => ['provider' => 'etherscan',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
         'network'     => ['provider' => 'blockchair',  'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
         'staking'     => ['provider' => 'beaconchain', 'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
-        'development' => ['provider' => 'github',      'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
+        'development' => ['provider' => 'github',      'scope' => 'coin',  'priority' => 4, 'render' => 'cache', 'requires' => 'githubRepo'],
 
         /* ---- v2 design ---------------------------------------------------
          *
@@ -278,6 +282,21 @@ return [
      * the list can grow to 250 without costing a second request.
      * ---------------------------------------------------------------- */
     'peers' => ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'cardano', 'avalanche-2', 'tron', 'sui'],
+
+    /* Which coins each coin is compared with (2.3.0). A coin is compared
+       within the FIRST group that lists it; a coin in no group gets
+       `peers` above. Every id here is fetched in the same single
+       /coins/markets request — groups cost nothing. A stablecoin compared
+       with Bitcoin's volatility would say nothing; with other stablecoins it
+       says how it holds its dollar. */
+    'peer_groups' => [
+        'majors'   => ['bitcoin', 'ethereum', 'solana', 'binancecoin', 'ripple', 'cardano', 'avalanche-2', 'tron', 'sui'],
+        'payments' => ['litecoin', 'bitcoin-cash', 'stellar', 'hedera-hashgraph', 'bitcoin', 'ripple'],
+        'stable'   => ['tether', 'usd-coin', 'dai', 'ethena-usde', 'paypal-usd'],
+        'meme'     => ['dogecoin', 'shiba-inu', 'pepe', 'bonk', 'dogwifcoin'],
+        'oracles'  => ['chainlink', 'pyth-network', 'the-graph', 'band-protocol'],
+        'newL1'    => ['hyperliquid', 'the-open-network', 'sui', 'aptos', 'near', 'solana'],
+    ],
 
     /* ------------------------------------------------------------------
      * SCHEDULER — bounded work per tick.
@@ -637,14 +656,20 @@ return [
                five minutes extends the ban, so these pause it for an hour. */
             'block_statuses' => [402, 430, 434],
             'block_cooldown' => HOUR_IN_SECONDS,
-            'chains'   => ['Ethereum', 'Bitcoin'],
+            /* 2.3.0: Litecoin, Dogecoin and Bitcoin Cash — UTXO chains with the
+               same /stats and transaction shapes as Bitcoin, in satoshi-style
+               units. Other chains Blockchair indexes return different shapes
+               and are not wired in. */
+            'chains'   => ['Ethereum', 'Bitcoin', 'Litecoin', 'Dogecoin', 'Bitcoincash'],
             /* Blockchair names chains its own way — an eighth identifier for one
                coin, stored rather than derived, for the same reason as the other
                seven. See Coin.php. */
-            'slugs'    => ['Ethereum' => 'ethereum', 'Bitcoin' => 'bitcoin'],
+            'slugs'    => ['Ethereum' => 'ethereum', 'Bitcoin' => 'bitcoin', 'Litecoin' => 'litecoin',
+                           'Dogecoin' => 'dogecoin', 'Bitcoincash' => 'bitcoin-cash'],
             'datasets' => ['network', 'whales'],
             /* Whale radar: native transfers at or above this many coins. */
-            'whale_min' => ['Ethereum' => 500, 'Bitcoin' => 500],
+            'whale_min' => ['Ethereum' => 500, 'Bitcoin' => 500, 'Litecoin' => 20000,
+                            'Dogecoin' => 20000000, 'Bitcoincash' => 5000],
         ],
 
         /* v2's price-since-launch chart. DefiLlama's price API, as its own
@@ -664,7 +689,13 @@ return [
             'datasets' => ['longchart'],
             /* Second source, same budget: Kraken's public OHLC (keyless). */
             'bases'    => ['kraken' => 'https://api.kraken.com/0/public'],
-            'kraken_pairs' => ['ethereum' => 'ETHUSD', 'bitcoin' => 'XBTUSD'],
+            'kraken_pairs' => [
+                'ethereum' => 'ETHUSD', 'bitcoin' => 'XBTUSD', 'ripple' => 'XRPUSD', 'solana' => 'SOLUSD',
+                'cardano' => 'ADAUSD', 'dogecoin' => 'XDGUSD', 'litecoin' => 'LTCUSD', 'chainlink' => 'LINKUSD',
+                'stellar' => 'XLMUSD', 'bitcoin-cash' => 'BCHUSD', 'avalanche-2' => 'AVAXUSD', 'tron' => 'TRXUSD',
+                'tether' => 'USDTZUSD', 'usd-coin' => 'USDCUSD', 'shiba-inu' => 'SHIBUSD',
+                'the-open-network' => 'TONUSD', 'sui' => 'SUIUSD',
+            ],
         ],
 
         /* CoinMetrics Community API — free, keyless, documented. Daily
@@ -814,16 +845,18 @@ return [
     /* ------------------------------------------------------------------
      * The coin list at /coins/ (includes/Listing.php). One CoinGecko
      * /coins/markets request per page of `per_page` coins:
-     *   page 1 every 5 min (12/h) + pages 2–5 every 30 min (8/h) = 20/h.
-     * The rest of the plugin uses ~100 of CoinGecko's 200/h (docs/LIVE-PRICE.md).
-     * More pages cost 2 requests/hour each.
+     *   page 1 every 10 min (6/h) + pages 2–5 every 2 h (2/h) = 8/h.
+     * 2.3.0: halved from 2.2.0's 20/h. CoinGecko's real ceiling here is
+     * about 130 calls an hour (a 4-per-minute window over 55-second ticks),
+     * the live ticker takes 65 of them, and twenty coin pages need most of
+     * the rest. More pages cost half a request an hour each.
      * ---------------------------------------------------------------- */
     'listing' => [
         'enabled'   => true,
         'per_page'  => 100,
         'pages'     => 5,
-        'ttl_first' => 5 * MINUTE_IN_SECONDS,
-        'ttl_rest'  => 30 * MINUTE_IN_SECONDS,
+        'ttl_first' => 10 * MINUTE_IN_SECONDS,
+        'ttl_rest'  => 2 * HOUR_IN_SECONDS,
     ],
 
     /* How many articles the news section shows. The approved UI expects 4. */

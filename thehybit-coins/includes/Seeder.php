@@ -19,7 +19,11 @@ final class Seeder
 {
     /** Fields fillEditorial() may write: content only, never configuration. */
     public const EDITORIAL = ['thb_tagline', 'thb_timeline', 'thb_learn', 'thb_audience', 'thb_faq',
-                              'thb_unlocks', 'thb_wikipedia', 'thb_github_repo', 'thb_price_events'];
+                              'thb_unlocks', 'thb_wikipedia', 'thb_github_repo', 'thb_price_events',
+                              'thb_seo_title', 'thb_meta_description'];
+
+    /** The version whose new coins have been created; see addMissing(). */
+    public const OPTION_COINS = 'thb_coins_coins_seeded';
 
     public const OPTION_EDITORIAL = 'thb_coins_editorial_seeded';
 
@@ -83,10 +87,44 @@ final class Seeder
         return $result;
     }
 
-    /** @return array<string,string> slug => action taken */
-    public static function run(bool $force = false): array
+    /**
+     * Create the coins in config/coins.php that do not exist yet — once per
+     * plugin version, on the first wp-admin visit after an upgrade. This is
+     * how 2.3.0's 18 new coin pages appear without the setup page. Existing
+     * coins are never touched here (fillEditorial() fills their blanks).
+     *
+     * @return array<string,string> slug => action taken, for new coins only
+     */
+    public static function addMissing(bool $force = false): array
+    {
+        if (!$force && get_option(self::OPTION_COINS) === THB_COINS_VERSION) {
+            return [];
+        }
+        $coins = require THB_COINS_DIR . 'config/coins.php';
+        $missing = [];
+        foreach (array_keys($coins) as $slug) {
+            if (!get_page_by_path($slug, OBJECT, CoinRepository::POST_TYPE)) {
+                $missing[] = $slug;
+            }
+        }
+        $result = $missing === [] ? [] : self::run(false, $missing);
+        update_option(self::OPTION_COINS, THB_COINS_VERSION, false);
+        if ($result !== []) {
+            update_option(self::OPTION_COINS . '_last', ['at' => gmdate('c'), 'created' => $result], false);
+        }
+        return $result;
+    }
+
+    /**
+     * @param string[]|null $only limit to these slugs
+     * @return array<string,string> slug => action taken
+     */
+    public static function run(bool $force = false, ?array $only = null): array
     {
         $coins = require THB_COINS_DIR . 'config/coins.php';
+        if ($only !== null) {
+            $coins = array_intersect_key($coins, array_flip($only));
+        }
         $result = [];
 
         foreach ($coins as $slug => $spec) {
