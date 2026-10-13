@@ -31,6 +31,7 @@ $pageUrl = static fn(int $n): string => $n <= 1 ? $base : $base . 'page/' . $n .
 $from = ($L['page'] - 1) * $L['perPage'] + 1;
 $to = $from + $L['perPage'] - 1;
 $market = $L['market7d'];
+$liveConfig = $plugin->config;
 
 get_header();
 ?>
@@ -105,7 +106,10 @@ get_header();
                 $vs = $r['vsMarket'];
                 $spark = Svg::line(Svg::clean((array) $r['sparkline']), 100, 32, 2);
                 $sparkDir = View::dir($r['change7d']); ?>
-              <tr<?= $r['url'] ? ' class="is-ours"' : '' ?>>
+              <?php /* data-live-*: live.js (2.4.0) replaces the price and 24h change
+                 with real WebSocket ticks for coins a feed carries. Volume
+                 stays the server's global figure. */ ?>
+              <tr<?= $r['url'] ? ' class="is-ours"' : '' ?><?= \TheHybit\Coins\LiveFeed::covers($liveConfig, (string) $r['id']) ? ' data-live-id="' . esc_attr((string) $r['id']) . '"' : '' ?>>
                 <td class="c-rank"><?= View::n((string) ($r['rank'] ?? $r['position'])) ?></td>
                 <th scope="row" class="c-coin">
                   <span class="list-coin">
@@ -124,8 +128,8 @@ get_header();
                     </span>
                   </span>
                 </th>
-                <td class="c-num c-price"><?= View::n(Format::usd($r['price'])) ?><span class="list-sub v2-delta--<?= View::dir($r['change24h']) ?>"><?= View::n(Format::pct($r['change24h'], true, 2)) ?></span></td>
-                <td class="c-num c-24h v2-delta--<?= View::dir($r['change24h']) ?>"><?= View::n(Format::pct($r['change24h'], true, 2)) ?></td>
+                <td class="c-num c-price"><span class="list-price" data-live-usd><?= View::n(Format::usd($r['price'])) ?></span><span class="list-sub v2-delta--<?= View::dir($r['change24h']) ?>" data-live-chg><?= View::n(Format::pct($r['change24h'], true, 2)) ?></span></td>
+                <td class="c-num c-24h v2-delta--<?= View::dir($r['change24h']) ?>" data-live-chg><?= View::n(Format::pct($r['change24h'], true, 2)) ?></td>
                 <td class="c-num c-7d v2-delta--<?= View::dir($r['change7d']) ?>"><?= View::n(Format::pct($r['change7d'], true, 2)) ?></td>
                 <td class="c-vs">
                   <?php if ($vs !== null) : ?>

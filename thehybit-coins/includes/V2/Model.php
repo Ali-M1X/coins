@@ -204,6 +204,7 @@ final class Model
             'name'     => (string) ($m['coin']['name'] ?? $coin->name),
             'nameEn'   => (string) ($m['coin']['nameEn'] ?? ''),
             'symbol'   => (string) ($m['coin']['symbol'] ?? $coin->symbol),
+            'coingeckoId' => $coin->coingeckoId,
             'logo'     => $m['coin']['logo'] ?? null,
             'rank'     => $m['coin']['rank'] ?? null,
             'tagline'  => trim((string) $coin->meta('tagline', '')),

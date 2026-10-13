@@ -345,16 +345,35 @@ function initLivePrice() {
     } catch { return ''; }
   };
 
+  /* A live WebSocket tick (assets/v2/live.js) outranks any poll that is not
+     newer than it. live.js sets data-live-src while its feed is fresh and
+     data-live-at to when the last real tick arrived; once the feed is gone,
+     the first poll fetched after that tick takes the figure back. */
+  const held = (el, iso) => {
+    if (!el) return false;
+    const at = Number(el.dataset.liveAt || 0);
+    return !!el.dataset.liveSrc || (at > 0 && at >= (Date.parse(iso || '') || 0));
+  };
+  const release = (el) => {
+    el.classList.remove('is-stale');
+    el.removeAttribute('title');
+    delete el.dataset.liveAt;
+  };
+
   const render = (d) => {
-    const old = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, ''));
-    priceEl.textContent = usd(d.price);
     const host = priceEl.parentElement;
-    if (isFinite(old) && old !== d.price) {
-      host.classList.remove('is-tick-up', 'is-tick-down');
-      host.classList.add(d.price > old ? 'is-tick-up' : 'is-tick-down');
-      setTimeout(() => host.classList.remove('is-tick-up', 'is-tick-down'), 1500);
+    const priceHeld = held(host, d.fetchedAt);
+    if (!priceHeld) {
+      const old = parseFloat(priceEl.textContent.replace(/[^0-9.]/g, ''));
+      priceEl.textContent = usd(d.price);
+      release(host);
+      if (isFinite(old) && old !== d.price) {
+        host.classList.remove('is-tick-up', 'is-tick-down');
+        host.classList.add(d.price > old ? 'is-tick-up' : 'is-tick-down');
+        setTimeout(() => host.classList.remove('is-tick-up', 'is-tick-down'), 1500);
+      }
     }
-    if (changeEl && d.change24h != null) {
+    if (changeEl && d.change24h != null && !priceHeld) {
       const dir = d.change24h > 0 ? 'up' : d.change24h < 0 ? 'down' : 'flat';
       changeEl.className = `v2-delta v2-delta--${dir}`;
       const num = $('.v2-num', changeEl);
@@ -362,14 +381,15 @@ function initLivePrice() {
       const arrow = $('[data-v2-live-arrow]', changeEl);
       if (arrow) arrow.textContent = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '•';
     }
-    if (tomanEl && d.toman != null) {
+    if (tomanEl && d.toman != null && !held(tomanEl, d.fetchedAt)) {
       const num = $('.v2-num', tomanEl);
       if (num) num.textContent = Math.round(d.toman).toLocaleString('en-US');
       tomanEl.hidden = false;
+      release(tomanEl);
     }
-    if (stampEl && d.fetchedAt) {
-      const num = $('.v2-num', stampEl);
-      if (num) num.textContent = tehran(d.fetchedAt);
+    if (stampEl && d.fetchedAt && !priceHeld) {
+      stampEl.innerHTML = 'به‌روزرسانی <bdi class="v2-num" dir="ltr"></bdi> · هر دقیقه';
+      $('.v2-num', stampEl).textContent = tehran(d.fetchedAt);
     }
   };
 

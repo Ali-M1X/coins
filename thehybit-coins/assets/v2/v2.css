@@ -285,6 +285,21 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-price__value.is-tick-up .v2-num { color: var(--v2-accent); transition: color .2s; }
 .v2-price__value.is-tick-down .v2-num { color: var(--v2-red); transition: color .2s; }
 @media (prefers-reduced-motion: reduce) { .v2-price__value .v2-num { transition: none; } }
+
+/* Live price over WebSocket (2.4.0, live.js). Tabular digits and a width that
+   only grows, so a tick never moves the line; a figure whose feed went silent
+   is dimmed rather than left looking live. */
+[data-live-usd] { display: inline-block; font-variant-numeric: tabular-nums; }
+[data-live-usd].is-tick-up .v2-num { color: var(--v2-accent); transition: color .2s; }
+[data-live-usd].is-tick-down .v2-num { color: var(--v2-red); transition: color .2s; }
+[data-live-usd].is-stale, [data-live-irt].is-stale { opacity: .55; }
+.v2-live-stamp.is-stale { color: var(--v2-amber); }
+.v2-live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--v2-accent); margin-inline-end: 6px; vertical-align: middle; animation: v2-live-pulse 2s ease-in-out infinite; }
+@keyframes v2-live-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-live-usd] .v2-num { transition: none !important; }
+  .v2-live-dot { animation: none; }
+}
 .v2-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
 .v2-actions .v2-btn { flex: 1 1 160px; }
 

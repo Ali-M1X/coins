@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.3.0
+ * Version:     2.4.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.3.0');
+define('THB_COINS_VERSION', '2.4.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -30,6 +30,7 @@ require_once THB_COINS_DIR . 'includes/CoinRepository.php';
 require_once THB_COINS_DIR . 'includes/Settings.php';
 require_once THB_COINS_DIR . 'includes/Design.php';
 require_once THB_COINS_DIR . 'includes/LivePrice.php';
+require_once THB_COINS_DIR . 'includes/LiveFeed.php';
 require_once THB_COINS_DIR . 'includes/Datasets.php';
 require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';
@@ -180,11 +181,14 @@ final class Plugin
     public function assets(): void
     {
         /* The coin list shares v2's stylesheet (tokens, fonts, the theme-box
-           breakout) and adds its own table styles. No script: it is a plain,
-           server-rendered table with link pagination. */
+           breakout) and adds its own table styles. A plain, server-rendered
+           table with link pagination; the only script is the optional live
+           price (2.4.0), for the rows a WebSocket feed carries. */
         if (is_post_type_archive(CoinRepository::POST_TYPE)) {
             wp_enqueue_style('thb-v2', THB_COINS_URL . 'assets/v2/v2.css', [], THB_COINS_VERSION);
             wp_enqueue_style('thb-list', THB_COINS_URL . 'assets/v2/list.css', ['thb-v2'], THB_COINS_VERSION);
+            $rows = (array) ($this->listing->entry(Listing::currentPage())['data']['rows'] ?? []);
+            LiveFeed::enqueue($this->config, array_map(static fn($r) => (string) ($r['id'] ?? ''), $rows));
             return;
         }
         if (!is_singular(CoinRepository::POST_TYPE)) {
@@ -244,7 +248,7 @@ final class Plugin
      */
     public static function moduleTag(string $tag, string $handle, string $src): string
     {
-        if ($handle !== 'thb-coin' && $handle !== 'thb-coin-v2') {
+        if ($handle !== 'thb-coin' && $handle !== 'thb-coin-v2' && $handle !== LiveFeed::HANDLE) {
             return $tag;
         }
 
@@ -312,6 +316,7 @@ final class Plugin
                 ) . ';',
                 'before'
             );
+            LiveFeed::enqueue($this->config, [$coin->coingeckoId]);
         }
     }
 }

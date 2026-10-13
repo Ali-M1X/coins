@@ -761,7 +761,7 @@ ok($lst->due() === null, 'and then nothing is due');
 Probe::reset(keepCache: true);
 $l1 = v2_render_list(1);
 ok(Probe::count() === 0, 'a warm list render makes no provider request');
-preg_match_all('#<tr(?: class="is-ours")?>\s*<td class="c-rank">#', $l1, $trs);
+preg_match_all('#<tr(?: class="is-ours")?(?: data-live-id="[a-z0-9-]+")?>\s*<td class="c-rank">#', $l1, $trs);
 ok(count($trs[0]) === 99, 'page 1 lists the 100 top coins less the one CoinGecko sent without a price (' . count($trs[0]) . ' rows)');
 ok(substr_count($l1, '<h1') === 1 && substr_count($l1, '<h2') >= 2 && str_contains($l1, '<th scope="col"') && str_contains($l1, '<th scope="row"'),
    'one h1, section h2s, and a real table with column and row headers');
@@ -829,6 +829,50 @@ ok(strpos($schedSrc, '1b. One page of the /coins/ list') > strpos($schedSrc, '1.
    && strpos($schedSrc, '1. The batch, which serves every coin') > strpos($schedSrc, '0. The live price')
    && str_contains($schedSrc, "\$this->listing->due()") && str_contains($schedSrc, "refuse('coingecko')"),
    'the scheduler asks for at most one list page a tick, after the live price AND the market batch, through the CoinGecko budget');
+
+/* ---- Live price over the visitor's WebSocket (2.4.0) ---------------- */
+use TheHybit\Coins\LiveFeed;
+$cfg = $plugin->config;
+$btcLive = LiveFeed::client($cfg, ['bitcoin']);
+ok(($btcLive['coins']['bitcoin']['usd'][0] ?? null) === ['feed' => 'kraken', 'sym' => 'BTC/USD', 'quote' => 'USD']
+   && ($btcLive['coins']['bitcoin']['usd'][1] ?? null) === ['feed' => 'nobitex', 'sym' => 'BTCUSDT', 'quote' => 'USDT']
+   && ($btcLive['coins']['bitcoin']['irt'] ?? null) === ['feed' => 'nobitex', 'sym' => 'BTCIRT'],
+   'live map: bitcoin is Kraken BTC/USD first, Nobitex BTCUSDT (labelled USDT) second, Nobitex BTCIRT for toman');
+ok(($btcLive['feeds']['kraken']['url'] ?? '') === 'wss://ws.kraken.com/v2' && ($btcLive['feeds']['nobitex']['url'] ?? '') === 'wss://ws.nobitex.ir/connection/websocket',
+   'the browser connects to the exchanges\' public endpoints — no URL of ours, no key');
+ok(!preg_match('#key|token|secret#i', (string) json_encode($btcLive)), 'and the live config carries no key or token');
+ok(LiveFeed::client($cfg, ['hyperliquid']) === null, 'a coin no feed lists (Hyperliquid) gets no live config: it stays on polling');
+$bnb = LiveFeed::client($cfg, ['binancecoin']);
+ok(array_column($bnb['coins']['binancecoin']['usd'] ?? [], 'feed') === ['nobitex'] && !isset($bnb['feeds']['kraken']),
+   'BNB (not on Kraken) is carried only by the Nobitex USDT market — and no Kraken socket is opened for it');
+$suiL = LiveFeed::client($cfg, ['sui']);
+ok(array_column($suiL['coins']['sui']['usd'] ?? [], 'feed') === ['kraken'] && !isset($suiL['coins']['sui']['irt']),
+   'SUI (not on Nobitex) is Kraken only, and gets no live toman');
+$allIds = array_map(static fn($s) => $s['fields']['thb_coingecko_id'], require THB_COINS_DIR . 'config/coins.php');
+$allLive = LiveFeed::client($cfg, array_values($allIds));
+ok(count($allLive['feeds']) === 2, 'all 20 coins on one page still means two sockets — one per exchange, never one per coin');
+foreach ((array) $cfg['live_ws']['feeds'] as $feedName => $f) {
+    foreach (['symbols', 'irt', 'usdt'] as $k) {
+        foreach ((array) ($f[$k] ?? []) as $cg => $sym) {
+            if (!in_array($cg, $allIds, true)) { ok(false, "live map {$feedName}.{$k} names {$cg}, which is not a configured coin"); }
+        }
+    }
+}
+ok(str_contains($html, 'data-live-id="ethereum"') && preg_match('#data-v2-price data-live-usd><bdi class="v2-num" dir="ltr">\$[0-9,.]+</bdi>#', $html),
+   'coin page: the server-rendered price stays in the first response; live.js only enhances it (SEO unchanged)');
+ok(str_contains($html, 'window.__THB_LIVE__ = ') && str_contains($html, 'assets/v2/live.js'), 'coin page loads live.js with its config');
+ok(str_contains($l1, 'data-live-id="bitcoin"') && str_contains($l1, 'assets/v2/live.js')
+   && !str_contains($l1, 'data-live-id="hyperliquid"'), 'list page: rows a feed carries are marked for live.js; the rest are left alone');
+ok(str_contains(Plugin::moduleTag('<script src="l.js"></script>', LiveFeed::HANDLE, 'l.js'), 'type="module"'), 'live.js is served as an ES module');
+$GLOBALS['thb_options']['thb_coins_settings']['live_ws'] = 'off';
+ok(LiveFeed::client($cfg, ['bitcoin']) === null && !LiveFeed::covers($cfg, 'bitcoin'), 'kill switch: Settings live_ws = off → no live config, no data-live attributes');
+$GLOBALS['thb_enqueued'] = [];
+LiveFeed::enqueue($cfg, ['bitcoin']);
+ok(!in_array(LiveFeed::HANDLE, $GLOBALS['thb_enqueued'], true), 'and no script is enqueued');
+unset($GLOBALS['thb_options']['thb_coins_settings']['live_ws']);
+LiveFeed::enqueue($cfg, ['bitcoin']);
+ok(in_array(LiveFeed::HANDLE, $GLOBALS['thb_enqueued'], true) && str_starts_with((string) $GLOBALS['thb_inline'][LiveFeed::HANDLE], 'window.__THB_LIVE__ = '),
+   'switched back on, live.js is enqueued with its JSON island');
 
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);

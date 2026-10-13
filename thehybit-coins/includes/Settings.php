@@ -212,6 +212,12 @@ final class Settings
             }
         }
 
+        /* The live-price kill switch (2.4.0). 'off' removes the script and its
+           JSON from every page; the one-a-minute polling carries on. */
+        if (isset($_POST['live_ws'])) {
+            $stored['live_ws'] = sanitize_key(wp_unslash((string) $_POST['live_ws'])) === 'off' ? 'off' : 'on';
+        }
+
         if (isset($_POST['trade_url'])) {
             $trade = trim((string) wp_unslash($_POST['trade_url']));
             /* https only, and only the two placeholders documented on the
@@ -280,6 +286,19 @@ final class Settings
             . '</td></tr>',
             esc_attr((string) self::get('trade_url', ''))
         );
+
+        $live = (string) self::get(LiveFeed::SETTING, 'on') === 'off' ? 'off' : 'on';
+        echo '<tr><th scope="row"><label for="thb-live-ws">قیمت زنده (WebSocket)</label></th><td>';
+        echo '<select id="thb-live-ws" name="live_ws">';
+        foreach (['on' => 'روشن', 'off' => 'خاموش'] as $value => $label) {
+            printf('<option value="%s"%s>%s</option>', esc_attr($value), $live === $value ? ' selected' : '', esc_html($label));
+        }
+        echo '</select>';
+        echo '<p class="description">در طراحی جدید و فهرست ارزها، مرورگر بازدیدکننده مستقیم به WebSocket عمومی صرافی‌ها '
+           . '(Kraken برای دلار، نوبیتکس برای تومان و پشتیبان دلاری به تتر) وصل می‌شود و قیمت و تغییر ۲۴ ساعته را لحظه‌ای نشان می‌دهد. '
+           . 'سرور هیچ درخواستی برای آن نمی‌فرستد. اگر اتصال برقرار نشود، صفحه مثل قبل هر دقیقه به‌روز می‌شود. '
+           . 'اگر مشکلی دیدید «خاموش» کنید؛ همه‌چیز به حالت پیش از آن برمی‌گردد.</p>';
+        echo '</td></tr>';
 
         echo '</tbody></table>';
 

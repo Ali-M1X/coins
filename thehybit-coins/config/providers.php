@@ -861,4 +861,79 @@ return [
 
     /* How many articles the news section shows. The approved UI expects 4. */
     'news_limit' => 4,
+
+    /* ------------------------------------------------------------------
+     * Live price in the VISITOR'S BROWSER (2.4.0) — assets/v2/live.js.
+     *
+     * The browser connects straight to an exchange's public WebSocket. Our
+     * server never opens, relays or proxies a socket, and a page render makes
+     * no request for it: this block only becomes a few lines of JSON in the
+     * page. Free and keyless. Price and 24h change only — volume stays the
+     * server's global CoinGecko figure, because one exchange's volume is a
+     * fraction of it and would read as a crash.
+     *
+     * One connection per EXCHANGE per page, never one per coin. A coin a feed
+     * does not list has no entry here and keeps the server value and the
+     * one-a-minute polling, exactly as before. Whatever fails — blocked by
+     * region, refused, dropped — the page carries on as if this did not exist.
+     *
+     * Kill switch: Settings → «قیمت زنده (WebSocket)» → خاموش. Per feed:
+     * 'enabled' => false below.
+     *
+     * Symbols are matched by CoinGecko id, never by ticker, so two coins that
+     * share a ticker can never borrow each other's price.
+     * ---------------------------------------------------------------- */
+    'live_ws' => [
+        'enabled' => true,
+        /* Hide the tab this long and the sockets close; they reopen on return. */
+        'hidden_grace' => 10,
+        /* At most one repaint per coin per this many milliseconds. */
+        'paint_ms' => 1000,
+        'feeds' => [
+            /* USD, primary. Kraken WebSocket v2, public ticker channel: last
+               trade price and 24h change; a heartbeat every second while
+               subscribed, so silence means the connection is gone. */
+            'kraken' => [
+                'label'   => 'Kraken',
+                'enabled' => true,
+                'url'     => 'wss://ws.kraken.com/v2',
+                'stale'   => 15,
+                'symbols' => [
+                    'bitcoin' => 'BTC/USD', 'ethereum' => 'ETH/USD', 'tether' => 'USDT/USD',
+                    'ripple' => 'XRP/USD', 'solana' => 'SOL/USD', 'usd-coin' => 'USDC/USD',
+                    'dogecoin' => 'DOGE/USD', 'tron' => 'TRX/USD', 'cardano' => 'ADA/USD',
+                    'chainlink' => 'LINK/USD', 'stellar' => 'XLM/USD', 'sui' => 'SUI/USD',
+                    'bitcoin-cash' => 'BCH/USD', 'avalanche-2' => 'AVAX/USD', 'litecoin' => 'LTC/USD',
+                    'the-open-network' => 'TON/USD', 'shiba-inu' => 'SHIB/USD',
+                ],
+            ],
+            /* Nobitex public WebSocket (Centrifugo, documented at
+               apidocs.nobitex.ir, no token for public: channels). Rial markets
+               give the toman line (÷ 10); USDT markets are the fallback for the
+               USD price and are LABELLED USDT wherever they are shown. Market
+               stats are pushed on change, Centrifugo pings every 25 s. */
+            'nobitex' => [
+                'label'   => 'Nobitex',
+                'enabled' => true,
+                'url'     => 'wss://ws.nobitex.ir/connection/websocket',
+                'stale'   => 40,
+                'irt' => [
+                    'bitcoin' => 'BTCIRT', 'ethereum' => 'ETHIRT', 'tether' => 'USDTIRT',
+                    'ripple' => 'XRPIRT', 'binancecoin' => 'BNBIRT', 'solana' => 'SOLIRT',
+                    'usd-coin' => 'USDCIRT', 'dogecoin' => 'DOGEIRT', 'tron' => 'TRXIRT',
+                    'cardano' => 'ADAIRT', 'chainlink' => 'LINKIRT', 'stellar' => 'XLMIRT',
+                    'bitcoin-cash' => 'BCHIRT', 'avalanche-2' => 'AVAXIRT', 'hedera-hashgraph' => 'HBARIRT',
+                    'litecoin' => 'LTCIRT', 'the-open-network' => 'TONIRT', 'shiba-inu' => 'SHIBIRT',
+                ],
+                'usdt' => [
+                    'bitcoin' => 'BTCUSDT', 'ethereum' => 'ETHUSDT', 'ripple' => 'XRPUSDT',
+                    'binancecoin' => 'BNBUSDT', 'solana' => 'SOLUSDT', 'dogecoin' => 'DOGEUSDT',
+                    'tron' => 'TRXUSDT', 'cardano' => 'ADAUSDT', 'chainlink' => 'LINKUSDT',
+                    'stellar' => 'XLMUSDT', 'bitcoin-cash' => 'BCHUSDT', 'avalanche-2' => 'AVAXUSDT',
+                    'hedera-hashgraph' => 'HBARUSDT', 'litecoin' => 'LTCUSDT', 'the-open-network' => 'TONUSDT',
+                    'shiba-inu' => 'SHIBUSDT',
+                ],
+            ],
+        ],
+    ],
 ];

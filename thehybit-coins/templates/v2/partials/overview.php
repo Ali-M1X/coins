@@ -10,10 +10,15 @@ defined('ABSPATH') || exit;
 $c = $v['coin'];
 $h = $v['hero'];
 $ch = $v['chart'];
+/* data-live-*: the contract with assets/v2/live.js (2.4.0), present only for
+   a coin a live feed carries. The server value stays in the HTML; live.js
+   only ever replaces it with a real tick. */
+$liveId = !empty($c['coingeckoId']) && \TheHybit\Coins\LiveFeed::covers(\TheHybit\Coins\Plugin::instance()->config, $c['coingeckoId'])
+    ? $c['coingeckoId'] : null;
 ?>
 <section class="v2-overview" id="overview" aria-labelledby="overview-title">
 
-  <div class="v2-overview__id">
+  <div class="v2-overview__id"<?= $liveId ? ' data-live-id="' . esc_attr($liveId) . '"' : '' ?>>
     <p class="v2-kicker">قیمت <?= esc_html($c['name']) ?> (<bdi><?= esc_html($c['symbol']) ?></bdi>) امروز</p>
     <div class="v2-identity">
       <?php if (!empty($c['logo'])) : ?>
@@ -34,17 +39,17 @@ $ch = $v['chart'];
        a price announced every minute would drown a screen reader. */ ?>
     <div class="v2-price">
       <?php if ($h['price'] !== null) : ?>
-        <span class="v2-price__value" data-v2-price><?= View::n(Format::usd((float) $h['price'])) ?></span>
-        <span class="v2-delta v2-delta--<?= View::dir($h['change24h']) ?>" data-v2-live-change>
+        <span class="v2-price__value" data-v2-price data-live-usd><?= View::n(Format::usd((float) $h['price'])) ?></span>
+        <span class="v2-delta v2-delta--<?= View::dir($h['change24h']) ?>" data-v2-live-change data-live-chg>
           <span data-v2-live-arrow><?= esc_html(Format::arrow($h['change24h'])) ?></span> <?= View::n(Format::pct($h['change24h'])) ?> <small>۲۴ ساعت</small>
         </span>
       <?php else : ?>
         <?= View::na('pending') ?>
       <?php endif; ?>
     </div>
-    <p class="v2-toman"<?= empty($h['toman']) || $h['toman'] === '—' ? ' hidden' : '' ?> data-v2-live-toman>≈ <?= View::n((string) $h['toman']) ?> تومان</p>
+    <p class="v2-toman"<?= empty($h['toman']) || $h['toman'] === '—' ? ' hidden' : '' ?> data-v2-live-toman data-live-irt>≈ <?= View::n((string) $h['toman']) ?> تومان</p>
     <?php if (!empty($h['live']['fetchedAt'])) : ?>
-      <p class="v2-live-stamp" data-v2-live-stamp>به‌روزرسانی <?= View::n(Format::tehranTime($h['live']['fetchedAt'])) ?> · هر دقیقه</p>
+      <p class="v2-live-stamp" data-v2-live-stamp data-live-stamp>به‌روزرسانی <?= View::n(Format::tehranTime($h['live']['fetchedAt'])) ?> · هر دقیقه</p>
     <?php endif; ?>
 
     <div class="v2-actions">

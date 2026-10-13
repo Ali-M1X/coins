@@ -67,6 +67,16 @@ function get_footer(...$a): void
        . wp_json_encode(\TheHybit\Coins\V2\Model::client($plugin->v2($coin)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
        . ";</script>\n";
     echo "<script type=\"module\" src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/v2.js\"></script>\n";
+    /* The live price (2.4.0), as Plugin::assets() enqueues it: the coin's
+       CoinGecko id on a coin page, every row's on the list. */
+    $ids = !empty($GLOBALS['thb_is_list'])
+        ? array_map(static fn($r) => (string) ($r['id'] ?? ''), (array) ($plugin->listing->entry(\TheHybit\Coins\Listing::currentPage())['data']['rows'] ?? []))
+        : [$coin ? $coin->coingeckoId : ''];
+    $live = \TheHybit\Coins\LiveFeed::client($plugin->config, $ids);
+    if ($live !== null) {
+        echo "<script>window.__THB_LIVE__ = " . wp_json_encode($live, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
+        echo "<script type=\"module\" src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/live.js\"></script>\n";
+    }
     if (!empty($GLOBALS['thb_theme_boxed'])) {
         echo "<footer style=\"padding:14px 16px;color:#555;font:13px sans-serif\">پانویس قالب</footer></div>\n";
     }
