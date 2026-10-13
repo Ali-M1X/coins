@@ -1,0 +1,30 @@
+
+=== current TTLs — requests per hour (steady state, hours 3–8) ===
+  host                           20 coins   50 coins
+  api.alternative.me                  1.0        1.0
+  api.blockchair.com                 25.0       30.0
+  api.coingecko.com                  97.3      124.0
+  api.dexscreener.com                75.8      194.7
+  api.etherscan.io                   13.8       13.8
+  api.github.com                      5.3       11.3
+  api.growthepie.com                  0.2        0.2
+  api.llama.fi                      110.0      218.0
+  api.persiantoolbox.com              3.8        3.8
+  beaconcha.in                        4.0        4.0
+  stablecoins.llama.fi                1.0        1.0
+  yields.llama.fi                     0.2        0.2
+    of which live ticker             65.0       65.0
+    of which /coins/ list             8.0        7.7
+  CoinGecko busiest 60 s                4          4
+  CoinGecko 429s (8 h)                  0          0
+  CoinGecko per day (x24)            2336       2976
+
+  Freshness at the end (worst coin, age ÷ TTL; ≤ 1 is on time):
+  chart.24h                           0.1        0.5
+  chart.7d                            0.0        0.1
+  chart.30d                           0.0        0.0
+  chart.90d                           0.0        0.0
+  chart.1y                            0.0        0.0
+  metadata                            0.3        0.3
+  historical                          0.3        0.3
+  structure                           0.3        0.3

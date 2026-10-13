@@ -77,10 +77,18 @@ final class Cache
         return is_array($entry) ? $entry : null;
     }
 
+    /**
+     * Set by Scheduler::tick() for the duration of a background run: how long
+     * a remembered failure holds there. Null = the short miss TTL below, as
+     * page renders always use. 2.6.0: without it, at 50 coins every coin a
+     * provider has nothing for was asked again every minute by the tick.
+     */
+    public static ?int $missHold = null;
+
     /** How long a FAILURE is remembered. Short by design; see remember(). */
     public function missTtl(): int
     {
-        return (int) ($this->config['miss_ttl'] ?? 60);
+        return self::$missHold ?? (int) ($this->config['miss_ttl'] ?? 60);
     }
 
     /**

@@ -228,7 +228,7 @@ function probe_payload(string $url): array
      * false statement, so the fixture carries exactly that zero. */
     /* ---- Blockchair: large transfers. One row below the threshold, which
        the collector must drop rather than trust the provider's filter. */
-    if (preg_match('#^/(ethereum|bitcoin|litecoin|dogecoin|bitcoin-cash)/transactions$#', $path, $m)) {
+    if (preg_match('#^/(ethereum|bitcoin|litecoin|dogecoin|bitcoin-cash|zcash)/transactions$#', $path, $m)) {
         $isBtc = $m[1] !== 'ethereum';   // the UTXO chains share Bitcoin's shape
         $rows = [];
         foreach ([1500, 800, 2000, 120] as $i => $amount) {
@@ -301,7 +301,7 @@ function probe_payload(string $url): array
         return ['items' => $items];
     }
 
-    if (preg_match('#^/(ethereum|bitcoin|litecoin|dogecoin|bitcoin-cash)/stats$#', $path, $m)) {
+    if (preg_match('#^/(ethereum|bitcoin|litecoin|dogecoin|bitcoin-cash|zcash)/stats$#', $path, $m)) {
         $isBtc = $m[1] !== 'ethereum';   // the UTXO chains share Bitcoin's shape
         return ['data' => [
             'blocks'                          => $isBtc ? 865000 : 21000000,
@@ -480,7 +480,15 @@ function probe_payload(string $url): array
            DexScreener does (the top-20 coins with a DEX presence). */
         foreach (['0xdac17f958d2ee523a2206206994597c13d831ec7' => 'USDT', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' => 'USDC',
                   '0x514910771af9ca656af840dff83e8264ecf986ca' => 'LINK', '0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce' => 'SHIB',
-                  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c' => 'WBNB', 'so11111111111111111111111111111111111111112' => 'SOL'] as $addr => $sym) {
+                  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c' => 'WBNB', 'so11111111111111111111111111111111111111112' => 'SOL',
+                  /* 2.6.0 batch 3 */
+                  '0x2af5d2ad76741191d15dfe7bf6ac92d4bd912ca3' => 'LEO', '0xda5e1988097297dcdc1f90d4dfe7909e847cbef6' => 'WLFI',
+                  '0x3c3a81e81dc49a522a592e7622a7e711c06bf354' => 'MNT', '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984' => 'UNI',
+                  '0xa0b73e1ff0b80914ab6fe0444e65848c4c34450b' => 'CRO', '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9' => 'AAVE',
+                  '0x57e114b691db790c35207b2e685d4a43181e6061' => 'ENA', '0x75231f58b43240c9718dd58b4967c5114342a86c' => 'OKB',
+                  '0x6982508145454ce325ddbe47a25d4ec3d2311933' => 'PEPE', '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3' => 'ONDO',
+                  '0x455e53cbb86018ac2b8092fdcd39d8444affc3f6' => 'POL', '0x912ce59144191c1204e64559fe8253a0e49e6548' => 'ARB',
+                  '0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24' => 'RNDR', '6p6xghyf7aee6tzksmfsko444wqop15icusqi2jfgipn' => 'TRUMP'] as $addr => $sym) {
             if (str_contains(strtolower($path), $addr)) {
                 $symbol = $sym;
             }

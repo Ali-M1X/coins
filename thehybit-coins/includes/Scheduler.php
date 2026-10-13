@@ -51,6 +51,9 @@ defined('ABSPATH') || exit;
 
 final class Scheduler
 {
+    /** Seconds before the background scheduler retries a dataset that came back empty. */
+    public const MISS_RETRY = 15 * 60;
+
     public const HOOK_TICK  = 'thb_warm_tick';
     private const HOOK_PRUNE = 'thb_prune_history';
 
@@ -338,9 +341,13 @@ final class Scheduler
            and the finally block is safe. */
         register_shutdown_function([$this->lock, 'release'], $token);
 
+        /* Inside a tick, a remembered failure is held for MISS_RETRY, not the
+           one-minute miss window page renders use (see Cache::remember). */
+        Cache::$missHold = self::MISS_RETRY;
         try {
             return $this->run();
         } finally {
+            Cache::$missHold = null;
             $this->lock->release($token);
         }
     }
@@ -828,9 +835,13 @@ final class Scheduler
         if (!is_array($entry) || empty($entry['fetchedAt'])) {
             return INF;
         }
-        // A remembered failure is retried once its short miss TTL lapses, not
-        // treated as fresh data.
-        $ttl = !empty($entry['miss']) ? $cache->missTtl() : $cache->ttl($dataset);
+        /* A remembered failure is retried, not treated as fresh data — but by
+           the BACKGROUND scheduler only every 15 minutes (or the dataset's
+           own TTL if that is shorter). 2.6.0: at 50 coins, a coin a provider
+           simply has nothing for (no DEX pairs, an unknown chain) was asked
+           again every minute, forever — a few hundred wasted requests an
+           hour. The short miss TTL still protects page renders. */
+        $ttl = !empty($entry['miss']) ? min($cache->ttl($dataset), max($cache->missTtl(), self::MISS_RETRY)) : $cache->ttl($dataset);
 
         return (time() - (int) $entry['fetchedAt']) / max(1, $ttl);
     }

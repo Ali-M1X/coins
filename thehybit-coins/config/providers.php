@@ -95,7 +95,7 @@ return [
            stats every 15 min + whale transfers every 20 = 7 an hour a chain,
            35 in all — under the 40/h budget and well under Blockchair's
            keyless ~1,440/day, which has IP-blocked this server once. */
-        'network'     => 15 * MINUTE_IN_SECONDS,
+        'network'     => 20 * MINUTE_IN_SECONDS,   // 2.6.0: 15→20, six Blockchair chains within 40/h
         'staking'     => 30 * MINUTE_IN_SECONDS,
         'supply'      => HOUR_IN_SECONDS,
         'development' => 6 * HOUR_IN_SECONDS,
@@ -124,7 +124,7 @@ return [
         'listing'      => 2 * HOUR_IN_SECONDS,
         'activity'     => 6 * HOUR_IN_SECONDS,
         'stakingyield' => 6 * HOUR_IN_SECONDS,
-        'whales'       => 20 * MINUTE_IN_SECONDS,
+        'whales'       => 30 * MINUTE_IN_SECONDS,   // 2.6.0: 20→30, same reason
         'ethlocations' => HOUR_IN_SECONDS,
         'interest'     => 12 * HOUR_IN_SECONDS,
     ],
@@ -296,6 +296,15 @@ return [
         'meme'     => ['dogecoin', 'shiba-inu', 'pepe', 'bonk', 'dogwifcoin'],
         'oracles'  => ['chainlink', 'pyth-network', 'the-graph', 'band-protocol'],
         'newL1'    => ['hyperliquid', 'the-open-network', 'sui', 'aptos', 'near', 'solana'],
+        /* 2.6.0 — batch 3. Each new coin sits in the first group that lists
+           it; still one /coins/markets request for every id here. */
+        'exchange' => ['binancecoin', 'leo-token', 'okb', 'bitget-token', 'whitebit', 'crypto-com-chain'],
+        'privacy'  => ['monero', 'zcash', 'dash'],
+        'defi'     => ['uniswap', 'aave', 'ethena', 'ondo-finance', 'world-liberty-financial', 'aster-2', 'hyperliquid'],
+        'l2'       => ['arbitrum', 'mantle', 'polygon-ecosystem-token', 'optimism'],
+        'l1'       => ['polkadot', 'cosmos', 'internet-computer', 'algorand', 'vechain', 'kaspa', 'ethereum-classic', 'cardano', 'avalanche-2'],
+        'infra'    => ['bittensor', 'render-token', 'filecoin', 'internet-computer'],
+        'memeNew'  => ['official-trump', 'pepe', 'dogecoin', 'shiba-inu', 'bonk'],
     ],
 
     /* ------------------------------------------------------------------
@@ -660,16 +669,18 @@ return [
                same /stats and transaction shapes as Bitcoin, in satoshi-style
                units. Other chains Blockchair indexes return different shapes
                and are not wired in. */
-            'chains'   => ['Ethereum', 'Bitcoin', 'Litecoin', 'Dogecoin', 'Bitcoincash'],
+            /* 2.6.0: Zcash — the same Bitcoin-style shapes (transparent
+               outputs only; shielded transfers are invisible by design). */
+            'chains'   => ['Ethereum', 'Bitcoin', 'Litecoin', 'Dogecoin', 'Bitcoincash', 'Zcash'],
             /* Blockchair names chains its own way — an eighth identifier for one
                coin, stored rather than derived, for the same reason as the other
                seven. See Coin.php. */
             'slugs'    => ['Ethereum' => 'ethereum', 'Bitcoin' => 'bitcoin', 'Litecoin' => 'litecoin',
-                           'Dogecoin' => 'dogecoin', 'Bitcoincash' => 'bitcoin-cash'],
+                           'Dogecoin' => 'dogecoin', 'Bitcoincash' => 'bitcoin-cash', 'Zcash' => 'zcash'],
             'datasets' => ['network', 'whales'],
             /* Whale radar: native transfers at or above this many coins. */
             'whale_min' => ['Ethereum' => 500, 'Bitcoin' => 500, 'Litecoin' => 20000,
-                            'Dogecoin' => 20000000, 'Bitcoincash' => 5000],
+                            'Dogecoin' => 20000000, 'Bitcoincash' => 5000, 'Zcash' => 5000],
         ],
 
         /* v2's price-since-launch chart. DefiLlama's price API, as its own
@@ -905,6 +916,15 @@ return [
                     'chainlink' => 'LINK/USD', 'stellar' => 'XLM/USD', 'sui' => 'SUI/USD',
                     'bitcoin-cash' => 'BCH/USD', 'avalanche-2' => 'AVAX/USD', 'litecoin' => 'LTC/USD',
                     'the-open-network' => 'TON/USD', 'shiba-inu' => 'SHIB/USD',
+                    /* 2.6.0 batch 3. A pair Kraken does not list is rejected by
+                       the socket and that coin simply stays on polling. */
+                    'zcash' => 'ZEC/USD', 'monero' => 'XMR/USD', 'polkadot' => 'DOT/USD', 'uniswap' => 'UNI/USD',
+                    'aave' => 'AAVE/USD', 'near' => 'NEAR/USD', 'pepe' => 'PEPE/USD', 'internet-computer' => 'ICP/USD',
+                    'ethereum-classic' => 'ETC/USD', 'aptos' => 'APT/USD', 'ondo-finance' => 'ONDO/USD',
+                    'polygon-ecosystem-token' => 'POL/USD', 'algorand' => 'ALGO/USD', 'cosmos' => 'ATOM/USD',
+                    'arbitrum' => 'ARB/USD', 'render-token' => 'RENDER/USD', 'filecoin' => 'FIL/USD', 'ethena' => 'ENA/USD',
+                    'bittensor' => 'TAO/USD', 'mantle' => 'MNT/USD', 'world-liberty-financial' => 'WLFI/USD',
+                    'official-trump' => 'TRUMP/USD', 'kaspa' => 'KAS/USD',
                 ],
             ],
             /* Nobitex public WebSocket (Centrifugo, documented at
@@ -924,6 +944,12 @@ return [
                     'cardano' => 'ADAIRT', 'chainlink' => 'LINKIRT', 'stellar' => 'XLMIRT',
                     'bitcoin-cash' => 'BCHIRT', 'avalanche-2' => 'AVAXIRT', 'hedera-hashgraph' => 'HBARIRT',
                     'litecoin' => 'LTCIRT', 'the-open-network' => 'TONIRT', 'shiba-inu' => 'SHIBIRT',
+                    /* 2.6.0 batch 3 — from Nobitex's documented currency list.
+                       PEPE trades there only as «1M_PEPE» (a million units per
+                       lot) and is deliberately left out rather than rescaled. */
+                    'uniswap' => 'UNIIRT', 'polkadot' => 'DOTIRT', 'aave' => 'AAVEIRT', 'cosmos' => 'ATOMIRT',
+                    'algorand' => 'ALGOIRT', 'monero' => 'XMRIRT', 'aptos' => 'APTIRT', 'near' => 'NEARIRT',
+                    'filecoin' => 'FILIRT', 'render-token' => 'RNDRIRT', 'arbitrum' => 'ARBIRT', 'ethereum-classic' => 'ETCIRT',
                 ],
                 'usdt' => [
                     'bitcoin' => 'BTCUSDT', 'ethereum' => 'ETHUSDT', 'ripple' => 'XRPUSDT',
@@ -932,6 +958,9 @@ return [
                     'stellar' => 'XLMUSDT', 'bitcoin-cash' => 'BCHUSDT', 'avalanche-2' => 'AVAXUSDT',
                     'hedera-hashgraph' => 'HBARUSDT', 'litecoin' => 'LTCUSDT', 'the-open-network' => 'TONUSDT',
                     'shiba-inu' => 'SHIBUSDT',
+                    'uniswap' => 'UNIUSDT', 'polkadot' => 'DOTUSDT', 'aave' => 'AAVEUSDT', 'cosmos' => 'ATOMUSDT',
+                    'algorand' => 'ALGOUSDT', 'monero' => 'XMRUSDT', 'aptos' => 'APTUSDT', 'near' => 'NEARUSDT',
+                    'filecoin' => 'FILUSDT', 'render-token' => 'RNDRUSDT', 'arbitrum' => 'ARBUSDT', 'ethereum-classic' => 'ETCUSDT',
                 ],
             ],
         ],

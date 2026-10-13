@@ -85,7 +85,7 @@ $plot = array_values(array_filter($p['rows'], static fn($r) => $r['marketCap'] !
           <thead>
             <tr><th scope="col"><span class="v2-sr">شاخص</span></th>
               <?php foreach ($p['table'] as $r) : ?>
-                <th scope="col" class="<?= $r['self'] ? 'is-self' : '' ?>"><bdi><?= esc_html($r['symbol']) ?></bdi></th>
+                <th scope="col" class="<?= $r['self'] ? 'is-self' : '' ?>"><?php if (!empty($r['url'])) : ?><a class="v2-peers__link" href="<?= esc_url($r['url']) ?>"><bdi><?= esc_html($r['symbol']) ?></bdi></a><?php else : ?><bdi><?= esc_html($r['symbol']) ?></bdi><?php endif; ?></th>
               <?php endforeach; ?>
             </tr>
           </thead>
@@ -112,6 +112,11 @@ $plot = array_values(array_filter($p['rows'], static fn($r) => $r['marketCap'] !
         </table>
       </div>
       <p class="v2-muted">علاقه جست‌وجو و فعالیت توسعه برای همه همتایان به‌صورت یکسان اندازه‌گیری‌پذیر نیست و نمایش داده نمی‌شود.</p>
+      <?php $more = array_values(array_filter($p['rows'], static fn($r) => !empty($r['url']))); ?>
+      <?php if ($more !== []) : ?>
+        <p class="v2-peers__more">صفحه همتایان: <?php foreach ($more as $k => $r) : ?><?= $k ? '، ' : '' ?><a href="<?= esc_url($r['url']) ?>"><?= esc_html($r['name']) ?></a><?php endforeach; ?></p>
+      <?php endif; ?>
+
     </div>
   </div>
   <?php endif; ?>

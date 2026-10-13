@@ -77,8 +77,37 @@ function simulate(array $config, int $n, array $seeds): array
             $scheduler->tick();
             Clock::$now = max($at + $interval, Clock::$now);
         }
+        if (getenv('THB_FILL')) {
+            /* How many coins have every chart window and the since-launch
+               history, after each simulated hour from an empty cache. */
+            $full = 0;
+            $priced = 0;
+            foreach ($ids as $id => $slug) {
+                $coin = $plugin->coins->find($id);
+                $ok = true;
+                foreach (['chart.24h', 'chart.7d', 'chart.30d', 'chart.90d', 'chart.1y', 'longchart'] as $ds) {
+                    $e = $cache->peek($ds, $cache->keyFor($ds, $coin));
+                    if (!is_array($e) || empty($e['data'])) { $ok = false; }
+                }
+                $m = $cache->peek('market', $cache->keyFor('market', $coin));
+                $priced += is_array($m) && !empty($m['data']) ? 1 : 0;
+                $full += $ok ? 1 : 0;
+            }
+            fwrite(STDERR, sprintf("  after %dh: %d/%d coins priced, %d/%d with every chart filled\n", $h + 1, $priced, $n, $full, $n));
+        }
     }
     $calls = array_slice(Probe::$calls, $start);
+    if (getenv('THB_DEBUG_HOST')) {
+        $by = [];
+        foreach ($calls as $c) {
+            if ($c['host'] === getenv('THB_DEBUG_HOST')) {
+                $u = preg_replace('#\?.*#', '', $c['url']);
+                $by[$u] = ($by[$u] ?? 0) + 1 / $window;
+            }
+        }
+        arsort($by);
+        foreach (array_slice($by, 0, 25, true) as $u => $n) { fwrite(STDERR, sprintf("  %6.1f/h  %s\n", $n, $u)); }
+    }
     $byHost = [];
     foreach ($calls as $c) {
         $byHost[$c['host']] = ($byHost[$c['host']] ?? 0) + 1 / $window;
@@ -118,10 +147,12 @@ if (getenv('THB_TTL_PROPOSAL')) {
     $variants = ['proposed TTLs' => $plugin->config];
 }
 foreach ($variants as $label => $config) {
-    $r2 = simulate($config, 2, $seeds);
-    $r20 = simulate($config, 20, $seeds);
+    /* THB_SIZES=20,50 compares the 2.5 site with the 2.6 one; default 2,20. */
+    [$na, $nb] = array_map('intval', explode(',', getenv('THB_SIZES') ?: '2,20'));
+    $r2 = simulate($config, $na, $seeds);
+    $r20 = simulate($config, $nb, $seeds);
     printf("\n=== %s — requests per hour (steady state, hours 3–8) ===\n", $label);
-    printf("  %-28s %10s %10s\n", 'host', '2 coins', '20 coins');
+    printf("  %-28s %10s %10s\n", 'host', $na . ' coins', $nb . ' coins');
     foreach (array_unique(array_merge(array_keys($r2['byHost']), array_keys($r20['byHost']))) as $host) {
         printf("  %-28s %10.1f %10.1f\n", $host, $r2['byHost'][$host] ?? 0, $r20['byHost'][$host] ?? 0);
     }

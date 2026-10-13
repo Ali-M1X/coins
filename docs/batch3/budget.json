@@ -1,0 +1,64 @@
+{
+    "2": {
+        "byHost": {
+            "api.alternative.me": 0.9999999999999999,
+            "api.blockchair.com": 25.00000000000004,
+            "api.coingecko.com": 97.33333333333391,
+            "api.dexscreener.com": 75.8333333333333,
+            "api.etherscan.io": 13.833333333333318,
+            "api.github.com": 5.333333333333334,
+            "api.growthepie.com": 0.16666666666666666,
+            "api.llama.fi": 110.00000000000094,
+            "api.persiantoolbox.com": 3.8333333333333317,
+            "beaconcha.in": 3.9999999999999982,
+            "stablecoins.llama.fi": 0.9999999999999999,
+            "yields.llama.fi": 0.16666666666666666
+        },
+        "peak": 4,
+        "refused": 0,
+        "ticker": 65,
+        "listing": 8,
+        "worst": {
+            "chart.24h": 0.08833333333333333,
+            "chart.7d": 0.014722222222222222,
+            "chart.30d": 0.007361111111111111,
+            "chart.90d": 0.0036805555555555554,
+            "chart.1y": 0.0012268518518518518,
+            "metadata": 0.3239236111111111,
+            "historical": 0.3277777777777778,
+            "structure": 0.32905092592592594
+        },
+        "ticks": 65
+    },
+    "20": {
+        "byHost": {
+            "api.alternative.me": 0.9999999999999999,
+            "api.blockchair.com": 30.000000000000075,
+            "api.coingecko.com": 124.00000000000134,
+            "api.dexscreener.com": 194.66666666666433,
+            "api.etherscan.io": 13.833333333333318,
+            "api.github.com": 11.333333333333327,
+            "api.growthepie.com": 0.16666666666666666,
+            "api.llama.fi": 217.99999999999633,
+            "api.persiantoolbox.com": 3.8333333333333317,
+            "beaconcha.in": 3.9999999999999982,
+            "stablecoins.llama.fi": 0.9999999999999999,
+            "yields.llama.fi": 0.16666666666666666
+        },
+        "peak": 4,
+        "refused": 0,
+        "ticker": 65,
+        "listing": 7.666666666666667,
+        "worst": {
+            "chart.24h": 0.455,
+            "chart.7d": 0.07583333333333334,
+            "chart.30d": 0.03791666666666667,
+            "chart.90d": 0.018958333333333334,
+            "chart.1y": 0.006319444444444444,
+            "metadata": 0.32775462962962965,
+            "historical": 0.32775462962962965,
+            "structure": 0.32775462962962965
+        },
+        "ticks": 65
+    }
+}

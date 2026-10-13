@@ -1167,6 +1167,14 @@ final class Model
             ]);
         }
 
+        /* 2.6.0: internal links — every peer we have a page for links to it. */
+        $pages = [];
+        foreach ((new \TheHybit\Coins\CoinRepository())->all() as $c) {
+            if ($c->coingeckoId !== '' && $c->postId) {
+                $pages[$c->coingeckoId] = (string) get_permalink($c->postId);
+            }
+        }
+
         $out = [];
         foreach ($list as $r) {
             $tvl = $tvlByGecko[$r['id']] ?? null;
@@ -1177,6 +1185,7 @@ final class Model
                 'symbol'    => $r['symbol'],
                 'name'      => $r['name'] ?? $r['symbol'],
                 'self'      => $r['id'] === $self,
+                'url'       => $r['id'] !== $self ? ($pages[$r['id']] ?? null) : null,
                 'marketCap' => $r['marketCap'],
                 'volume'    => $r['volume24h'] ?? null,
                 'tvl'       => $tvl,

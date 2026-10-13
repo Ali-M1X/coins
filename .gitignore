@@ -32,3 +32,6 @@ docs/v2-screens/ethereum-mobile-*.png
 docs/v2-screens/bitcoin-mobile-full.png
 docs/v2-screens/header-*.png
 !docs/v2-screens/ethereum-desktop-full.png
+v2-aave.html
+v2-zcash.html
+v2-near.html

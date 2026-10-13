@@ -592,6 +592,9 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-bubble__legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; color: var(--v2-muted); margin-top: 6px; }
 .v2-bubble__key { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: rgba(139, 92, 246, .35); border: 2px solid rgba(167, 139, 250, .9); }
 .v2-bubble__key--self { background: rgba(25, 227, 177, .3); border-color: var(--v2-accent); }
+.v2-peers__link { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.v2-peers__more { font-size: 13px; color: var(--v2-muted); margin-top: 8px; line-height: 1.9; }
+.v2-peers__more a { color: var(--v2-accent); }
 .v2-peers__insight { font-weight: 400; line-height: 1.9; font-size: 14px; }
 .v2-peers__insight-title { font-size: 14px; font-weight: 700; color: var(--v2-accent); margin-bottom: 4px; }
 .v2-bubble__pt.is-self circle { fill: rgba(25, 227, 177, .3); stroke: var(--v2-accent); stroke-width: 3; filter: drop-shadow(0 0 16px rgba(25, 227, 177, .7)); }
