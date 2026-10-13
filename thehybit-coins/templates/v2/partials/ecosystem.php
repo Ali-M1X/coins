@@ -16,6 +16,7 @@ $c = $v['coin'];
 $nodes = $e['nodes'];
 $present = array_values(array_unique(array_column($nodes, 'group')));
 $first = $nodes[0] ?? null;
+$cy = \TheHybit\Coins\V2\Model::ECO_CY;
 ?>
 <section class="v2-section v2-eco" id="ecosystem" aria-labelledby="ecosystem-title">
   <?= View::heading('ecosystem', 'اکوسیستم ' . $c['name'], 'پروتکل‌های این زنجیره به ترتیب کارمزدی که کاربران در ۲۴ ساعت گذشته پرداخته‌اند') ?>
@@ -40,24 +41,24 @@ $first = $nodes[0] ?? null;
   <div class="v2-eco__grid">
     <div class="v2-card v2-eco__map" data-v2-eco-map>
       <div class="v2-xscroll" style="--min: 680px" data-v2-center>
-        <svg viewBox="0 0 1000 600" role="img" aria-label="نقشه پروتکل‌های <?= esc_attr($c['name']) ?> بر اساس کارمزد ۲۴ ساعته">
+        <svg viewBox="0 0 1000 780" role="img" aria-label="نقشه پروتکل‌های <?= esc_attr($c['name']) ?> بر اساس کارمزد ۲۴ ساعته">
         <defs>
           <radialGradient id="v2-core" cx="50%" cy="50%" r="50%">
             <stop offset="0" stop-color="var(--v2-violet)" stop-opacity=".55"/>
             <stop offset="1" stop-color="var(--v2-violet)" stop-opacity="0"/>
           </radialGradient>
         </defs>
-        <circle cx="500" cy="290" r="160" fill="url(#v2-core)"/>
+        <circle cx="500" cy="<?= $cy ?>" r="170" fill="url(#v2-core)"/>
         <?php foreach ($nodes as $i => $nd) :
             $next = $nodes[($i + 1) % count($nodes)]; ?>
           <line class="v2-eco__edge v2-eco__edge--faint" x1="<?= $nd['x'] ?>" y1="<?= $nd['y'] ?>" x2="<?= $next['x'] ?>" y2="<?= $next['y'] ?>"/>
-          <line class="v2-eco__edge" data-group="<?= esc_attr($nd['group']) ?>" x1="500" y1="290" x2="<?= $nd['x'] ?>" y2="<?= $nd['y'] ?>"/>
+          <line class="v2-eco__edge" data-group="<?= esc_attr($nd['group']) ?>" x1="500" y1="<?= $cy ?>" x2="<?= $nd['x'] ?>" y2="<?= $nd['y'] ?>"/>
         <?php endforeach; ?>
-        <circle cx="500" cy="290" r="62" class="v2-eco__core"/>
+        <circle cx="500" cy="<?= $cy ?>" r="62" class="v2-eco__core"/>
         <?php if (!empty($c['logo'])) : ?>
-          <image href="<?= esc_url($c['logo']) ?>" x="460" y="250" width="80" height="80"/>
+          <image href="<?= esc_url($c['logo']) ?>" x="460" y="<?= $cy - 40 ?>" width="80" height="80"/>
         <?php else : ?>
-          <text x="500" y="300" text-anchor="middle" class="v2-eco__coretext"><?= esc_html($c['symbol']) ?></text>
+          <text x="500" y="<?= $cy + 10 ?>" text-anchor="middle" class="v2-eco__coretext"><?= esc_html($c['symbol']) ?></text>
         <?php endif; ?>
         <?php foreach ($nodes as $i => $nd) : ?>
           <g class="v2-eco__node v2-g--<?= esc_attr($nd['group']) ?>" data-group="<?= esc_attr($nd['group']) ?>" data-v2-node="<?= $i ?>" tabindex="0" role="button"
@@ -135,7 +136,6 @@ $first = $nodes[0] ?? null;
         </ol>
         <p class="v2-muted">مجموع: <?= View::n(Format::usdCompact($e['totalFees'])) ?> در ۲۴ ساعت</p>
       </div>
-      <?= View::source($e['source'], $e['fetchedAt']) ?>
     </aside>
   </div>
   <?php endif; ?>

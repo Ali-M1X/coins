@@ -42,7 +42,7 @@ final class View
     {
         $label = match ($state) {
             'pending'        => 'در حال دریافت داده',
-            'disabled'       => 'منبع فعال نیست',
+            'disabled'       => 'این داده فعال نیست',
             'not_applicable' => 'کاربرد ندارد',
             default          => 'داده در دسترس نیست',
         };
@@ -54,18 +54,14 @@ final class View
         );
     }
 
-    /** "Source · fetched at 07:15" — the provenance line under a card. */
+    /**
+     * The provenance line under a card. 2.5.0: the public page names no
+     * sources (editor's decision); the per-figure record lives on the admin
+     * diagnostics screen. Kept so a child theme calling it does not break.
+     */
     public static function source(?string $who, ?string $iso = null): string
     {
-        if ($who === null || $who === '') {
-            return '';
-        }
-        $time = $iso ? \TheHybit\Coins\Format::tehranTime($iso) : null;
-        return sprintf(
-            '<p class="v2-source">منبع: <bdi>%s</bdi>%s</p>',
-            esc_html($who),
-            $time ? ' · به‌روزرسانی ' . self::n($time) : ''
-        );
+        return '';
     }
 
     /** A section heading block with an anchor id and optional sub-line. */

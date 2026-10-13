@@ -33,7 +33,7 @@ $sent = $d['sentiment'];
           </svg>
           <p class="v2-gauge__label"><?= esc_html((string) $sent['label']) ?>
             <?php if ($sent['weekAgo'] !== null) : ?><span class="v2-muted">· هفته قبل <?= View::n((string) (int) $sent['weekAgo']) ?></span><?php endif; ?></p>
-          <p class="v2-source">شاخص ترس و طمع کل بازار · <bdi>Alternative.me</bdi></p>
+          <p class="v2-source">شاخص ترس و طمع کل بازار</p>
         <?php else : ?>
           <?= View::na($sent['state']) ?>
         <?php endif; ?>

@@ -49,9 +49,8 @@ $c = $v['coin'];
         </ul>
       <?php endif; ?>
       <?php if ($s['missing'] !== [] || count($s['slices']) > 2) : ?>
-        <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم در WETH. منابع: beaconcha.in (استیکینگ) و Etherscan (سوزاندن، WETH، پل‌ها، کیف پول‌های صرافی‌ها).</p>
+        <p class="v2-muted">هر نوار سهم جداگانه‌ای از کل عرضه است و جمع آن‌ها ۱۰۰ نیست — یک سکه می‌تواند هم در استیکینگ باشد و هم در WETH.</p>
       <?php else : ?>
-        <p class="v2-muted">منبع: <bdi>CoinGecko</bdi> (عرضه در گردش، کل و سقف عرضه).</p>
       <?php endif; ?>
     </div>
     <?php endif; ?>
@@ -64,19 +63,19 @@ $c = $v['coin'];
           − تورم خالص عرضه <?= $s['inflation'] !== null ? View::n(Format::pct($s['inflation'], true, 2)) : '<span class="v2-muted">؟</span>' ?></p>
         <?php if ($s['realYield'] !== null) : ?>
           <p class="v2-yield__big"><?= View::n(Format::pct($s['realYield'], false, 2)) ?></p>
-          <p class="v2-muted">بازده واقعی سالانه = بازده استیکینگ منهای تغییر سالانه‌شده عرضه در ۷ روز گذشته (انتشار منهای سوزاندن، <bdi><?= esc_html((string) $s['inflationSource']) ?></bdi>)</p>
+          <p class="v2-muted">بازده واقعی سالانه = بازده استیکینگ منهای تغییر سالانه‌شده عرضه در ۷ روز گذشته (انتشار منهای سوزاندن)</p>
         <?php else : ?>
           <p class="v2-yield__big"><?= View::n(Format::pct($s['apr'], false, 2)) ?></p>
           <p class="v2-muted">بازده استیکینگ؛ بازده واقعی وقتی محاسبه می‌شود که دو اندازه‌گیری عرضه با دست‌کم ۶ روز فاصله ثبت شده باشد.</p>
         <?php endif; ?>
-        <p class="v2-source">بازده: <?= esc_html((string) $s['aprSource']) ?><?= $s['validators'] ? ' · ' . View::n(Format::num((float) $s['validators'], 0)) . ' اعتبارسنج' : '' ?></p>
+        <?php if ($s['validators']) : ?><p class="v2-source"><?= View::n(Format::num((float) $s['validators'], 0)) ?> اعتبارسنج فعال</p><?php endif; ?>
         <?php if ($s['aprKind'] === 'formula') : ?>
           <p class="v2-muted">این عدد اندازه‌گیری نیست: حداکثر بازده لایه اجماع است که از فرمول پروتکل و کل اتر سپرده‌شده محاسبه شده؛ کارمزد اولویت و MEV در آن نیست.</p>
         <?php endif; ?>
       <?php elseif ($s['inflation'] !== null) : ?>
         <p class="v2-yield__eq"><?= $s['isPow'] ? 'این شبکه استیکینگ ندارد؛ ' : '' ?>تورم سالانه‌شده عرضه:</p>
         <p class="v2-yield__big"><?= View::n(Format::pct($s['inflation'], true, 2)) ?></p>
-        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته، از اندازه‌گیری‌های خود سایت · <bdi><?= esc_html((string) $s['inflationSource']) ?></bdi></p>
+        <p class="v2-muted">تغییر سالانه‌شده عرضه در ۷ روز گذشته، از اندازه‌گیری‌های خود سایت</p>
       <?php else : ?>
         <?= View::na('pending', 'رشد عرضه از اندازه‌گیری‌هایی با دست‌کم ۶ روز فاصله محاسبه می‌شود') ?>
       <?php endif; ?>

@@ -252,6 +252,52 @@ final class Svg
         return $out;
     }
 
+    /**
+     * Push circles apart until none overlap (plus `gap`), keeping each inside
+     * [x0,x1]×[y0,y1]. Each moves the least it must: overlapping pairs are
+     * separated along the line between their centres, half each. Used for
+     * the peers bubble chart, where log scales put big chains on top of each
+     * other.
+     *
+     * @param array<int|string, array{x:float,y:float,r:float}> $pts
+     */
+    public static function separate(array $pts, float $x0, float $x1, float $y0, float $y1, float $gap = 4.0): array
+    {
+        $keys = array_keys($pts);
+        for ($iter = 0; $iter < 300; $iter++) {
+            $moved = false;
+            foreach ($keys as $i => $a) {
+                foreach (array_slice($keys, $i + 1) as $b) {
+                    $dx = $pts[$b]['x'] - $pts[$a]['x'];
+                    $dy = $pts[$b]['y'] - $pts[$a]['y'];
+                    $d = sqrt($dx * $dx + $dy * $dy);
+                    $min = $pts[$a]['r'] + $pts[$b]['r'] + $gap;
+                    if ($d >= $min) {
+                        continue;
+                    }
+                    if ($d < 0.01) {   // identical centres: split sideways
+                        $dx = 1.0; $dy = 0.3; $d = sqrt(1.09);
+                    }
+                    $push = ($min - $d) / 2 + 0.01;
+                    $ux = $dx / $d;
+                    $uy = $dy / $d;
+                    $pts[$a]['x'] -= $ux * $push; $pts[$a]['y'] -= $uy * $push;
+                    $pts[$b]['x'] += $ux * $push; $pts[$b]['y'] += $uy * $push;
+                    $moved = true;
+                }
+            }
+            foreach ($keys as $k) {
+                $r = $pts[$k]['r'];
+                $pts[$k]['x'] = max($x0 + $r, min($x1 - $r, $pts[$k]['x']));
+                $pts[$k]['y'] = max($y0 + $r, min($y1 - $r, $pts[$k]['y']));
+            }
+            if (!$moved) {
+                break;
+            }
+        }
+        return $pts;
+    }
+
     /* ------------------------------------------------------------------
      * Scales
      * ---------------------------------------------------------------- */

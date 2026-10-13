@@ -30,9 +30,6 @@ $liveId = !empty($c['coingeckoId']) && \TheHybit\Coins\LiveFeed::covers(\TheHybi
         <span class="v2-chip v2-chip--muted">رتبه <?= View::n('#' . $c['rank']) ?></span>
       <?php endif; ?>
     </div>
-    <?php if ($c['tagline'] !== '') : ?>
-      <p class="v2-tagline"><?= esc_html($c['tagline']) ?></p>
-    <?php endif; ?>
 
     <?php /* data-v2-live-*: the three figures v2.js updates in place from
        /wp-json/thehybit/v1/price/{slug} once a minute. Not an aria-live region:
@@ -48,9 +45,6 @@ $liveId = !empty($c['coingeckoId']) && \TheHybit\Coins\LiveFeed::covers(\TheHybi
       <?php endif; ?>
     </div>
     <p class="v2-toman"<?= empty($h['toman']) || $h['toman'] === '—' ? ' hidden' : '' ?> data-v2-live-toman data-live-irt>≈ <?= View::n((string) $h['toman']) ?> تومان</p>
-    <?php if (!empty($h['live']['fetchedAt'])) : ?>
-      <p class="v2-live-stamp" data-v2-live-stamp data-live-stamp>به‌روزرسانی <?= View::n(Format::tehranTime($h['live']['fetchedAt'])) ?> · هر دقیقه</p>
-    <?php endif; ?>
 
     <div class="v2-actions">
       <?php if ($c['tradeUrl']) : ?>

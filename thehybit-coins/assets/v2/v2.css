@@ -397,11 +397,11 @@ html:has(.thb-v2) { overflow-x: clip; }
 
 .v2-flow__sankey { align-self: start; }
 .v2-flow__sankey svg { width: 100%; height: auto; }
-.v2-ribbon { fill: var(--tone); opacity: .38; transition: opacity .2s; }
+.v2-ribbon { fill: var(--tone); opacity: .45; transition: opacity .2s; }
 .v2-ribbon:hover { opacity: .65; }
 .v2-flow__node { fill: var(--tone); }
-.v2-flow__label { fill: var(--v2-text); font-size: 17px; font-weight: 600; }
-.v2-flow__pct { fill: var(--v2-accent); font-size: 15px; }
+.v2-flow__label { fill: #fff; font-size: 17px; font-weight: 700; paint-order: stroke; stroke: rgba(5, 7, 13, .55); stroke-width: 3px; }
+.v2-flow__pct { fill: #e8edf5; font-size: 15px; font-weight: 600; paint-order: stroke; stroke: rgba(5, 7, 13, .55); stroke-width: 3px; }
 .v2-flow__head { fill: var(--v2-text); font-size: 17px; font-weight: 700; }
 .v2-flow__dir { fill: var(--v2-muted); font-size: 14px; letter-spacing: 1px; }
 .v2-flow__arrow { fill: var(--tone); }
@@ -430,14 +430,14 @@ html:has(.thb-v2) { overflow-x: clip; }
 /* Wrapping, not scrolling: as many events per line as fit, then a new line
    below. Left-to-right within each line, as chronology is read here. Each item
    draws its own stretch of the rail, so every line has a continuous one. */
-.v2-timeline__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 30px 0; direction: ltr; }
+.v2-timeline__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 30px 0; direction: rtl; /* 2.5.0: starts on the right, every line */ }
 /* The joins between wrapped lines (drawn by v2.js), in the rail's colour. */
 .v2-timeline__joins { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .v2-timeline__join { fill: none; stroke: rgba(25, 227, 177, .45); stroke-width: 2; stroke-linecap: round; }
 .v2-timeline__join.is-planned { stroke: rgba(139, 92, 246, .8); stroke-dasharray: 8 6; }
 .v2-timeline__item { position: relative; padding: 30px 12px 0; direction: rtl; text-align: right; }
 .v2-timeline__item::before { content: ""; position: absolute; top: 9px; left: 0; right: 0; height: 2px; background: rgba(25, 227, 177, .45); }
-.v2-timeline__dot { position: absolute; top: 0; left: 12px; width: 20px; height: 20px; border-radius: 50%; background: #052a22; border: 2px solid var(--v2-accent); box-shadow: 0 0 14px rgba(25, 227, 177, .6); }
+.v2-timeline__dot { position: absolute; top: 0; inset-inline-start: 12px; width: 20px; height: 20px; border-radius: 50%; background: #052a22; border: 2px solid var(--v2-accent); box-shadow: 0 0 14px rgba(25, 227, 177, .6); }
 .v2-timeline__item.is-featured .v2-timeline__dot { background: var(--v2-accent); box-shadow: 0 0 24px rgba(25, 227, 177, .9); }
 .v2-timeline__item.is-planned::before { background: repeating-linear-gradient(90deg, rgba(139, 92, 246, .8) 0 8px, transparent 8px 14px); }
 .v2-timeline__item.is-planned .v2-timeline__dot { border-style: dashed; border-color: var(--v2-violet); background: transparent; box-shadow: none; }
@@ -520,7 +520,16 @@ html:has(.thb-v2) { overflow-x: clip; }
 /* ---------- 6. price as story ---------- */
 
 .v2-pstory__bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.v2-pstory__chart { position: relative; }
 .v2-pstory__chart svg { width: 100%; height: auto; }
+/* 2.5.0: the event's explanation, beside the event (v2.js places it). */
+.v2-pop { position: absolute; z-index: 5; width: min(320px, calc(100% - 16px)); padding: 14px 16px; border-radius: 14px; background: rgba(7, 11, 20, .97); border: 1px solid rgba(25, 227, 177, .55); box-shadow: 0 12px 32px rgba(0, 0, 0, .55); direction: rtl; text-align: right; pointer-events: auto; }
+.v2-pop[hidden] { display: none; }
+.v2-pop__title { font-size: 16px; font-weight: 700; color: var(--v2-text); }
+.v2-pop__date { font-size: 12px; color: var(--v2-muted); margin-top: 2px; }
+.v2-pop__text { font-size: 13.5px; line-height: 1.8; color: #c4ccd8; margin-top: 8px; }
+.v2-pop__figs { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--v2-line); font-size: 12.5px; color: var(--v2-muted); }
+.v2-pop__figs [hidden] { display: none; }
 .v2-grid { stroke: rgba(148, 163, 184, .08); }
 .v2-axis { fill: var(--v2-muted); font-size: 13px; }
 .v2-axisline { stroke: rgba(148, 163, 184, .3); }
@@ -547,24 +556,23 @@ html:has(.thb-v2) { overflow-x: clip; }
 /* ---------- 7. pulse ---------- */
 
 .v2-pulse__head { display: grid; gap: 4px; }
-.v2-pulse__date { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; }
-.v2-live { display: inline-flex; align-items: center; gap: 6px; padding: 2px 12px; border-radius: 10px; background: var(--v2-accent); color: var(--v2-accent-ink); font-size: 13px; }
-.v2-live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.v2-pulse__lines li { font-size: clamp(16px, 1.8vw, 20px); font-weight: 600; line-height: 1.9; padding: 8px 0; }
-.v2-pulse__lines strong { margin-inline-start: 8px; }
-.v2-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
-.v2-chips__item { padding: 8px 16px; border: 1px solid var(--v2-line-2); border-radius: 12px; font-size: 14px; background: rgba(13, 20, 34, .7); }
+.v2-pulse__date { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: var(--v2-muted); }
+/* 2.5.0: the day's lines live in one framed card, a step smaller. */
+.v2-pulse__card { padding: 8px 20px 16px; }
+.v2-pulse__lines li { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; font-size: clamp(14px, 1.3vw, 16px); font-weight: 500; line-height: 1.8; padding: 12px 0; border-bottom: 1px solid var(--v2-line); }
+.v2-pulse__lines li:last-child { border-bottom: 0; }
+.v2-pulse__fig { flex: none; font-size: 15px; font-weight: 700; }
+.v2-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.v2-chips__item { padding: 6px 12px; border: 1px solid var(--v2-line-2); border-radius: 10px; font-size: 13px; background: rgba(13, 20, 34, .7); }
 .v2-chips__item--positive { border-color: rgba(25, 227, 177, .4); }
 .v2-chips__item--negative { border-color: rgba(244, 63, 94, .4); }
-.v2-heat__bars { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: end; height: 150px; border-bottom: 1px solid var(--v2-line-2); padding-bottom: 6px; }
-.v2-heat__bars li { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
-.v2-heat__bar { width: 100%; max-width: 110px; height: var(--h); min-height: 8px; border-radius: 8px; background: var(--tone); box-shadow: 0 0 16px color-mix(in srgb, var(--tone) 50%, transparent); }
-.v2-heat__label { font-size: 13px; }
-.v2-heat__pct { color: var(--v2-muted); font-size: 12px; }
 .v2-pulse__side { display: grid; gap: var(--v2-gap); align-content: start; min-width: 0; }
-.v2-tldr__list li { padding: 6px 0; font-size: 14px; border-bottom: 1px solid var(--v2-line); }
+.v2-tldr__list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--v2-line); }
+.v2-tldr__label { font-size: 14px; font-weight: 600; }
+.v2-tldr__value { font-size: 16px; font-weight: 700; }
+.v2-tldr__note { grid-column: 1 / -1; font-size: 12.5px; line-height: 1.7; color: var(--v2-muted); }
 .v2-tldr__list { margin-bottom: 10px; }
-.v2-tldr__text { font-size: clamp(18px, 2vw, 24px); font-weight: 700; color: var(--v2-accent); text-align: center; padding: 14px; border: 1px solid var(--v2-line); border-radius: 12px; }
+.v2-tldr__text { font-size: 12.5px; color: var(--v2-muted); text-align: center; }
 
 /* ---------- 8. peers ---------- */
 
@@ -574,8 +582,20 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-bubble svg { width: 100%; height: auto; }
 .v2-bubble__pt { transition: transform .5s ease; }
 .v2-bubble__pt circle { fill: rgba(139, 92, 246, .35); stroke: rgba(167, 139, 250, .9); stroke-width: 2; filter: drop-shadow(0 0 10px rgba(139, 92, 246, .55)); }
-.v2-bubble__pt text { fill: #fff; font-size: 13px; font-weight: 700; }
+.v2-bubble__pt text { fill: #fff; font-size: 11.5px; font-weight: 700; pointer-events: none; }
+/* 2.5.0: a framed plot with decade gridlines, a key, and a readable callout. */
+.v2-bubble__plot { fill: rgba(13, 20, 34, .55); stroke: var(--v2-line); }
+.v2-bubble__grid { stroke: rgba(148, 163, 184, .12); stroke-dasharray: 3 5; }
+.v2-bubble__tick { fill: var(--v2-muted); font-size: 11px; }
+.v2-bubble__pt { cursor: default; }
+.v2-bubble__pt:hover circle { stroke-width: 3; }
+.v2-bubble__legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; color: var(--v2-muted); margin-top: 6px; }
+.v2-bubble__key { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: rgba(139, 92, 246, .35); border: 2px solid rgba(167, 139, 250, .9); }
+.v2-bubble__key--self { background: rgba(25, 227, 177, .3); border-color: var(--v2-accent); }
+.v2-peers__insight { font-weight: 400; line-height: 1.9; font-size: 14px; }
+.v2-peers__insight-title { font-size: 14px; font-weight: 700; color: var(--v2-accent); margin-bottom: 4px; }
 .v2-bubble__pt.is-self circle { fill: rgba(25, 227, 177, .3); stroke: var(--v2-accent); stroke-width: 3; filter: drop-shadow(0 0 16px rgba(25, 227, 177, .7)); }
+.v2-bubble__pt.is-self text { fill: #eafff8; }
 .v2-callout { margin-top: 10px; padding: 12px 16px; border: 1px solid rgba(25, 227, 177, .5); border-radius: 12px; background: rgba(25, 227, 177, .06); font-weight: 600; }
 .v2-table--compare th.is-self, .v2-table--compare td.is-self { background: rgba(25, 227, 177, .14); color: var(--v2-accent); }
 .v2-table--compare td, .v2-table--compare thead th { text-align: center; }
@@ -625,6 +645,7 @@ html:has(.thb-v2) { overflow-x: clip; }
   .v2-overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .v2-eco__grid, .v2-flow__grid, .v2-peers__grid { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
   .v2-pstory__grid, .v2-pulse__grid { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); }
+  .v2-pstory__grid--full { grid-template-columns: minmax(0, 1fr); }
   .v2-story__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .v2-story__grid .v2-learn { grid-column: 1 / -1; }
   .v2-dna__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

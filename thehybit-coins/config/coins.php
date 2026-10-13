@@ -16,7 +16,29 @@
 
 defined('ABSPATH') || exit;
 
-return [
+/* 2.5.0: the story timeline and price-chart events come from
+   editorial-2.5.php, laid over the fields below. The texts they replace are
+   kept as `previous`, so a live coin whose field still holds a shipped seed is
+   upgraded and an edited one is left alone (Seeder::fillEditorial). */
+return (static function (array $coins): array {
+    foreach (require __DIR__ . '/editorial-2.5.php' as $slug => $e) {
+        if (!isset($coins[$slug])) {
+            continue;
+        }
+        foreach (['thb_timeline' => 'timeline', 'thb_price_events' => 'events'] as $field => $key) {
+            if (empty($e[$key])) {
+                continue;
+            }
+            $old = (string) ($coins[$slug]['fields'][$field] ?? '');
+            $new = implode("\n", $e[$key]);
+            if ($old !== '' && $old !== $new) {
+                $coins[$slug]['fields']['previous'][$field][] = $old;
+            }
+            $coins[$slug]['fields'][$field] = $new;
+        }
+    }
+    return $coins;
+})([
 
     'ethereum' => [
         'post_title' => 'اتریوم',
@@ -205,4 +227,4 @@ return [
             'thb_enable_l2'           => 0,
         ],
     ],
-] + require __DIR__ . '/coins-more.php';
+] + require __DIR__ . '/coins-more.php');

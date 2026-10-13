@@ -21,7 +21,7 @@ $c = $v['coin'];
       <?php endif; ?>
       <dl class="v2-about__facts">
         <?php if (!empty($a['founder'])) : ?><div><dt>بنیان‌گذار</dt><dd><?= esc_html($a['founder']) ?></dd></div><?php endif; ?>
-        <?php if (!empty($a['launchDate'])) : ?><div><dt>راه‌اندازی</dt><dd><time datetime="<?= esc_attr(substr((string) $a['launchDate'], 0, 10)) ?>"><?= esc_html(Format::gregorian($a['launchDate'])) ?></time></dd></div><?php endif; ?>
+        <?php if (!empty($a['launchDate'])) : ?><div><dt>راه‌اندازی</dt><dd><time datetime="<?= esc_attr(substr(Format::fromJalali((string) $a['launchDate']), 0, 10)) ?>"><?= esc_html(Format::gregorian($a['launchDate'])) ?></time></dd></div><?php endif; ?>
         <?php if (!empty($a['consensus'])) : ?><div><dt>اجماع</dt><dd><?= esc_html($a['consensus']) ?></dd></div><?php endif; ?>
         <?php if (!empty($a['website'])) : ?><div><dt>وب‌سایت</dt><dd><a href="<?= esc_url($a['website']) ?>" rel="nofollow noopener" target="_blank"><bdi><?= esc_html(preg_replace('#^https?://#', '', rtrim($a['website'], '/'))) ?></bdi></a></dd></div><?php endif; ?>
       </dl>
@@ -40,5 +40,4 @@ $c = $v['coin'];
     <?php endif; ?>
   </div>
 
-  <p class="v2-note">داده‌ها از CoinGecko، DefiLlama، Kraken، Etherscan، beaconcha.in، Blockchair، growthepie، GitHub، ویکی‌پدیا و Alternative.me دریافت و در سرور <?= esc_html($v['brand']) ?> ذخیره می‌شوند؛ مرورگر شما مستقیماً با هیچ‌کدام تماس نمی‌گیرد. جایی که داده‌ای منبع معتبر ندارد، همین را می‌نویسیم و عددی نمی‌سازیم.</p>
 </section>

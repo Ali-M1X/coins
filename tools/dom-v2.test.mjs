@@ -162,12 +162,25 @@ const joins = async (width) => {
       return { a: [a.x, a.y], b: [b.x, b.y] };
     });
     const rows = tops.map((t) => items.filter((i) => Math.round(i.top) === t));
+    /* 2.5.0: right to left. A line ends at its LEFT-most event; the next
+       line starts again at the RIGHT edge. */
     const expect = rows.slice(0, -1).map((row, k) => ({
-      a: [Math.max(...row.map((i) => i.right)) - c.left, t0(row) + 10],
-      b: [Math.min(...rows[k + 1].map((i) => i.left)) - c.left, t0(rows[k + 1]) + 10],
+      a: [Math.min(...row.map((i) => i.left)) - c.left, t0(row) + 10],
+      b: [Math.max(...rows[k + 1].map((i) => i.right)) - c.left, t0(rows[k + 1]) + 10],
     }));
     function t0(row) { return Math.round(row[0].top - c.top); }
-    return { rows: rows.length, perRow: rows[0].length, ends, expect,
+    /* DOM order is chronological; on screen each next event must sit to the
+       left of the previous one on the same line, and each line must start
+       at the right edge. */
+    const lis = [...card.querySelectorAll('.v2-timeline__item')];
+    let rtl = true;
+    for (let k = 1; k < lis.length; k++) {
+      const p = lis[k - 1].getBoundingClientRect(), q = lis[k].getBoundingClientRect();
+      if (Math.round(p.top) === Math.round(q.top) && !(q.right <= p.left + 1)) rtl = false;
+    }
+    const listBox = card.querySelector('.v2-timeline__list').getBoundingClientRect();
+    const startsRight = rows.every((row) => Math.abs(Math.max(...row.map((i) => i.right)) - listBox.right) < 2);
+    return { rows: rows.length, perRow: rows[0].length, ends, expect, rtl, startsRight,
              overflow: card.scrollWidth - card.clientWidth };
   });
   await p.close();
@@ -180,6 +193,7 @@ for (const width of [1440, 900]) {
   ok(j.ends.every((e, k) => near(e.a, j.expect[k].a) && near(e.b, j.expect[k].b)),
      `timeline at ${width}px: each connector starts where a line's rail ends and ends where the next line's rail starts`);
   ok(j.overflow <= 0, `timeline at ${width}px: no horizontal scroll (${j.overflow}px)`);
+  ok(j.rtl && j.startsRight, `timeline at ${width}px: time runs right to left on every line, and every line starts at the right edge`);
 }
 {
   const j = await joins(390);
@@ -268,11 +282,27 @@ if (tvlToggle) {
   ok(await page.evaluate(() => !document.querySelector('[data-v2-layer-el="tvl"]').hasAttribute('hidden')), 'the TVL layer can be switched on');
 }
 const pins = await page.$$('[data-v2-event]');
+ok(!(await page.$('[data-v2-eventcard]')), 'price story: the side panel that repeated one event (2.4) is gone');
 if (pins.length > 1) {
+  await page.locator('#price-story').scrollIntoViewIfNeeded();
+  await pins[1].hover();
+  const pop = await page.evaluate(() => {
+    const p = document.querySelector('[data-v2-pop]');
+    const c = document.querySelector('[data-v2-pstory]').getBoundingClientRect();
+    const r = p.getBoundingClientRect();
+    return { shown: !p.hidden, title: p.querySelector('[data-v2-p="title"]').textContent,
+             text: p.querySelector('[data-v2-p="text"]').textContent,
+             inside: r.left >= c.left - 1 && r.right <= c.right + 1 };
+  });
+  const want = await page.evaluate(() => window.__THB_V2__.story.events[1]);
+  ok(pop.shown && pop.title === want.title && pop.text === want.text && pop.inside,
+     'price story: hovering an event opens its explanation beside it, inside the chart card');
+  ok(/^[\u0600-\u06FF]/.test(pop.text), 'and the explanation starts with a Persian letter');
+  await page.keyboard.press('Escape');
+  ok(await page.evaluate(() => document.querySelector('[data-v2-pop]').hidden), 'Escape closes it');
   await pins[0].click();
-  const title = await page.textContent('[data-v2-e="title"]');
-  const want = await page.evaluate(() => window.__THB_V2__.story.events[0].title);
-  ok(title.trim() === want, 'clicking an event pin fills the event card');
+  ok(await page.evaluate(() => !document.querySelector('[data-v2-pop]').hidden), 'a tap opens it too');
+  await page.mouse.click(5, 5);
 }
 
 const axis = await page.$('[data-v2-axis]');

@@ -37,26 +37,45 @@ $plot = array_values(array_filter($p['rows'], static fn($r) => $r['marketCap'] !
         </label>
       </div>
       <div class="v2-xscroll" style="--min: 560px" data-v2-center>
-        <svg viewBox="0 0 700 480" role="img" aria-label="نمودار حبابی: ارزش بازار در برابر <?= $p['hasTvl'] ? 'ارزش قفل‌شده' : 'حجم معاملات' ?>؛ اندازه حباب حجم ۲۴ ساعته">
-        <line class="v2-axisline" x1="50" y1="440" x2="680" y2="440"/>
-        <line class="v2-axisline" x1="50" y1="20" x2="50" y2="440"/>
-        <text class="v2-axis v2-fa" x="365" y="472" text-anchor="middle" data-v2-xlabel><?= $p['hasTvl'] ? 'ارزش قفل‌شده (مقیاس لگاریتمی)' : 'حجم ۲۴ ساعته (مقیاس لگاریتمی)' ?></text>
-        <text class="v2-axis v2-fa" x="20" y="230" text-anchor="middle" transform="rotate(-90 20 230)">ارزش بازار (لگاریتمی)</text>
+        <svg viewBox="0 0 700 490" role="img" aria-label="نمودار حبابی: ارزش بازار در برابر <?= $p['hasTvl'] ? 'ارزش قفل‌شده' : 'حجم معاملات' ?>؛ اندازه حباب حجم ۲۴ ساعته">
+        <rect class="v2-bubble__plot" x="80" y="20" width="610" height="420" rx="10"/>
+        <?php foreach ($p['ticks']['y'] ?? [] as $tk) : ?>
+          <line class="v2-bubble__grid" x1="80" y1="<?= $tk['at'] ?>" x2="690" y2="<?= $tk['at'] ?>"/>
+          <text class="v2-bubble__tick" x="72" y="<?= $tk['at'] + 4 ?>" text-anchor="end"><?= esc_html($tk['label']) ?></text>
+        <?php endforeach; ?>
+        <?php foreach (['T' => 'tvl', 'V' => 'vol'] as $ax => $key) : ?>
+          <g data-v2-xticks="<?= $key ?>"<?= ($p['hasTvl'] ? 'tvl' : 'vol') === $key ? '' : ' hidden' ?>>
+            <?php foreach ($p['ticks'][$ax] ?? [] as $tk) : ?>
+              <line class="v2-bubble__grid" x1="<?= $tk['at'] ?>" y1="20" x2="<?= $tk['at'] ?>" y2="440"/>
+              <text class="v2-bubble__tick" x="<?= $tk['at'] ?>" y="458" text-anchor="middle"><?= esc_html($tk['label']) ?></text>
+            <?php endforeach; ?>
+          </g>
+        <?php endforeach; ?>
+        <text class="v2-axis v2-fa" x="385" y="484" text-anchor="middle" data-v2-xlabel><?= $p['hasTvl'] ? 'ارزش قفل‌شده در دیفای شبکه (مقیاس لگاریتمی)' : 'حجم معاملات ۲۴ ساعته (مقیاس لگاریتمی)' ?></text>
+        <text class="v2-axis v2-fa" x="16" y="230" text-anchor="middle" transform="rotate(-90 16 230)">ارزش بازار (لگاریتمی)</text>
         <?php foreach ($plot as $i => $r) :
-            $x = $p['hasTvl'] ? $r['xT'] : $r['xV'];
+            $ax = $p['hasTvl'] ? 'T' : 'V';
+            $x = $r['x' . $ax];
             // A peer with no TVL still has a volume: kept, hidden on the TVL axis.
             $hide = $x === null;
-            $x ??= $r['xV'] ?? 60; ?>
-          <g class="v2-bubble__pt<?= $r['self'] ? ' is-self' : '' ?>" data-v2-peer="<?= $i ?>" transform="translate(<?= $x ?> <?= $r['y'] ?>)"<?= $hide ? ' hidden' : '' ?>>
+            $x ??= $r['xV'] ?? 80;
+            $y = $r['y' . $ax] ?? $r['y']; ?>
+          <g class="v2-bubble__pt<?= $r['self'] ? ' is-self' : '' ?>" data-v2-peer="<?= $i ?>" transform="translate(<?= $x ?> <?= $y ?>)"<?= $hide ? ' hidden' : '' ?>>
             <circle r="<?= $r['r'] ?>"/>
-            <text y="5" text-anchor="middle"><?= esc_html($r['symbol']) ?></text>
-            <title><?= esc_html($r['name'] . ' — ارزش بازار ' . Format::usdCompact($r['marketCap']) . ($r['tvl'] !== null ? '، TVL ' . Format::usdCompact($r['tvl']) : '')) ?></title>
+            <text y="4" text-anchor="middle"><?= esc_html($r['symbol']) ?></text>
+            <title><?= esc_html($r['name'] . ' — ارزش بازار ' . Format::usdCompact($r['marketCap']) . ($r['tvl'] !== null ? '، ارزش قفل‌شده ' . Format::usdCompact($r['tvl']) : '') . ($r['volume'] !== null ? '، حجم ۲۴ ساعته ' . Format::usdCompact($r['volume']) : '')) ?></title>
           </g>
         <?php endforeach; ?>
       </svg>
         </div>
-      <?php if ($p['insight']) : ?><p class="v2-callout"><?= esc_html($p['insight']) ?></p><?php endif; ?>
-      <?= View::source($p['source'] . ' · DefiLlama', $p['fetchedAt']) ?>
+      <p class="v2-bubble__legend"><span class="v2-bubble__key v2-bubble__key--self" aria-hidden="true"></span><?= esc_html($c['name']) ?>
+        <span class="v2-bubble__key" aria-hidden="true"></span>همتایان · اندازه حباب = حجم معاملات ۲۴ ساعته</p>
+      <?php if ($p['insight']) : ?>
+        <div class="v2-callout v2-peers__insight">
+          <h3 class="v2-peers__insight-title">نسبت ارزش قفل‌شده به ارزش بازار یعنی چه؟</h3>
+          <p><?= esc_html($p['insight']) ?></p>
+        </div>
+      <?php endif; ?>
     </div>
 
     <div class="v2-card v2-peers__table">
@@ -92,7 +111,7 @@ $plot = array_values(array_filter($p['rows'], static fn($r) => $r['marketCap'] !
           </tbody>
         </table>
       </div>
-      <p class="v2-muted">علاقه جست‌وجو و فعالیت توسعه برای همه همتایان منبع یکسان و رایگانی ندارد و نمایش داده نمی‌شود.</p>
+      <p class="v2-muted">علاقه جست‌وجو و فعالیت توسعه برای همه همتایان به‌صورت یکسان اندازه‌گیری‌پذیر نیست و نمایش داده نمی‌شود.</p>
     </div>
   </div>
   <?php endif; ?>

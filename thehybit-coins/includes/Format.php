@@ -275,8 +275,60 @@ final class Format
         if (!$iso) {
             return null;
         }
+        $iso = self::fromJalali($iso);
         $ts = strtotime($iso);
         return $ts === false ? null : $ts;
+    }
+
+    /**
+     * A date that arrives in the JALALI calendar, rewritten as Gregorian
+     * Y-m-d. 2.5.0: a site running a Jalali-date plugin can hand an ACF date
+     * field back as "1397-03-10" (or with Persian digits); read as Gregorian
+     * that is the year 1397 — the "mixed" date an editor saw in the About box.
+     * Any year from 1300 to 1499 is taken as Jalali; anything else passes
+     * through untouched.
+     */
+    public static function fromJalali(string $date): string
+    {
+        $d = strtr(trim($date), ['۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9',
+                                 '٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
+        if (!preg_match('#^(1[34]\d\d)[-/]?(\d{1,2})[-/]?(\d{1,2})$#', $d, $m)) {
+            return $d;
+        }
+        [$gy, $gm, $gd] = self::jalaliToGregorian((int) $m[1], (int) $m[2], (int) $m[3]);
+        return sprintf('%04d-%02d-%02d', $gy, $gm, $gd);
+    }
+
+    /** @return array{int,int,int} Gregorian year, month, day (jalaali-js algorithm). */
+    public static function jalaliToGregorian(int $jy, int $jm, int $jd): array
+    {
+        $jy += 1595;
+        $days = -355668 + 365 * $jy + intdiv($jy, 33) * 8 + intdiv(($jy % 33) + 3, 4) + $jd
+              + ($jm < 7 ? ($jm - 1) * 31 : ($jm - 7) * 30 + 186);
+        $gy = 400 * intdiv($days, 146097);
+        $days %= 146097;
+        if ($days > 36524) {
+            $gy += 100 * intdiv(--$days, 36524);
+            $days %= 36524;
+            if ($days >= 365) {
+                $days++;
+            }
+        }
+        $gy += 4 * intdiv($days, 1461);
+        $days %= 1461;
+        if ($days > 365) {
+            $gy += intdiv($days - 1, 365);
+            $days = ($days - 1) % 365;
+        }
+        $gd = $days + 1;
+        $leap = ($gy % 4 === 0 && $gy % 100 !== 0) || $gy % 400 === 0;
+        $months = [31, $leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        $gm = 0;
+        while ($gm < 12 && $gd > $months[$gm]) {
+            $gd -= $months[$gm];
+            $gm++;
+        }
+        return [$gy, $gm + 1, $gd];
     }
 
     /** The single switch point for the whole page's digit system. */

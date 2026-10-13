@@ -213,8 +213,6 @@ export class Feed {
 
 /* ----------------------------------------------------------------- page */
 
-const LABELS = { kraken: 'Kraken', nobitex: 'نوبیتکس' };
-
 /**
  * Wire every [data-live-id] element on the page to the feeds. Returns a
  * handle (used by the tests) or null when there is nothing to stream.
@@ -321,7 +319,8 @@ export function boot(config, env = {}) {
     el.dataset.liveSrc = t.feed;
     el.dataset.liveAt = String(feeds[t.feed]?.lastMsg || t.at);
     el.classList.remove('is-stale');
-    el.title = 'قیمت زنده · ' + (LABELS[t.feed] || t.feed) + (t.quote === 'USDT' ? ' (بازار تتر)' : '');
+    /* 2.5.0: no exchange is named on the public page; a USDT price still says so. */
+    el.title = 'قیمت زنده' + (t.quote === 'USDT' ? ' — به تتر (USDT)' : '');
   };
 
   const markStale = (el) => {
@@ -337,7 +336,7 @@ export function boot(config, env = {}) {
       const el = root.querySelector('[data-live-stamp]');
       if (!el) continue;
       const text = t
-        ? 'قیمت زنده · ' + (LABELS[t.feed] || t.feed) + (t.quote === 'USDT' ? ' · به تتر (USDT)' : '')
+        ? 'قیمت زنده' + (t.quote === 'USDT' ? ' · به تتر (USDT)' : '')
         : 'اتصال زنده قطع شد · آخرین قیمت زنده ' + hhmmss(Number(root.querySelector('[data-live-usd]')?.dataset.liveAt || 0));
       if (el.dataset.liveText === text) continue;
       el.dataset.liveText = text;

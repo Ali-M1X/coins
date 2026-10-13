@@ -320,7 +320,7 @@ final class Model
         if ($active || $this->awaiting('activity')) {
             $rows[] = self::metric('آدرس‌های فعال روزانه', $active ? Format::num($active['latest'], 0) : null,
                 $active ? self::change($active['latest'], $active['weekAgo']) : null, '۷ روز', $active['source'] ?? 'growthepie',
-                self::stateNote('pending'), $active ? 'روز ' . Format::jalaliShort($active['date']) . ' · ' . $active['source'] : null);
+                self::stateNote('pending'), $active ? 'روز ' . Format::gregorian($active['date']) : null);
         } else {
             $this->gap('overview', 'آدرس‌های فعال روزانه');
         }
@@ -340,15 +340,17 @@ final class Model
         $nodes = [];
         $n = count($top);
         foreach ($top as $i => $p) {
-            /* Two rings: the five largest close in, the rest further out, each
-               spread evenly so labels never stack. Positions are in a 1000×560
-               box the template scales with viewBox. */
+            /* Two rings: the five largest close in, the rest further out and
+               offset by half a step, so no outer node sits behind an inner
+               one. 2.5.0: a taller box (1000×780) and wider rings — the
+               reader complained the circles crowded each other. Positions
+               are in viewBox units; the template scales them. */
             $inner = $i < 5;
             $count = $inner ? min(5, $n) : max(1, $n - 5);
             $slot = $inner ? $i : $i - 5;
             $angle = -M_PI / 2 + 2 * M_PI * ($slot + ($inner ? 0 : 0.5)) / $count;
-            $rx = $inner ? 240 : 420;
-            $ry = $inner ? 150 : 210;
+            $rx = $inner ? 250 : 430;
+            $ry = $inner ? 190 : 300;
             $group = self::groupOf((string) $p['category']);
             $nodes[] = [
                 'name'       => $p['name'],
@@ -360,11 +362,12 @@ final class Model
                 'change'     => $p['change1d'] ?? null,
                 'share'      => $total > 0 ? $p['fees24h'] / $total * 100 : null,
                 'logo'       => $p['logo'] ?? null,
-                'x'          => round(500 + $rx * cos($angle), 1),
-                'y'          => round(290 + $ry * sin($angle), 1),
-                'r'          => round(24 + 26 * sqrt($top[0]['fees24h'] > 0 ? $p['fees24h'] / $top[0]['fees24h'] : 0), 1),
+                'x'          => 500 + $rx * cos($angle),
+                'y'          => self::ECO_CY + $ry * sin($angle),
+                'r'          => round(22 + 20 * sqrt($top[0]['fees24h'] > 0 ? $p['fees24h'] / $top[0]['fees24h'] : 0), 1),
             ];
         }
+        $nodes = self::spread($nodes);
 
         $groups = [];
         foreach ($rows as $p) {
@@ -391,6 +394,80 @@ final class Model
             'tvlArea'   => Svg::area((array) ($defi['sparkline'] ?? []), 300, 90, 4),
             'bars'      => self::bars(array_map(static fn($p) => (float) $p['fees24h'], $top), 300, 110),
         ];
+    }
+
+    /** The ecosystem map's centre, in its 1000×780 viewBox. */
+    public const ECO_CY = 380;
+
+    /**
+     * Push ecosystem nodes apart until no two overlap — circle AND the two
+     * label lines under it — and none leaves the box or covers the centre.
+     * Each node is a box: as wide as its circle or its name (whichever is
+     * wider), from the top of the circle to the bottom of its figure line.
+     * Nodes move only as far as they must; the rings stay recognisable.
+     */
+    public static function spread(array $nodes, int $w = 1000, int $h = 780): array
+    {
+        $box = static function (array $n): array {
+            $half = max($n['r'], mb_strlen((string) $n['name']) * 4.6 + 6);
+            return [$n['x'] - $half, $n['y'] - $n['r'] - 6, $n['x'] + $half, $n['y'] + $n['r'] + 50];
+        };
+        $cx = 500.0;
+        $cy = (float) self::ECO_CY;
+        for ($iter = 0; $iter < 200; $iter++) {
+            $moved = false;
+            $count = count($nodes);
+            for ($i = 0; $i < $count; $i++) {
+                for ($j = $i + 1; $j < $count; $j++) {
+                    [$a1, $b1, $c1, $d1] = $box($nodes[$i]);
+                    [$a2, $b2, $c2, $d2] = $box($nodes[$j]);
+                    $ox = min($c1, $c2) - max($a1, $a2) + 8;   // 8 units of air
+                    $oy = min($d1, $d2) - max($b1, $b2) + 8;
+                    if ($ox <= 0 || $oy <= 0) {
+                        continue;
+                    }
+                    /* Separate along the cheaper axis. */
+                    if ($ox < $oy) {
+                        $s = $nodes[$i]['x'] <= $nodes[$j]['x'] ? -1 : 1;
+                        $nodes[$i]['x'] += $s * $ox / 2;
+                        $nodes[$j]['x'] -= $s * $ox / 2;
+                    } else {
+                        $s = $nodes[$i]['y'] <= $nodes[$j]['y'] ? -1 : 1;
+                        $nodes[$i]['y'] += $s * $oy / 2;
+                        $nodes[$j]['y'] -= $s * $oy / 2;
+                    }
+                    $moved = true;
+                }
+            }
+            foreach ($nodes as &$n) {
+                /* Keep clear of the centre (core circle 62 + glow) … */
+                $dx = $n['x'] - $cx;
+                $dy = $n['y'] - $cy;
+                $d = sqrt($dx * $dx + $dy * $dy) ?: 1.0;
+                $min = 62 + $n['r'] + 40;
+                if ($d < $min) {
+                    $n['x'] = $cx + $dx / $d * $min;
+                    $n['y'] = $cy + $dy / $d * $min;
+                    $moved = true;
+                }
+                /* … and inside the box, labels included. */
+                [$a, $b, $c, $e] = $box($n);
+                if ($a < 4) { $n['x'] += 4 - $a; $moved = true; }
+                if ($c > $w - 4) { $n['x'] -= $c - ($w - 4); $moved = true; }
+                if ($b < 4) { $n['y'] += 4 - $b; $moved = true; }
+                if ($e > $h - 4) { $n['y'] -= $e - ($h - 4); $moved = true; }
+            }
+            unset($n);
+            if (!$moved) {
+                break;
+            }
+        }
+        foreach ($nodes as &$n) {
+            $n['x'] = round($n['x'], 1);
+            $n['y'] = round($n['y'], 1);
+        }
+        unset($n);
+        return $nodes;
     }
 
     /* ------------------------------------------------------------------
@@ -485,6 +562,29 @@ final class Model
            Solana, no Blockchair figures on a token. */
         $pulse = array_values(array_filter($pulse, fn($row) => $row['ds'] === null || $this->applies($row['ds'])));
 
+        /* 2.5.0 — chains with no native network source (Tron, Solana, BNB
+           Chain, Cardano …: Blockchair's shapes are verified only for five
+           chains, and no keyless source covers the rest) still get a network
+           pulse: the chain's activity as DefiLlama measures it, from data
+           already in the cache. No new request. Only rows with a value. */
+        $chainPulse = false;
+        if (!array_filter($pulse, static fn($row) => $row['ds'] !== null)) {
+            $stableCtx = (array) ($m['context']['stablecoinSupply'] ?? []);
+            $extra = [
+                ['label' => 'عرضه استیبل‌کوین روی این شبکه', 'value' => ($stableCtx['available'] ?? false) ? Format::usdCompact((float) $stableCtx['value'], 2) : null],
+                ['label' => 'ارزش قفل‌شده در برنامه‌های شبکه (TVL)', 'value' => isset($defi['tvl']) ? Format::usdCompact((float) $defi['tvl'], 2) : null],
+                ['label' => 'تغییر ارزش قفل‌شده در ۷ روز', 'value' => isset($defi['tvlChange7d']) ? Format::pct((float) $defi['tvlChange7d'], true, 1) : null],
+                ['label' => 'کارمزد پرداختی کاربران (۲۴ ساعت)', 'value' => $fees !== null ? Format::usdCompact($fees, 2) : null],
+                ['label' => 'درآمد پروتکل‌ها (۲۴ ساعت)', 'value' => $revenue !== null ? Format::usdCompact($revenue, 2) : null],
+            ];
+            foreach ($extra as $row) {
+                if ($row['value'] !== null) {
+                    $pulse[] = $row + ['state' => 'ok', 'source' => 'DefiLlama', 'ds' => null];
+                    $chainPulse = true;
+                }
+            }
+        }
+
         $healthy = null;
         if (($staking['available'] ?? false) && isset($sd['participation'])) {
             $healthy = !empty($sd['finalized']) && (float) $sd['participation'] >= self::HEALTHY_PARTICIPATION;
@@ -492,7 +592,7 @@ final class Model
 
         $cards = [];
         $stable = (array) ($m['context']['stablecoinSupply'] ?? []);
-        if ($stable['available'] ?? false) {
+        if (($stable['available'] ?? false) && !$chainPulse) {
             $cards[] = ['text' => 'عرضه استیبل‌کوین روی این زنجیره', 'value' => Format::usdCompact((float) $stable['value'])];
         }
         $stakedShare = $this->stakedShare($m);
@@ -543,13 +643,14 @@ final class Model
                and LEAVES on the left. `left`/`right` in this array are the
                data's roles — sources and destinations — drawn on the right and
                left of the diagram respectively. */
-            'ribbonsSources' => $ok ? Svg::ribbons(array_column($left, 'share'), 850, 580, 20, 360, 12, 140, 120) : [],
+            'ribbonsSources' => $ok ? Svg::ribbons(array_column($left, 'share'), 850, 580, 20, 360, 12, 140, 120, 44.0) : [],
             'ribbonsDest'    => $ok && $right !== [] ? Svg::ribbons(array_column($right, 'share'), 150, 420, 60, 280, 24, 140, 120, 60) : [],
             'whales'  => $whales,
             'showSankey' => $this->applies('protocols'),
             'showWhales' => $this->applies('whales'),
             'exchange' => $exchange,
             'pulse'   => $pulse,
+            'chainPulse' => $chainPulse,
             'healthy' => $healthy,
             'participation' => $sd['participation'] ?? null,
             'cards'   => $cards,
@@ -587,7 +688,7 @@ final class Model
             $news[] = [
                 'title' => $n['title'] ?? '',
                 'url'   => $n['url'] ?? '#',
-                'date'  => Format::jalaliShort($n['publishedAt'] ?? null),
+                'date'  => Format::gregorian($n['publishedAt'] ?? null),   // 2.5.0: Gregorian throughout the v2 page
                 'iso'   => $n['publishedAt'] ?? null,
                 /* News::thumbnail() returns {src, alt}, not a URL. Printing the
                    array produced src="Array" — a broken image on every card. */
@@ -826,6 +927,8 @@ final class Model
                 'row' => $row, 'ly' => -196 + $row * 46,   // label rows above the plot area
                 'c90' => $e['change90'] !== null ? Format::pct($e['change90'], true, 0) : null,
                 'dir90' => Format::direction($e['change90']),
+                'dateFa' => Format::gregorian($e['date']),
+                'monthFa' => explode(' ', Format::gregorian($e['date']), 2)[1] ?? $e['date'],
             ];
         }
 
@@ -880,7 +983,7 @@ final class Model
             'from'     => gmdate('Y', $t0),
             'client'   => [
                 'events' => array_map(static fn($e) => [
-                    'title' => $e['title'], 'text' => $e['text'], 'date' => $e['date'],
+                    'title' => $e['title'], 'text' => $e['text'], 'date' => $e['dateFa'],
                     'change' => $e['change'] !== null ? Format::pct($e['change'], true, 0) : null,
                     'dir' => Format::direction($e['change']), 'window' => $e['window'],
                     'price' => Format::usd((float) $e['price']),
@@ -955,30 +1058,59 @@ final class Model
             }
         }
 
-        // Ecosystem heat: today's fees by protocol group, as shares.
-        $heat = [];
-        $rows = (array) ($protocols['data']['protocols'] ?? []);
-        $byGroup = [];
-        foreach ($rows as $p) {
-            $g = self::groupOf((string) $p['category']);
-            $byGroup[$g] = ($byGroup[$g] ?? 0) + (float) $p['fees24h'];
+        /* 2.5.0 — «۳۰ ثانیه»: four facts a reader cannot get from the lines
+           above, each with what it means in plain words. Was: the same
+           signals as the chips beside it and the «what's next» list. */
+        $summary = [];
+        $price = isset($mk['price']) ? (float) $mk['price'] : null;
+        $ath = isset($mk['ath']['price']) ? (float) $mk['ath']['price'] : null;
+        if ($price !== null && $ath !== null && $ath > 0) {
+            $off = ($price / $ath - 1) * 100;
+            $summary[] = [
+                'label' => 'فاصله تا بالاترین قیمت تاریخ',
+                'value' => $off > -1 ? 'در نزدیکی سقف' : Format::pct($off, true, 0),
+                'dir'   => $off > -1 ? 'up' : 'down',
+                'note'  => 'سقف تاریخی ' . self::iso(Format::usd($ath)) . (!empty($mk['ath']['date']) ? ' در ' . Format::gregorian((string) $mk['ath']['date']) : '')
+                         . ($off > -1 ? '' : sprintf('؛ برای رسیدن دوباره به آن، قیمت باید %s رشد کند.', Format::pct(($ath / $price - 1) * 100, false, 0))),
+            ];
         }
-        $sum = array_sum($byGroup);
-        arsort($byGroup);
-        foreach (array_slice($byGroup, 0, 5, true) as $g => $v) {
-            $heat[] = ['label' => self::GROUP_LABELS[$g], 'share' => $sum > 0 ? $v / $sum * 100 : 0];
+        $p30 = $m['performance']['30d'] ?? null;
+        if ($p30 !== null) {
+            $summary[] = [
+                'label' => 'تغییر قیمت در ۳۰ روز گذشته',
+                'value' => Format::pct((float) $p30, true, 1),
+                'dir'   => Format::direction((float) $p30),
+                'note'  => sprintf('کسی که ۳۰ روز پیش ۱۰۰ دلار %s خریده بود، امروز حدود %s دلار دارد.', $name, Format::num(100 * (1 + (float) $p30 / 100), 0)),
+            ];
+        }
+        $share = (array) ($m['context']['marketCapShare'] ?? []);
+        if ($share['available'] ?? false) {
+            $rank = $m['coin']['rank'] ?? null;
+            $summary[] = [
+                'label' => 'سهم از ارزش کل بازار رمزارزها',
+                'value' => Format::pct((float) $share['value'], false, 2),
+                'dir'   => 'flat',
+                'note'  => ($rank ? 'رتبه ' . $rank . ' از نظر ارزش بازار؛ ' : '') . sprintf('از هر ۱۰۰ دلار ارزش کل بازار رمزارزها، حدود %s دلار به %s تعلق دارد.', Format::num((float) $share['value'], (float) $share['value'] < 1 ? 2 : 1), $name),
+            ];
+        }
+        if (isset($s['value'])) {
+            $fg = (float) $s['value'];
+            $summary[] = [
+                'label' => 'حال‌وهوای کل بازار',
+                'value' => Format::num($fg, 0) . '/100',
+                'dir'   => 'flat',
+                'note'  => sprintf('شاخص ترس و طمع روی «%s» است؛ زیر ۵۰ یعنی احتیاط و ترس در بازار غالب است و بالای ۵۰ یعنی خوش‌بینی.', (string) ($s['labelFa'] ?? '')),
+            ];
         }
 
         $generated = $m['meta']['generatedAt'] ?? gmdate('c', time());
 
         return [
-            'date'   => Format::jalaliLong($generated),
+            'summary' => $summary,
+            'date'   => Format::gregorian($generated),
             'time'   => Format::tehranTime($generated),
             'lines'  => $lines,
             'chips'  => array_slice($chips, 0, 4),
-            'heat'   => $heat,
-            'heatState' => $protocols['state'],
-            'showHeat' => $this->applies('protocols'),
         ];
     }
 
@@ -992,7 +1124,7 @@ final class Model
         if ($rows === []) {
             // One coin compared with nothing is not a comparison.
             return ['state' => $peers['state'], 'source' => $peers['source'], 'fetchedAt' => $peers['fetchedAt'],
-                    'rows' => [], 'table' => [], 'insight' => null, 'hasTvl' => false, 'client' => []];
+                    'rows' => [], 'table' => [], 'insight' => null, 'hasTvl' => false, 'ticks' => [], 'client' => []];
         }
         $tvlByGecko = [];
         foreach ((array) ($m['chains']['data']['chains'] ?? []) as $c) {
@@ -1067,11 +1199,42 @@ final class Model
 
         foreach ($out as &$r) {
             $r['y']  = 440 - Svg::logScale($r['marketCap'], $cLo, $cHi, 0, 400);
-            $r['xT'] = $r['tvl'] !== null ? 60 + Svg::logScale($r['tvl'], $tLo, $tHi, 0, 560) : null;
-            $r['xV'] = $r['volume'] !== null ? 60 + Svg::logScale($r['volume'], $vLo, $vHi, 0, 560) : null;
-            $r['r']  = round(12 + 26 * sqrt(($r['volume'] ?? 0) / $vmax), 1);
+            $r['xT'] = $r['tvl'] !== null ? 80 + Svg::logScale($r['tvl'], $tLo, $tHi, 0, 580) : null;
+            $r['xV'] = $r['volume'] !== null ? 80 + Svg::logScale($r['volume'], $vLo, $vHi, 0, 580) : null;
+            /* 18 at the least, so the symbol fits inside its own circle. */
+            $r['r']  = round(18 + 20 * sqrt(($r['volume'] ?? 0) / $vmax), 1);
         }
         unset($r);
+        /* 2.5.0: no two bubbles overlap, on either axis. Each is nudged the
+           least it must be; the true position stays in its tooltip and the
+           table. One layout per axis, so the swap moves them cleanly. */
+        foreach (['T', 'V'] as $ax) {
+            $pts = [];
+            foreach ($out as $k => $r) {
+                if ($r['x' . $ax] !== null && $r['marketCap'] !== null) {
+                    $pts[$k] = ['x' => $r['x' . $ax], 'y' => $r['y'], 'r' => $r['r']];
+                }
+            }
+            $pts = Svg::separate($pts, 80, 690, 20, 440, 6);
+            foreach ($out as $k => &$r) {
+                $r['x' . $ax] = isset($pts[$k]) ? round($pts[$k]['x'], 1) : null;
+                $r['y' . $ax] = isset($pts[$k]) ? round($pts[$k]['y'], 1) : round($r['y'], 1);
+            }
+            unset($r);
+        }
+        /* Gridlines on the log axes: powers of ten, labelled. */
+        $decades = static function (float $lo, float $hi, callable $at): array {
+            $t = [];
+            for ($e = (int) ceil(log10(max($lo, 1e-9))); $e <= (int) floor(log10(max($hi, 1e-9))); $e++) {
+                $t[] = ['at' => round($at(10 ** $e), 1), 'label' => Format::usdCompact((float) 10 ** $e, 0)];
+            }
+            return $t;
+        };
+        $ticks = [
+            'y' => $decades($cLo, $cHi, static fn($v) => 440 - Svg::logScale($v, $cLo, $cHi, 0, 400)),
+            'T' => $tvls === [] ? [] : $decades($tLo, $tHi, static fn($v) => 80 + Svg::logScale($v, $tLo, $tHi, 0, 580)),
+            'V' => $vols === [] ? [] : $decades($vLo, $vHi, static fn($v) => 80 + Svg::logScale($v, $vLo, $vHi, 0, 580)),
+        ];
 
         /* Which other coins to set beside this one in the table: the largest
            by market cap, as the reader's most likely comparison. */
@@ -1080,18 +1243,25 @@ final class Model
         $selfRow = array_values(array_filter($out, static fn($r) => $r['self']))[0] ?? null;
         $table = $selfRow ? array_merge([$selfRow], array_slice($others, 0, 3)) : array_slice($others, 0, 4);
 
-        // One sentence, computed: where this coin ranks on TVL per dollar of market cap.
+        /* What the ratio means, in plain words (2.5.0). Was: «نسبت TVL به
+           ارزش بازار X رتبه 1 در میان 9 دارایی مقایسه‌شده است» — correct and
+           opaque. */
         $insight = null;
         $withTvl = array_values(array_filter($out, static fn($r) => $r['tvlToMcap'] !== null));
         if ($selfRow && $selfRow['tvlToMcap'] !== null && count($withTvl) >= 3) {
             usort($withTvl, static fn($a, $b) => $b['tvlToMcap'] <=> $a['tvlToMcap']);
             $rank = array_search($self, array_column($withTvl, 'id'), true) + 1;
-            $insight = sprintf(
-                'نسبت TVL به ارزش بازار %s رتبه %s در میان %s دارایی مقایسه‌شده است.',
-                (string) ($m['coin']['name'] ?? $coin->name),
-                self::iso(Format::num((float) $rank, 0)),
-                self::iso(Format::num((float) count($withTvl), 0))
-            );
+            $n = count($withTvl);
+            $name = (string) ($m['coin']['name'] ?? $coin->name);
+            $per100 = $selfRow['tvlToMcap'] * 100;
+            $amount = Format::num($per100, $per100 < 10 ? 1 : 0);
+            $lead = sprintf('در شبکه %s به ازای هر ۱۰۰ دلار ارزش بازار، حدود %s دلار در برنامه‌های دیفای همین شبکه قفل شده است.', $name, self::iso($amount));
+            $where = match (true) {
+                $rank === 1 => sprintf(' این بالاترین نسبت در میان %s رمزارز مقایسه‌شده است؛ یعنی نسبت به همتایان، بخش بزرگ‌تری از ارزش %s پشتوانه استفاده واقعی در وام‌دهی، معامله و دیگر برنامه‌های شبکه است.', self::iso((string) $n), $name),
+                $rank === $n => sprintf(' این پایین‌ترین نسبت در میان %s رمزارز مقایسه‌شده است؛ یعنی ارزش بازار %s بیشتر از آنکه به فعالیت دیفای روی شبکه‌اش متکی باشد، از جایگاه آن به‌عنوان دارایی یا کاربردهای دیگر می‌آید.', self::iso((string) $n), $name),
+                default => sprintf(' %s از نظر این نسبت رتبه %s را در میان %s رمزارز مقایسه‌شده دارد؛ هرچه رتبه بهتر باشد، بخش بزرگ‌تری از ارزش آن در برنامه‌های شبکه به کار گرفته شده است.', $name, self::iso((string) $rank), self::iso((string) $n)),
+            };
+            $insight = $lead . $where . ' این نسبت به‌تنهایی نشانه ارزان یا گران بودن نیست.';
         }
 
         return [
@@ -1102,8 +1272,9 @@ final class Model
             'table'   => $table,
             'insight' => $insight,
             'hasTvl'  => $tvls !== [],
+            'ticks'   => $ticks,
             'client'  => array_map(static fn($r) => [
-                'symbol' => $r['symbol'], 'xT' => $r['xT'], 'xV' => $r['xV'], 'y' => $r['y'],
+                'symbol' => $r['symbol'], 'xT' => $r['xT'], 'xV' => $r['xV'], 'yT' => $r['yT'], 'yV' => $r['yV'],
             ], array_values(array_filter($out, static fn($r) => $r['marketCap'] !== null))),
         ];
     }
@@ -1640,7 +1811,7 @@ final class Model
         }
         if (($staking['available'] ?? false) && isset($staking['data']['apr'])) {
             return ['value' => (float) $staking['data']['apr'], 'source' => 'beaconcha.in',
-                    'detail' => 'میانگین کل شبکه · beaconcha.in', 'kind' => 'measured'];
+                    'detail' => 'میانگین کل شبکه', 'kind' => 'measured'];
         }
         $steth = $this->x['stakingyield']['data']['apy7d'] ?? null;
         if (is_numeric($steth)) {
@@ -1828,9 +1999,6 @@ final class Model
             if (!$f['showWhales']) {
                 $this->gap('flow', 'رادار نهنگ‌ها');
             }
-        }
-        if (!$v['pulse']['showHeat']) {
-            $this->gap('pulse', 'حرارت اکوسیستم', 'na');
         }
         $s = $v['supply'];
         if (!$s['showDist']) {

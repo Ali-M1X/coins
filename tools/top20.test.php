@@ -71,6 +71,44 @@ foreach ($seeds as $slug => $spec) {
 }
 ok(true, 'every coin has the full editorial set, full-date market events and well-formed dates');
 
+/* 2.5.0: the story and the chart's events. */
+$overlay = require THB_COINS_DIR . 'config/editorial-2.5.php';
+foreach ($seeds as $slug => $spec) {
+    $f = $spec['fields'];
+    $tl = array_values(array_filter(preg_split('/\n/', (string) ($f['thb_timeline'] ?? ''))));
+    $ev = array_values(array_filter(preg_split('/\n/', (string) ($f['thb_price_events'] ?? ''))));
+    if (count($tl) < 7) {
+        ok(false, "{$slug}: only " . count($tl) . ' timeline events (at least 7)');
+    }
+    foreach (array_merge($tl, $ev) as $line) {
+        $parts = array_map('trim', explode('|', $line));
+        if (count($parts) !== 3) {
+            ok(false, "{$slug}: malformed line: {$line}");
+            continue;
+        }
+        [$date, $title, $text] = $parts;
+        if (!preg_match('/^(>.+|\d{4}(-\d{2}(-\d{2})?)?)$/u', $date)) {
+            ok(false, "{$slug}: bad date «{$date}»");
+        }
+        foreach (['title' => $title, 'explanation' => $text] as $what => $str) {
+            if (!preg_match('/^[\x{0600}-\x{06FF}]/u', $str)) {
+                ok(false, "{$slug}: {$what} does not start with a Persian letter: «{$str}»");
+            }
+        }
+        if (mb_strlen($text) < 30) {
+            ok(false, "{$slug}: explanation too short to be complete: «{$text}»");
+        }
+    }
+    foreach ((array) ($overlay[$slug]['verify'] ?? []) as $v) {
+        $hit = array_filter(array_merge($tl, $ev), static fn($l) => str_starts_with($l, $v . ' |'));
+        if ($hit === []) {
+            ok(false, "{$slug}: fact-check item «{$v}» matches no line");
+        }
+    }
+}
+ok(true, 'every coin: at least 7 timeline events; every title and explanation starts with a Persian letter; every fact-check item names a real line');
+
+
 section('unique SEO and FAQ');
 $seo = new Seo($plugin->coins, $plugin->pipeline);
 $titles = $descs = $faqs = [];
@@ -246,7 +284,7 @@ if (getenv('THB_STATUS_MD')) {
     file_put_contents((string) getenv('THB_STATUS_MD'), $md);
 }
 if (getenv('THB_TOP20_DIR')) {
-    foreach (['solana', 'tether', 'dogecoin', 'xrp'] as $slug) {
+    foreach (['solana', 'tether', 'dogecoin', 'xrp', 'tron', 'ethereum'] as $slug) {
         file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . "/v2-{$slug}.html", $pages[$slug]);
     }
 }

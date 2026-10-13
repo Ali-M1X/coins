@@ -28,9 +28,9 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
 ?>
 <section class="v2-section v2-flow" id="flow" aria-labelledby="flow-title">
   <?php if ($f['showSankey']) : ?>
-    <?= View::heading('flow', 'جریان زنجیره ' . $c['name'], 'کارمزدهای ۲۴ ساعت گذشته از کجا آمدند و به کجا رفتند؟') ?>
+    <?= View::heading('flow', 'جریان زنجیره ' . $c['name'], 'توزیع کارمزدهای پرداخت‌شده در ۲۴ ساعت گذشته بر حسب نوع پروتکل، و سهم هر یک از دریافت‌کنندگان نهایی آن.') ?>
   <?php else : ?>
-    <?= View::heading('flow', 'شبکه ' . $c['name'], 'نبض شبکه و انتقال‌های بزرگ روی زنجیره') ?>
+    <?= View::heading('flow', 'شبکه ' . $c['name'], 'شاخص‌های فعالیت شبکه و انتقال‌های بزرگ ثبت‌شده روی زنجیره.') ?>
   <?php endif; ?>
 
   <?php $hasSide = $f['pulse'] !== [] || $f['showWhales']; ?>
@@ -44,22 +44,23 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
            left (who keeps them). Column titles and an arrowhead at every
            ribbon's arriving end make the direction explicit. */ ?>
         <svg viewBox="-20 -50 1100 450" role="img" aria-label="جریان کارمزد <?= esc_attr($c['name']) ?> از راست به چپ: <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['left']))) ?> وارد شبکه شد (مجموع <?= esc_attr(Format::usdCompact($f['fees'])) ?>) و به <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['right']))) ?> رسید">
-          <text class="v2-flow__head v2-fa" x="905" y="-20" text-anchor="middle">ورودی: از کجا آمد</text>
-          <text class="v2-flow__head v2-fa" x="95" y="-20" text-anchor="middle">خروجی: به کجا رفت</text>
+          <text class="v2-flow__head v2-fa" x="856" y="-20" text-anchor="middle">ورودی</text>
+          <text class="v2-flow__head v2-fa" x="144" y="-20" text-anchor="middle">خروجی</text>
           <text class="v2-flow__dir" x="500" y="-20" text-anchor="middle">◀ ─────── جهت جریان ─────── ◀</text>
           <?php foreach ($f['ribbonsSources'] as $i => $r) : $mid = $r['cy'] + $r['ch'] / 2; ?>
             <path class="v2-ribbon v2-t--<?= $tones[$i % 5] ?>" d="<?= esc_attr($r['d']) ?>"/>
             <polygon class="v2-flow__arrow v2-t--<?= $tones[$i % 5] ?>" points="<?= 598 ?>,<?= $mid - 7 ?> <?= 598 ?>,<?= $mid + 7 ?> 584,<?= $mid ?>"/>
             <rect class="v2-flow__node v2-t--<?= $tones[$i % 5] ?>" x="850" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
-            <text class="v2-flow__label v2-fa" x="872" y="<?= $r['y'] + $r['h'] / 2 - 2 ?>" text-anchor="end"><?= esc_html($f['left'][$i]['label']) ?></text>
-            <text class="v2-flow__pct" x="872" y="<?= $r['y'] + $r['h'] / 2 + 18 ?>" text-anchor="start"><?= esc_html(Format::pct($f['left'][$i]['share'] * 100, false, 1)) ?></text>
+            <?php /* 2.5.0: name, share AND amount inside the band, at its outer end where it is full height. */ ?>
+            <text class="v2-flow__label v2-fa" x="836" y="<?= $r['y'] + $r['h'] / 2 - 4 ?>" text-anchor="start"><?= esc_html($f['left'][$i]['label']) ?></text>
+            <text class="v2-flow__pct" x="836" y="<?= $r['y'] + $r['h'] / 2 + 15 ?>" text-anchor="end"><?= esc_html(Format::pct($f['left'][$i]['share'] * 100, false, 1) . ' · ' . Format::usdCompact((float) $f['left'][$i]['value'], 1)) ?></text>
           <?php endforeach; ?>
           <?php foreach ($f['ribbonsDest'] as $i => $r) : $mid = $r['y'] + $r['h'] / 2; ?>
             <path class="v2-ribbon v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" d="<?= esc_attr($r['d']) ?>"/>
             <polygon class="v2-flow__arrow v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" points="166,<?= $mid - 8 ?> 166,<?= $mid + 8 ?> 152,<?= $mid ?>"/>
             <rect class="v2-flow__node v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" x="138" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
-            <text class="v2-flow__label v2-fa" x="128" y="<?= $r['y'] + $r['h'] / 2 - 2 ?>" text-anchor="start"><?= esc_html($f['right'][$i]['label']) ?></text>
-            <text class="v2-flow__pct" x="128" y="<?= $r['y'] + $r['h'] / 2 + 18 ?>" text-anchor="end"><?= esc_html(Format::pct($f['right'][$i]['share'] * 100, false, 1)) ?></text>
+            <text class="v2-flow__label v2-fa" x="180" y="<?= $r['y'] + $r['h'] / 2 - 4 ?>" text-anchor="end"><?= esc_html($f['right'][$i]['label']) ?></text>
+            <text class="v2-flow__pct" x="180" y="<?= $r['y'] + $r['h'] / 2 + 16 ?>" text-anchor="start"><?= esc_html(Format::pct($f['right'][$i]['share'] * 100, false, 1) . ' · ' . Format::usdCompact((float) $f['right'][$i]['value'], 1)) ?></text>
           <?php endforeach; ?>
           <rect class="v2-flow__core" x="420" y="130" width="160" height="140" rx="24"/>
           <?php if (!empty($c['logo'])) : ?>
@@ -72,25 +73,24 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
         <?php /* Phone layout: the diagram fits the card and its labels move into
            this list, where they can be read at full size. */ ?>
         <div class="v2-flow__mobile">
-          <?php foreach ([['ورودی: از کجا آمد ↓', $f['left'], $tones], ['خروجی: به کجا رفت', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
+          <?php foreach ([['ورودی', $f['left'], $tones], ['خروجی', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
             <?php if ($nodes === []) { continue; } ?>
             <h3 class="v2-flow__mtitle"><?= esc_html($title) ?></h3>
             <ul class="v2-flow__mlist">
               <?php foreach ($nodes as $i => $node) : ?>
                 <li><span class="v2-swatch v2-t--<?= esc_attr($tn[$i % count($tn)]) ?>" aria-hidden="true"></span><?= esc_html($node['label']) ?>
-                  <?= View::n(Format::pct($node['share'] * 100, false, 1)) ?></li>
+                  <?= View::n(Format::pct($node['share'] * 100, false, 1) . ' · ' . Format::usdCompact((float) $node['value'], 1)) ?></li>
               <?php endforeach; ?>
             </ul>
           <?php endforeach; ?>
         </div>
         <?php if ($f['right'] === []) : ?>
-          <p class="v2-muted">ستون خروجی (سهم درآمد پروتکل‌ها) هنوز دریافت نشده است؛ ستون ورودی کامل است.</p>
+          <p class="v2-muted">تفکیک خروجی (سهم درآمد پروتکل‌ها) هنوز در دسترس نیست؛ بخش ورودی کامل است.</p>
         <?php endif; ?>
         <div class="v2-flow__legend">
-          <span>راست (ورودی): کارمزدی که کاربران به هر نوع پروتکل پرداختند</span>
-          <span>چپ (خروجی): چه سهمی درآمد خود پروتکل‌ها شد و چه سهمی به تأمین‌کنندگان سرمایه رسید</span>
+          <span>ورودی: کارمزد پرداخت‌شده کاربران به تفکیک نوع پروتکل.</span>
+          <span>خروجی: سهم درآمد خود پروتکل‌ها و سهم تأمین‌کنندگان سرمایه (نقدینگی‌دهندگان، وام‌دهندگان و سپرده‌گذاران).</span>
         </div>
-        <?= View::source('DefiLlama') ?>
       <?php else : ?>
         <?= View::na($f['state'] === 'disabled' ? 'disabled' : ($f['state'] === 'pending' ? 'pending' : 'unavailable'),
             $f['state'] === 'disabled' ? 'داده دیفای برای این ارز خاموش است' : 'تفکیک کارمزد این زنجیره هنوز در دسترس نیست') ?>
@@ -103,6 +103,9 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
       <?php if ($f['pulse'] !== []) : ?>
       <div class="v2-card">
         <h3 class="v2-card__title">نبض شبکه</h3>
+        <?php if (!empty($f['chainPulse'])) : ?>
+          <p class="v2-muted v2-kv__intro">فعالیت اقتصادی روی شبکه <?= esc_html($c['name']) ?>؛ آمار فنی (تعداد تراکنش و زمان بلوک) برای این شبکه اندازه‌گیری نمی‌شود.</p>
+        <?php endif; ?>
         <ul class="v2-kv">
           <?php foreach ($f['pulse'] as $p) : ?>
             <li>
@@ -144,11 +147,11 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
               </li>
             <?php endforeach; ?>
           </ul>
-          <p class="v2-source">انتقال‌های بومی <?= esc_html($c['symbol']) ?> (نه توکن‌ها). نام صاحب کیف پول‌ها در منبع رایگانی منتشر نمی‌شود و حدس زده نمی‌شود. منبع: <bdi>Blockchair</bdi></p>
+          <p class="v2-source">فقط انتقال‌های خودِ <?= esc_html($c['symbol']) ?> (نه توکن‌های روی این شبکه). صاحبان کیف پول‌ها شناسایی نمی‌شوند.</p>
         <?php elseif ($w['state'] === 'ok' || $w['state'] === 'stale') : ?>
           <p class="v2-muted">در بازه اخیر انتقالی بالاتر از <?= View::n(Format::num((float) $w['min'], 0) . ' ' . $c['symbol']) ?> ثبت نشده است.</p>
         <?php else : ?>
-          <?= View::na($w['state'], 'فهرست انتقال‌های بزرگ از Blockchair') ?>
+          <?= View::na($w['state']) ?>
         <?php endif; ?>
       </div>
       <?php endif; ?>

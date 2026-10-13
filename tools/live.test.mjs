@@ -210,8 +210,8 @@ const heroPrice = (page) => page.$eval('[data-live-usd] .v2-num', (e) => e.textC
   const paints = await page.evaluate(() => window.__paints);
   ok(first === '$3,000.00', 'the first real tick replaces the price within one repaint');
   ok(paints <= 3 && (await heroPrice(page)) === '$3,010.00', `ten ticks in 300 ms → ${paints} repaints, ending on the latest value (≈1 per second per coin)`);
-  const st = await page.$eval('[data-live-stamp]', (e) => e.textContent);
-  ok(st.includes('قیمت زنده') && st.includes('Kraken'), 'the stamp says the figure is live, and from where: «' + st + '»');
+  const st = await page.$eval('[data-live-usd]', (e) => ({ t: e.title, src: e.dataset.liveSrc }));
+  ok(st.t === 'قیمت زنده' && st.src === 'kraken', 'the price is marked live (title «' + st.t + '»), naming no exchange on the page (2.5.0)');
   const chg = await page.$eval('[data-live-chg]', (e) => ({ t: e.querySelector('.v2-num').textContent, c: e.className, a: e.querySelector('[data-v2-live-arrow]').textContent }));
   ok(chg.t === '+1.50%' && chg.c.includes('v2-delta--up') && chg.a === '▲', '24h change, its colour and arrow follow the tick');
 
@@ -269,17 +269,17 @@ const heroPrice = (page) => page.$eval('[data-live-usd] .v2-num', (e) => e.textC
   /* Silence: no heartbeat for longer than `stale`. */
   await sleep(2600);
   const stale = await page.$eval('[data-live-usd]', (e) => ({ c: e.className, src: e.dataset.liveSrc, t: e.title }));
-  const stStale = await page.$eval('[data-live-stamp]', (e) => e.textContent);
+
   ok(stale.c.includes('is-stale') && !stale.src && stale.t.includes('آخرین قیمت زنده'), 'a silent feed marks the figure stale (dimmed, titled with the last tick time)');
-  ok(stStale.includes('اتصال زنده قطع شد') && (await heroPrice(page)) === '$3,333.00', 'and says so in the stamp — never an empty price, never a silent freeze');
+  ok((await heroPrice(page)) === '$3,333.00', 'never an empty price, never a silent freeze');
 
   await poll({ price: 2222, change24h: -1, fetchedAt: new Date(Date.now() - 600000).toISOString(), nextRefreshAt: new Date(Date.now() - 1000).toISOString(), toman: 1 });
   ok((await heroPrice(page)) === '$3,333.00', 'a poll OLDER than the last live tick does not replace it');
   await poll({ price: 2345.67, change24h: -1, fetchedAt: now(), nextRefreshAt: new Date(Date.now() + 60000).toISOString(), toman: 1 });
   const back = await page.$eval('[data-live-usd]', (e) => e.className);
-  const stBack = await page.$eval('[data-live-stamp]', (e) => e.textContent);
-  ok((await heroPrice(page)) === '$2,345.67' && !back.includes('is-stale') && stBack.includes('به‌روزرسانی'),
-    'a newer poll takes the figure back, clears the stale mark and restores the stamp');
+  const titleBack = await page.$eval('[data-live-usd]', (e) => e.title);
+  ok((await heroPrice(page)) === '$2,345.67' && !back.includes('is-stale') && titleBack === '',
+    'a newer poll takes the figure back and clears the stale mark');
   ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await page.close();
 }
@@ -290,9 +290,9 @@ const heroPrice = (page) => page.$eval('[data-live-usd] .v2-num', (e) => e.textC
   await recv(page, 'nobitex', '{"id":1,"connect":{}}');
   await recv(page, 'nobitex', nStats('ETHUSDT', 2987.65, -0.4));
   await sleep(1100);
-  const st = await page.$eval('[data-live-stamp]', (e) => e.textContent);
-  ok((await heroPrice(page)) === '$2,987.65' && st.includes('USDT') && st.includes('نوبیتکس'),
-    'Kraken refused: the Nobitex ETHUSDT tick fills the price, and the stamp says it is a USDT price from Nobitex');
+  const st = await page.$eval('[data-live-usd]', (e) => ({ t: e.title, src: e.dataset.liveSrc }));
+  ok((await heroPrice(page)) === '$2,987.65' && st.t.includes('USDT') && st.src === 'nobitex',
+    'Kraken refused: the Nobitex ETHUSDT tick fills the price, marked as a USDT price');
   await sleep(2600);   // nothing more from Nobitex either
   ok((await page.$eval('[data-live-usd]', (e) => e.className)).includes('is-stale'), 'when Nobitex falls silent too, the fallback figure is marked stale');
   ok(errors.length === 0, 'no page errors');

@@ -221,7 +221,6 @@ foreach ([
     'رپ‌شده به WETH'               => 'WETH share of supply (Etherscan)',
     'در پل‌های رسمی لایه ۲'        => 'L2 canonical bridge share (Etherscan)',
     'کیف پول بزرگ صرافی‌ها (حداقل)' => 'share of supply on exchanges (Etherscan labelled wallets, a floor)',
-    'growthepie'                   => 'and named as its source',
     'پیدایش'                       => 'the editorial timeline',
     'قرارداد هوشمند'               => 'the learn-in-60-seconds cards',
 ] as $needle => $label) {
@@ -630,7 +629,7 @@ $GLOBALS['thb_probe_background'] = false;
 $fresh();
 $livePage = v2_render(10);
 ok(str_contains($livePage, '$3,251.04'), 'the v2 page renders the live price on first paint, not the 5-minute one');
-ok(str_contains($livePage, 'data-v2-live-change') && str_contains($livePage, 'data-v2-live-stamp'), 'the live figures are marked for in-place updates');
+ok(str_contains($livePage, 'data-v2-live-change') && !str_contains($livePage, 'data-v2-live-stamp') && !str_contains($livePage, 'هر دقیقه') && !str_contains($livePage, 'class="v2-tagline"'), 'the live figures are marked for in-place updates; no update-time line and no tagline under the name (2.5.0)');
 $island = \TheHybit\Coins\V2\Model::client($plugin->v2($ethL));
 ok(($island['live']['url'] ?? '') === 'https://thehybit.com/wp-json/thehybit/v1/price/ethereum', 'the data island carries the endpoint URL');
 ok(!str_contains($livePage, 'api.coingecko.com'), 'the page never points the browser at CoinGecko');
@@ -674,8 +673,9 @@ ok(isset($bars[1]) && substr_count($bars[1], 'v2-hbars__name') >= 5 && str_conta
    '#2 the top-protocols bars are labelled with protocol names and values');
 
 /* #3 — direction: titles, arrowheads, RTL order, one "other". */
-ok(str_contains($html15, 'ورودی: از کجا آمد') && str_contains($html15, 'خروجی: به کجا رفت') && str_contains($html15, 'جهت جریان'),
-   '#3 the Sankey has "in" (right) and "out" (left) column titles and a direction caption');
+ok(str_contains($html15, '>ورودی</text>') && str_contains($html15, '>خروجی</text>') && str_contains($html15, 'جهت جریان')
+   && !str_contains($html15, 'از کجا آمد') && !str_contains($html15, 'به کجا رفت'),
+   '#3 the Sankey has "in" (right) and "out" (left) column titles — just «ورودی» and «خروجی» (2.5.0) — and a direction caption');
 ok(substr_count($html15, 'class="v2-flow__arrow') >= 4, '#3 every ribbon ends in an arrowhead (' . substr_count($html15, 'class="v2-flow__arrow') . ')');
 preg_match_all('#<text class="v2-flow__label v2-fa"[^>]*>([^<]+)</text>#', $html15, $flowLabels);
 ok(count(array_keys($flowLabels[1], 'سایر')) <= 1, '#3 "سایر" appears once, not twice');
@@ -873,6 +873,72 @@ unset($GLOBALS['thb_options']['thb_coins_settings']['live_ws']);
 LiveFeed::enqueue($cfg, ['bitcoin']);
 ok(in_array(LiveFeed::HANDLE, $GLOBALS['thb_enqueued'], true) && str_starts_with((string) $GLOBALS['thb_inline'][LiveFeed::HANDLE], 'window.__THB_LIVE__ = '),
    'switched back on, live.js is enqueued with its JSON island');
+
+/* ---- 2.5.0 content revisions ---------------------------------------- */
+$visible = static function (string $h): string {
+    $h = preg_replace('#<(script|style|title)\b.*?</\1>#s', '', $h);
+    $h = preg_replace('#<(text|tspan)[^>]*>#', ' ', $h);   // keep SVG text
+    return html_entity_decode(strip_tags($h));
+};
+$pageText = $visible($html);
+ok(!str_contains($pageText, 'منبع') && !str_contains($pageText, 'منابع'), 'no "source" mention anywhere on the public coin page');
+foreach (['CoinGecko', 'DefiLlama', 'Etherscan', 'beaconcha.in', 'Blockchair', 'growthepie', 'Alternative.me', 'CoinMetrics'] as $prov) {
+    if (str_contains($pageText, $prov)) {
+        ok(false, "a data provider is named on the public page: {$prov}");
+    }
+}
+ok(!preg_match('/(فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند) ?(13|14)\d\d/u', $pageText)
+   && !preg_match('/\b1[34]\d\d\b/', strip_tags(preg_replace('#<svg.*?</svg>#s', '', $html))),
+   'no Jalali date anywhere on the page: every date is Gregorian');
+ok(\TheHybit\Coins\Format::fromJalali('1397-03-10') === '2018-05-31' && \TheHybit\Coins\Format::gregorian('۱۳۹۷/۰۳/۱۰') === '31 مه 2018'
+   && \TheHybit\Coins\Format::gregorian('2018-05-31') === '31 مه 2018',
+   'a launch date stored in the Jalali calendar (a Jalali-date plugin) is converted, never printed as a Gregorian year 1397');
+ok(str_contains($html, 'توزیع کارمزدهای پرداخت‌شده در ۲۴ ساعت گذشته') && !str_contains($html, 'از کجا آمدند'), 'flow: the formal subtitle');
+ok((bool) preg_match('#class="v2-flow__pct"[^>]*>[0-9.]+% · \$[0-9.]+[KMB]?<#', $html), 'flow: each band shows its share AND its amount');
+ok(!str_contains($html, 'v2-event__title') && str_contains($html, 'data-v2-pop'), 'price story: no side panel; an explanation box instead');
+
+/* 12 — ecosystem: ten nodes with long names never overlap, labels included. */
+$names = ['Binance staked ETH', 'Spark Liquidity Layer', 'Uniswap V4', 'Morpho Blue', 'Sky Lending', 'Curve DEX', 'Aave V3', 'Uniswap V3', 'Lido', 'Ethena USDe'];
+$eco = [];
+foreach ($names as $i => $nm) {
+    $inner = $i < 5; $slot = $inner ? $i : $i - 5;
+    $ang = -M_PI / 2 + 2 * M_PI * ($slot + ($inner ? 0 : .5)) / 5;
+    $eco[] = ['name' => $nm, 'x' => 500 + ($inner ? 250 : 430) * cos($ang), 'y' => \TheHybit\Coins\V2\Model::ECO_CY + ($inner ? 190 : 300) * sin($ang), 'r' => 22 + 20 * sqrt(1 - $i / 10)];
+}
+$eco = \TheHybit\Coins\V2\Model::spread($eco);
+$boxes = array_map(static fn($n) => [$n['x'] - max($n['r'], mb_strlen($n['name']) * 4.6 + 6), $n['y'] - $n['r'] - 6, $n['x'] + max($n['r'], mb_strlen($n['name']) * 4.6 + 6), $n['y'] + $n['r'] + 50], $eco);
+$clash = 0;
+foreach ($boxes as $i => $a) {
+    foreach (array_slice($boxes, $i + 1) as $b) {
+        if (min($a[2], $b[2]) > max($a[0], $b[0]) && min($a[3], $b[3]) > max($a[1], $b[1])) { $clash++; }
+    }
+    if ($a[0] < 0 || $a[2] > 1000 || $a[1] < 0 || $a[3] > 780) { $clash++; }
+}
+ok($clash === 0, 'ecosystem map: ten nodes, long names — no circle or label overlaps another, all inside the box');
+
+/* 18 — peers: bubbles that land on the same spot are pushed apart. */
+$pts = \TheHybit\Coins\V2\Svg::separate([
+    'bnb' => ['x' => 400, 'y' => 200, 'r' => 30], 'sol' => ['x' => 405, 'y' => 210, 'r' => 34],
+    'sui' => ['x' => 300, 'y' => 400, 'r' => 20], 'avax' => ['x' => 300, 'y' => 400, 'r' => 22],
+    'trx' => ['x' => 410, 'y' => 230, 'r' => 20],
+], 80, 690, 20, 440, 6);
+$over = 0;
+$keys = array_keys($pts);
+foreach ($keys as $i => $a) {
+    foreach (array_slice($keys, $i + 1) as $b) {
+        if (hypot($pts[$a]['x'] - $pts[$b]['x'], $pts[$a]['y'] - $pts[$b]['y']) < $pts[$a]['r'] + $pts[$b]['r'] + 5.9) { $over++; }
+    }
+}
+ok($over === 0 && abs($pts['sui']['x'] - 300) < 40, 'peers chart: overlapping bubbles (BNB/SOL/TRX, SUI/AVAX on one spot) are separated, each moved only a little');
+
+/* 18 — the peers sentence explains the ratio and the rank in plain words. */
+$peerSentence = (string) ($plugin->v2($plugin->coins->find(10))['peers']['insight'] ?? '');
+ok($peerSentence === '' || (str_contains($peerSentence, 'به ازای هر ۱۰۰ دلار ارزش بازار') && !str_contains($peerSentence, 'رتبه 1 در میان')),
+   'peers: the ratio is explained as dollars locked per $100 of market value, not as a bare rank');
+
+/* 17 — daily pulse: framed lines, no auto-written line, no heat box, a real 30-second summary. */
+ok(str_contains($html, 'v2-pulse__card') && !str_contains($html, 'به‌صورت خودکار از ترکیب داده‌ها') && !str_contains($html, 'حرارت اکوسیستم')
+   && str_contains($html, 'فاصله تا بالاترین قیمت تاریخ'), 'pulse: lines in a card; the auto-written line and the heat box are gone; the 30-second box carries new facts');
 
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);

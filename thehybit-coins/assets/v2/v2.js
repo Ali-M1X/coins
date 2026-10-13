@@ -171,30 +171,70 @@ function initPriceStory() {
     $$(`[data-v2-layer-el="${t.dataset.v2Layer}"]`).forEach((el) => el.toggleAttribute('hidden', !on));
   }));
 
-  const card = $('[data-v2-eventcard]');
+  /* Each event explains itself in one box placed beside it: on hover, on
+     keyboard focus, or on a tap (a second tap, Escape or a tap elsewhere
+     closes it). Filled from the data island; nothing is fetched. */
+  const chart = $('[data-v2-pstory]');
+  const pop = $('[data-v2-pop]');
   const events = data.story?.events || [];
   const pins = $$('[data-v2-event]');
-  const show = (k) => {
+  if (!chart || !pop) return;
+  let open = null;
+  let hideTimer = null;
+  const set = (key, v) => { const el = $(`[data-v2-p="${key}"]`, pop); if (el) el.textContent = v ?? ''; };
+  const hide = () => {
+    pop.hidden = true;
+    pins.forEach((p) => { p.classList.remove('is-on'); p.removeAttribute('aria-describedby'); });
+    open = null;
+  };
+  const show = (k, pin) => {
     const e = events[k];
-    if (!e || !card) return;
-    pins.forEach((p) => p.classList.toggle('is-on', Number(p.dataset.v2Event) === k));
-    const set = (key, v) => { const el = $(`[data-v2-e="${key}"]`, card); if (el) el.textContent = v; };
+    if (!e) return;
+    clearTimeout(hideTimer);
     set('title', e.title);
     set('date', e.date);
     set('text', e.text);
-    set('window', e.window);
     set('price', e.price);
-    const chg = $('[data-v2-e="change"]', card);
-    if (chg) {
-      chg.textContent = e.change || '—';
-      chg.className = `v2-event__chg v2-delta--${e.dir}`;
-    }
+    set('window', e.window);
+    set('change', e.change || '—');
+    const chg = $('[data-v2-p="change"]', pop);
+    if (chg) chg.className = `v2-num v2-delta--${e.dir}`;
+    const row = $('[data-v2-p="changeRow"]', pop);
+    if (row) row.hidden = !e.change;
+    pins.forEach((p) => p.classList.toggle('is-on', p === pin));
+    pin.setAttribute('aria-describedby', 'v2-pop');
+    pop.hidden = false;
+    /* Beside the marker on the line: above it when there is room, else below;
+       never past the card's edges. */
+    const c = chart.getBoundingClientRect();
+    const dot = ($('circle', pin) || pin).getBoundingClientRect();
+    const w = pop.offsetWidth;
+    const h = pop.offsetHeight;
+    let left = dot.left + dot.width / 2 - c.left - w / 2;
+    left = Math.max(8, Math.min(c.width - w - 8, left));
+    let top = dot.top - c.top - h - 14;
+    if (top < 8) top = dot.bottom - c.top + 14;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    open = k;
   };
+  const later = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hide, 180); };
   pins.forEach((p) => {
     const k = Number(p.dataset.v2Event);
-    p.addEventListener('click', () => show(k));
-    p.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); show(k); } });
+    p.addEventListener('mouseenter', () => show(k, p));
+    p.addEventListener('mouseleave', later);
+    p.addEventListener('focus', () => show(k, p));
+    p.addEventListener('blur', later);
+    p.addEventListener('click', (ev) => { ev.stopPropagation(); show(k, p); });
+    p.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') hide();
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); show(k, p); }
+    });
   });
+  pop.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+  pop.addEventListener('mouseleave', later);
+  document.addEventListener('click', (ev) => { if (!pop.hidden && !pop.contains(ev.target)) hide(); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hide(); });
 }
 
 /* ------------------------------------------------------------------ peers */
@@ -210,10 +250,12 @@ function initPeers() {
       const p = peers[Number(g.dataset.v2Peer)];
       if (!p) return;
       const x = useTvl ? p.xT : p.xV;
+      const y = useTvl ? p.yT : p.yV;
       g.toggleAttribute('hidden', x == null);
-      if (x != null) g.setAttribute('transform', `translate(${x} ${p.y})`);
+      if (x != null) g.setAttribute('transform', `translate(${x} ${y})`);
     });
-    if (label) label.textContent = useTvl ? 'ارزش قفل‌شده (مقیاس لگاریتمی)' : 'حجم ۲۴ ساعته (مقیاس لگاریتمی)';
+    $$('[data-v2-xticks]').forEach((t) => t.toggleAttribute('hidden', t.dataset.v2Xticks !== select.value));
+    if (label) label.textContent = useTvl ? 'ارزش قفل‌شده در دیفای شبکه (مقیاس لگاریتمی)' : 'حجم معاملات ۲۴ ساعته (مقیاس لگاریتمی)';
   });
 }
 
@@ -236,13 +278,15 @@ function initTabs() {
 
 /* ------------------------------------------------------------- timeline */
 
-/* The timeline wraps onto new lines (CSS grid), and each event draws its own
-   piece of rail. Where a line ends, this joins the end of its rail to the
-   start of the next line's rail with one continuous curve: down the right
-   margin, back along the gap between the lines, and down into the first
-   event — a carriage return, in the rail's own colour. Where the lines
-   break depends on the width, so it is measured and redrawn on resize. No
-   JavaScript: the events still read correctly, just without the joins. */
+/* The timeline reads right to left, like the page: every line starts at the
+   right edge (CSS grid, direction: rtl), and each event draws its own piece
+   of rail. Where a line ends — at the LEFT — this joins the end of its rail
+   to the start of the next line's rail with one continuous curve: down the
+   left margin, back along the gap between the lines to the right edge, and
+   down into the first event of the next line. A carriage return, in the
+   rail's own colour. Where the lines break depends on the width, so it is
+   measured and redrawn on resize. No JavaScript: the events still read in
+   order, just without the joins. */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function initTimeline() {
   const card = $('.v2-timeline');
@@ -270,26 +314,26 @@ function initTimeline() {
     for (let i = 0; i + 1 < rows.length; i++) {
       const a = rows[i];
       const b = rows[i + 1];
-      const last = a.items.reduce((m, x) => (x.r.right > m.r.right ? x : m));
-      const first = b.items.reduce((m, x) => (x.r.left < m.r.left ? x : m));
-      const x1 = last.r.right - c.left;          // where this line's rail ends
+      const last = a.items.reduce((m, x) => (x.r.left < m.r.left ? x : m));     // a line ends on the left
+      const first = b.items.reduce((m, x) => (x.r.right > m.r.right ? x : m));  // the next starts on the right
+      const x1 = last.r.left - c.left;
       const y1 = a.top + 10;                      // rail centre (top 9px, 2px high)
-      const x2 = first.r.left - c.left;          // where the next line's rail starts
+      const x2 = first.r.right - c.left;
       const y2 = b.top + 10;
       const bottom = Math.max(...a.items.map((x) => x.r.bottom - c.top));
       const ym = (bottom + b.top) / 2;           // midway through the gap
-      const rr = Math.min(12, (ym - y1) / 2);    // right turn radius
-      const rl = Math.min(12, (y2 - ym) / 2);    // left turn radius
+      const rl = Math.min(12, (ym - y1) / 2);    // left turn radius
+      const rr = Math.min(12, (y2 - ym) / 2);    // right turn radius
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('d', [
         `M${x1} ${y1}`,
-        `Q${x1 + rr} ${y1} ${x1 + rr} ${y1 + rr}`,
-        `L${x1 + rr} ${ym - rr}`,
-        `Q${x1 + rr} ${ym} ${x1} ${ym}`,
+        `Q${x1 - rl} ${y1} ${x1 - rl} ${y1 + rl}`,
+        `L${x1 - rl} ${ym - rl}`,
+        `Q${x1 - rl} ${ym} ${x1} ${ym}`,
         `L${x2} ${ym}`,
-        `Q${x2 - rl} ${ym} ${x2 - rl} ${ym + rl}`,
-        `L${x2 - rl} ${y2 - rl}`,
-        `Q${x2 - rl} ${y2} ${x2} ${y2}`,
+        `Q${x2 + rr} ${ym} ${x2 + rr} ${ym + rr}`,
+        `L${x2 + rr} ${y2 - rr}`,
+        `Q${x2 + rr} ${y2} ${x2} ${y2}`,
       ].join(' '));
       path.setAttribute('class', 'v2-timeline__join' + (first.li.classList.contains('is-planned') ? ' is-planned' : ''));
       svg.appendChild(path);
