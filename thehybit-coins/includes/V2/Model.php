@@ -1971,7 +1971,8 @@ final class Model
     private function stakingNa(): bool
     {
         $tags = array_map('trim', explode(',', $this->coin ? (string) $this->coin->meta('tags', '') : ''));
-        return $this->isPow() || in_array('استیبل‌کوین', $tags, true) || in_array('میم‌کوین', $tags, true);
+        /* 2.7.0: tokenized gold and fund shares have no staking either. */
+        return $this->isPow() || array_intersect(['استیبل‌کوین', 'میم‌کوین', 'طلای توکنی', 'صندوق توکنی‌شده'], $tags) !== [];
     }
 
     /** Proof of work: no staking exists to report, rather than no source for it. */

@@ -56,7 +56,7 @@ return [
         'historical' => DAY_IN_SECONDS,          // ATH/ATL and other near-static records
 
         /* Other providers, unchanged. */
-        'dex'        => 5 * MINUTE_IN_SECONDS,
+        'dex'        => 10 * MINUTE_IN_SECONDS,  // 2.7.0: 5→10, 84 coins (pool tables, not the price)
         'defi'       => 20 * MINUTE_IN_SECONDS,
         'onchain'    => 45 * MINUTE_IN_SECONDS,
         'l2'         => 3 * HOUR_IN_SECONDS,
@@ -305,6 +305,16 @@ return [
         'l1'       => ['polkadot', 'cosmos', 'internet-computer', 'algorand', 'vechain', 'kaspa', 'ethereum-classic', 'cardano', 'avalanche-2'],
         'infra'    => ['bittensor', 'render-token', 'filecoin', 'internet-computer'],
         'memeNew'  => ['official-trump', 'pepe', 'dogecoin', 'shiba-inu', 'bonk'],
+        /* 2.7.0 — batch 4. Dollar tokens, tokenised funds and gold compare
+           with their own kind; a coin already listed above keeps its group. */
+        'stable2'  => ['usds', 'usd1-wlfi', 'global-dollar', 'ripple-usd', 'usdd', 'gho', 'ondo-us-dollar-yield',
+                       'blackrock-usd-institutional-digital-liquidity-fund', 'tether', 'usd-coin', 'dai'],
+        'gold'     => ['tether-gold', 'pax-gold'],
+        'exchange2' => ['gatechain-token', 'kucoin-shares', 'htx-dao', 'nexo', 'binancecoin', 'okb', 'bitget-token'],
+        'defi2'    => ['morpho', 'sky', 'jupiter-exchange-solana', 'aerodrome-finance', 'pancakeswap-token', 'just', 'aave', 'uniswap'],
+        'l1b'      => ['blockstack', 'injective-protocol', 'xdce-crowd-sale', 'canton-network', 'pi-network', 'polkadot', 'cosmos'],
+        'memeNew2' => ['pump-fun', 'official-trump', 'pepe', 'bonk'],
+        'infra2'   => ['worldcoin-wld', 'venice-token', 'layerzero', 'quant-network', 'bittensor', 'render-token'],
     ],
 
     /* ------------------------------------------------------------------
@@ -328,7 +338,7 @@ return [
            does not make ticks more frequent, because the crontab is what fires
            them. See Scheduler::interval(). */
         'interval'         => 55,
-        'max_items'        => 8,    // datasets refreshed per tick
+        'max_items'        => 12,   // datasets refreshed per tick (2.7.0: 8→12 for 84 coins)
         'max_seconds'      => 20,   // wall-clock ceiling, well inside any limit
         /* How many candidate entries queue() inspects before it stops looking.
          *
@@ -925,6 +935,14 @@ return [
                     'arbitrum' => 'ARB/USD', 'render-token' => 'RENDER/USD', 'filecoin' => 'FIL/USD', 'ethena' => 'ENA/USD',
                     'bittensor' => 'TAO/USD', 'mantle' => 'MNT/USD', 'world-liberty-financial' => 'WLFI/USD',
                     'official-trump' => 'TRUMP/USD', 'kaspa' => 'KAS/USD',
+                    /* 2.7.0 batch 4. SKY, MORPHO, AERO and USDG are listed as
+                       to-verify: if Kraken has no such pair the socket rejects
+                       it and the page keeps polling. */
+                    'dai' => 'DAI/USD', 'paypal-usd' => 'PYUSD/USD', 'pax-gold' => 'PAXG/USD', 'quant-network' => 'QNT/USD',
+                    'worldcoin-wld' => 'WLD/USD', 'pump-fun' => 'PUMP/USD', 'jupiter-exchange-solana' => 'JUP/USD',
+                    'pyth-network' => 'PYTH/USD', 'injective-protocol' => 'INJ/USD', 'layerzero' => 'ZRO/USD',
+                    'blockstack' => 'STX/USD', 'ripple-usd' => 'RLUSD/USD', 'sky' => 'SKY/USD', 'morpho' => 'MORPHO/USD',
+                    'aerodrome-finance' => 'AERO/USD', 'global-dollar' => 'USDG/USD',
                 ],
             ],
             /* Nobitex public WebSocket (Centrifugo, documented at
@@ -950,6 +968,10 @@ return [
                     'uniswap' => 'UNIIRT', 'polkadot' => 'DOTIRT', 'aave' => 'AAVEIRT', 'cosmos' => 'ATOMIRT',
                     'algorand' => 'ALGOIRT', 'monero' => 'XMRIRT', 'aptos' => 'APTIRT', 'near' => 'NEARIRT',
                     'filecoin' => 'FILIRT', 'render-token' => 'RNDRIRT', 'arbitrum' => 'ARBIRT', 'ethereum-classic' => 'ETCIRT',
+                    /* 2.7.0 batch 4 — to verify against Nobitex's market list;
+                       an unknown channel simply never publishes. */
+                    'dai' => 'DAIIRT', 'quant-network' => 'QNTIRT', 'worldcoin-wld' => 'WLDIRT', 'layerzero' => 'ZROIRT',
+                    'just' => 'JSTIRT',
                 ],
                 'usdt' => [
                     'bitcoin' => 'BTCUSDT', 'ethereum' => 'ETHUSDT', 'ripple' => 'XRPUSDT',
@@ -961,6 +983,8 @@ return [
                     'uniswap' => 'UNIUSDT', 'polkadot' => 'DOTUSDT', 'aave' => 'AAVEUSDT', 'cosmos' => 'ATOMUSDT',
                     'algorand' => 'ALGOUSDT', 'monero' => 'XMRUSDT', 'aptos' => 'APTUSDT', 'near' => 'NEARUSDT',
                     'filecoin' => 'FILUSDT', 'render-token' => 'RNDRUSDT', 'arbitrum' => 'ARBUSDT', 'ethereum-classic' => 'ETCUSDT',
+                    'dai' => 'DAIUSDT', 'quant-network' => 'QNTUSDT', 'worldcoin-wld' => 'WLDUSDT', 'layerzero' => 'ZROUSDT',
+                    'just' => 'JSTUSDT',
                 ],
             ],
         ],

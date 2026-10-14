@@ -1,0 +1,59 @@
+  after 1h: 50/50 coins priced, 0/50 with every chart filled
+  after 2h: 50/50 coins priced, 0/50 with every chart filled
+  after 3h: 50/50 coins priced, 1/50 with every chart filled
+  after 4h: 50/50 coins priced, 3/50 with every chart filled
+  after 5h: 50/50 coins priced, 21/50 with every chart filled
+  after 6h: 50/50 coins priced, 50/50 with every chart filled
+  after 7h: 50/50 coins priced, 50/50 with every chart filled
+  after 8h: 50/50 coins priced, 50/50 with every chart filled
+  after 9h: 50/50 coins priced, 50/50 with every chart filled
+  after 10h: 50/50 coins priced, 50/50 with every chart filled
+  after 11h: 50/50 coins priced, 50/50 with every chart filled
+  after 12h: 50/50 coins priced, 50/50 with every chart filled
+  after 13h: 50/50 coins priced, 50/50 with every chart filled
+  after 14h: 50/50 coins priced, 50/50 with every chart filled
+  after 1h: 84/84 coins priced, 0/84 with every chart filled
+  after 2h: 84/84 coins priced, 0/84 with every chart filled
+  after 3h: 84/84 coins priced, 0/84 with every chart filled
+  after 4h: 84/84 coins priced, 0/84 with every chart filled
+  after 5h: 84/84 coins priced, 0/84 with every chart filled
+  after 6h: 84/84 coins priced, 0/84 with every chart filled
+  after 7h: 84/84 coins priced, 3/84 with every chart filled
+  after 8h: 84/84 coins priced, 4/84 with every chart filled
+  after 9h: 84/84 coins priced, 8/84 with every chart filled
+  after 10h: 84/84 coins priced, 29/84 with every chart filled
+  after 11h: 84/84 coins priced, 67/84 with every chart filled
+  after 12h: 84/84 coins priced, 84/84 with every chart filled
+  after 13h: 84/84 coins priced, 84/84 with every chart filled
+  after 14h: 84/84 coins priced, 84/84 with every chart filled
+
+=== current TTLs — requests per hour (steady state, hours 3–8) ===
+  host                           50 coins   84 coins
+  api.alternative.me                  1.0        1.0
+  api.blockchair.com                 29.7       29.7
+  api.coingecko.com                  91.8      133.5
+  api.dexscreener.com               118.0      239.3
+  api.etherscan.io                   13.8       13.8
+  api.github.com                     11.3       12.8
+  api.growthepie.com                  0.2        0.2
+  api.llama.fi                      218.0      245.0
+  api.persiantoolbox.com              3.8        3.8
+  beaconcha.in                        4.0        4.0
+  stablecoins.llama.fi                1.0        1.0
+  wikimedia.org                      12.5       18.7
+  yields.llama.fi                     0.2        0.2
+    of which live ticker             65.0       65.0
+    of which /coins/ list             7.8        6.0
+  CoinGecko busiest 60 s                4          4
+  CoinGecko 429s (8 h)                  0          0
+  CoinGecko per day (x24)            2204       3204
+
+  Freshness at the end (worst coin, age ÷ TTL; ≤ 1 is on time):
+  chart.24h                           0.3        0.5
+  chart.7d                            0.0        0.1
+  chart.30d                           0.0        0.0
+  chart.90d                           0.0        0.0
+  chart.1y                            0.0        0.0
+  metadata                            0.6        0.6
+  historical                          0.6        0.6
+  structure                           0.6        0.6

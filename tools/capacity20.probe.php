@@ -65,7 +65,7 @@ function simulate(array $config, int $n, array $seeds): array
 
     $interval = Scheduler::interval($config);
     $ticks = (int) floor(3600 / $interval);
-    $hours = 8;
+    $hours = (int) (getenv('THB_HOURS') ?: 8);
     $window = 6;
     $start = 0;
     for ($h = 0; $h < $hours; $h++) {
@@ -101,7 +101,8 @@ function simulate(array $config, int $n, array $seeds): array
         $by = [];
         foreach ($calls as $c) {
             if ($c['host'] === getenv('THB_DEBUG_HOST')) {
-                $u = preg_replace('#\?.*#', '', $c['url']);
+                $u = preg_replace(['#\?.*#', '#/coins/(?!markets)[a-z0-9-]+#'], ['', '/coins/{id}'], $c['url']);
+                if (str_contains($c['url'], 'market_chart')) { preg_match('#days=([0-9a-z]+)#', $c['url'], $dm); $u .= '?days=' . ($dm[1] ?? '?'); }
                 $by[$u] = ($by[$u] ?? 0) + 1 / $window;
             }
         }

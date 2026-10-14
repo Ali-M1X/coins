@@ -47,9 +47,9 @@ foreach ($seeds as $slug => $spec) {
 $GLOBALS['thb_coin_ids'] = array_keys($ids);
 
 section('configuration');
-ok(count($seeds) === 50, 'config/coins.php lists 50 coins: the 20 of 2.3 and the 30 of batch 3 (' . count($seeds) . ')');
+ok(count($seeds) === 84, 'config/coins.php lists 84 coins: the 20 of 2.3, the 30 of batch 3 and the 34 of batch 4 (' . count($seeds) . ')');
 $gecko = array_column(array_column($seeds, 'fields'), 'thb_coingecko_id');
-ok(count(array_unique($gecko)) === 50, 'each with its own CoinGecko id');
+ok(count(array_unique($gecko)) === 84, 'each with its own CoinGecko id');
 foreach (['tether', 'xrp', 'bnb', 'solana', 'usdc', 'dogecoin', 'cardano', 'litecoin'] as $slug) {
     ok(isset($seeds[$slug]), "/coins/{$slug}/ is one of them");
 }
@@ -119,8 +119,8 @@ foreach ($ids as $id => $slug) {
     $faqs[$slug] = (string) ($seeds[$slug]['fields']['thb_faq'] ?? '');
 }
 unset($GLOBALS['thb_current_post']);
-ok(count(array_unique($titles)) === 50 && !in_array('fallback', $titles, true), 'all 50 titles are different and hand-written');
-ok(count(array_unique($descs)) === 50 && min(array_map('mb_strlen', $descs)) >= 100, 'all 50 meta descriptions are different and substantial');
+ok(count(array_unique($titles)) === 84 && !in_array('fallback', $titles, true), 'all 84 titles are different and hand-written');
+ok(count(array_unique($descs)) === 84 && min(array_map('mb_strlen', $descs)) >= 100, 'all 84 meta descriptions are different and substantial');
 $questions = [];
 foreach ($faqs as $slug => $faq) {
     foreach (preg_split('/\n/', $faq) as $line) {
@@ -339,11 +339,70 @@ ok(str_contains($aavePage, 'class="v2-peers__link" href="https://thehybit.com/po
    'internal links: the peers table links to the other coins we have pages for');
 ok(str_contains($aavePage, '<nav class="v2-crumbs"') && str_contains($aavePage, '>ارزها</a>'), 'and the breadcrumb links back to /coins/');
 
+section('batch 4 (2.7.0) — the rest of the live-price list');
+$batch4 = array_filter($seeds, static fn($sp) => ($sp['batch'] ?? null) === 4);
+ok(count($batch4) === 34, 'batch 4 adds exactly 34 coins (' . count($batch4) . ')');
+$b4Ids = array_map(static fn($sp) => $sp['fields']['thb_coingecko_id'], $batch4);
+$before = array_map(static fn($sp) => $sp['fields']['thb_coingecko_id'], array_filter($seeds, static fn($sp) => ($sp['batch'] ?? null) !== 4));
+ok(count($before) === 50 && array_intersect($b4Ids, $before) === [], 'no batch-4 coin already has a page (by CoinGecko id), and none appears twice');
+$never = ['staked-ether', 'wrapped-steth', 'wrapped-bitcoin', 'weth', 'wrapped-eeth', 'coinbase-wrapped-btc', 'binance-bridged-usdt-bnb-smart-chain',
+          'rocket-pool-eth', 'mantle-staked-ether', 'jito-staked-sol', 'binance-staked-sol', 'savings-dai', 'ethena-staked-usde', 'susds', 'kelp-dao-restaked-eth'];
+ok(array_intersect($b4Ids, $never) === [], 'no wrapped, bridged, staked or liquid-staking token');
+foreach (['dai', 'usds', 'tether-gold', 'pax-gold', 'pi-network', 'blackrock-buidl'] as $slug) {
+    ok(isset($batch4[$slug]), "batch 4 now includes /coins/{$slug}/ (the old stablecoin/gold/fund/Pi skip is lifted)");
+}
+$b4Src = (string) file_get_contents(THB_COINS_DIR . 'config/coins-batch4.php');
+preg_match('#\$active = \[(.*?)\];#s', $b4Src, $am4);
+preg_match_all("#'([a-z0-9-]+)',#", $am4[1] ?? '', $al4);
+ok($al4[1] === array_keys($batch4), 'batch 4 is exactly its one-line-per-coin $active list, in its order');
+preg_match('#\$notBuilt = \[(.*?)\];#s', $b4Src, $nb);
+preg_match_all("#^\s*'([^']+)'\s*=>\s*'([^']{20,})'#m", $nb[1] ?? '', $nbl);
+ok(count($nbl[1]) === 18, 'the 18 coins not built are each listed with a reason (' . count($nbl[1]) . ')');
+foreach ($batch4 as $slug => $sp) {
+    $v = $plugin->v2($plugin->coins->find(array_search($slug, $ids, true)));
+    $f = $sp['fields'];
+    if (!empty($f['thb_enable_dex']) && empty($f['thb_dex_token_address'])) {
+        ok(false, "{$slug}: DEX on without a token address");
+    }
+    if (!empty($f['thb_enable_defi']) && empty($f['thb_defillama_chain'])) {
+        ok(false, "{$slug}: DeFi on without a DefiLlama chain");
+    }
+    foreach (['overview', 'story', 'price-story', 'pulse', 'peers'] as $always) {
+        if (!($v['sections'][$always]['show'] ?? false)) {
+            ok(false, "{$slug}: the {$always} section is missing");
+        }
+    }
+    $lines = array_merge(preg_split('/\n/', (string) $f['thb_timeline']), preg_split('/\n/', (string) $f['thb_price_events']));
+    foreach ((array) ($sp['verify'] ?? []) as $vv) {
+        if (array_filter($lines, static fn($l) => str_starts_with($l, $vv . ' |')) === []) {
+            ok(false, "{$slug}: fact-check item «{$vv}» matches no line");
+        }
+    }
+}
+ok(true, 'every batch-4 coin: DEX only by contract address, DeFi only with a chain, core sections present, fact-check items name real lines');
+$stable = $plugin->v2($plugin->coins->find(array_search('dai', $ids, true)));
+ok(!($stable['sections']['staking']['show'] ?? false), 'a stablecoin page has no staking section');
+$gold = $plugin->v2($plugin->coins->find(array_search('pax-gold', $ids, true)));
+ok(!($gold['sections']['staking']['show'] ?? false), 'nor does a gold token');
+$live4 = \TheHybit\Coins\LiveFeed::client($plugin->config, array_values($b4Ids));
+$live4Usd = array_keys(array_filter($live4['coins'] ?? [], static fn($m) => !empty($m['usd'])));
+ok(count($live4Usd) >= 16, 'live prices: ' . count($live4Usd) . ' of 34 batch-4 coins mapped to a live feed');
+$pg = $plugin->config['peer_groups'];
+$grouped = array_merge(...array_values($pg));
+ok(array_diff($b4Ids, $grouped) === [], 'every batch-4 coin sits in a peer group');
+ok(count(array_unique($grouped)) <= 250, 'and every peer id still fits the one /coins/markets request (' . count(array_unique($grouped)) . ' ≤ 250)');
+$daiPage = $pages['dai'];
+ok(str_contains($daiPage, 'class="v2-peers__link"') && str_contains($daiPage, '<nav class="v2-crumbs"'), 'internal links: peers and breadcrumb on a new page');
+$diCoin = $plugin->coins->find(array_search('dai', $ids, true));
+$plugin->cache->put('market', $plugin->cache->keyFor('market', $diCoin), ['price' => 1.0]);
+$dp = (object) ['ID' => array_search('dai', $ids, true), 'post_modified_gmt' => '2024-01-01 00:00:00', 'post_type' => 'thb_coin'];
+ok(isset($sm->core(['loc' => 'x'], $dp, 'thb_coin')['lastmod']), 'sitemap: the new pages carry lastmod too');
+
 if (getenv('THB_STATUS_MD')) {
     file_put_contents((string) getenv('THB_STATUS_MD'), $md);
 }
 if (getenv('THB_TOP20_DIR')) {
-    foreach (['solana', 'tether', 'dogecoin', 'xrp', 'tron', 'ethereum', 'aave', 'zcash', 'near'] as $slug) {
+    foreach (['solana', 'tether', 'dogecoin', 'xrp', 'tron', 'ethereum', 'aave', 'zcash', 'near', 'dai', 'worldcoin', 'stacks', 'pax-gold'] as $slug) {
         file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . "/v2-{$slug}.html", $pages[$slug]);
     }
 }

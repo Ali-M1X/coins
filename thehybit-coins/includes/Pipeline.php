@@ -550,12 +550,26 @@ final class Pipeline
         $order = array_keys($state);
         usort($order, static fn(string $a, string $b) => $state[$b]['priority'] <=> $state[$a]['priority']);
 
+        /* 2.7.0 — first fill. CoinGecko serves 7d, 30d and 90d at the same
+           hourly spacing, so one 90-day download holds the other two exactly.
+           When a shorter hourly window has never been fetched, 90d goes first
+           and the missing ones are cut from it: three downloads per new coin
+           instead of five. Only ever for a window that has nothing; a window
+           already held refreshes on its own as before. */
+        $seedable = array_values(array_filter(self::HOURLY_SEEDED, static fn($p) => isset($state[$p]) && $state[$p]['data'] === null));
+        if ($seedable !== [] && isset($state['90d']) && ($state['90d']['data'] === null || $state['90d']['stale'])) {
+            $order = array_merge(['90d'], array_values(array_diff($order, ['90d'])));
+        }
+
         foreach ($order as $period) {
             if ($budget <= 0) {
                 break;
             }
             if (!$state[$period]['stale']) {
                 continue;
+            }
+            if (in_array($period, $seedable, true) && $state[$period]['data'] !== null) {
+                continue;   // just cut from the 90-day download
             }
 
             $budget--;
@@ -568,6 +582,15 @@ final class Pipeline
 
             if (is_array($result['data'] ?? null)) {
                 $state[$period]['data'] = $result['data'];
+                if ($period === '90d' && empty($result['miss'])) {
+                    foreach ($seedable as $short) {
+                        $cut = self::cutWindow($result['data'], (int) ($windows[$short]['days'] ?? 0));
+                        if ($cut !== null) {
+                            $this->cache->put(Cache::CHART_PREFIX . $short, $this->cache->keyFor(Cache::CHART_PREFIX . $short, $coin), $cut);
+                            $state[$short]['data'] = $cut;
+                        }
+                    }
+                }
             }
         }
 
@@ -581,6 +604,38 @@ final class Pipeline
         }
 
         return $series ?: null;
+    }
+
+    /** Windows a 90-day download can seed: same hourly spacing upstream. */
+    private const HOURLY_SEEDED = ['7d', '30d'];
+
+    /**
+     * The last $days of a chart series, or null when it does not reach back
+     * that far (a coin younger than the window keeps its own download).
+     */
+    private static function cutWindow(array $d, int $days): ?array
+    {
+        if ($days <= 0 || empty($d['t']) || !is_array($d['t'])) {
+            return null;
+        }
+        $from = (end($d['t']) - $days * 86400 * 1000);
+        if ((int) $d['t'][0] > $from) {
+            return null;
+        }
+        $out = [];
+        foreach ($d as $col => $values) {
+            $out[$col] = is_array($values) ? [] : $values;
+        }
+        foreach ($d['t'] as $i => $t) {
+            if ($t >= $from) {
+                foreach ($d as $col => $values) {
+                    if (is_array($values) && array_key_exists($i, $values)) {
+                        $out[$col][] = $values[$i];
+                    }
+                }
+            }
+        }
+        return count($out['t']) >= 2 ? $out : null;
     }
 
     /**

@@ -227,4 +227,4 @@ return (static function (array $coins): array {
             'thb_enable_l2'           => 0,
         ],
     ],
-] + (require __DIR__ . '/coins-more.php') + (require __DIR__ . '/coins-batch3.php'));
+] + (require __DIR__ . '/coins-more.php') + (require __DIR__ . '/coins-batch3.php') + (require __DIR__ . '/coins-batch4.php'));

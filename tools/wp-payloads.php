@@ -83,7 +83,7 @@ function probe_payload(string $url): array
     }
 
     /* ---- CoinGecko: site-wide ---- */
-    if (str_contains($path, '/global')) {
+    if (preg_match('#/global$#', $path)) {
         return ['data' => [
             'total_market_cap'                     => ['usd' => 2.41e12, 'btc' => 3.6e7],
             'total_volume'                         => ['usd' => 9.8e10],
@@ -488,7 +488,20 @@ function probe_payload(string $url): array
                   '0x57e114b691db790c35207b2e685d4a43181e6061' => 'ENA', '0x75231f58b43240c9718dd58b4967c5114342a86c' => 'OKB',
                   '0x6982508145454ce325ddbe47a25d4ec3d2311933' => 'PEPE', '0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3' => 'ONDO',
                   '0x455e53cbb86018ac2b8092fdcd39d8444affc3f6' => 'POL', '0x912ce59144191c1204e64559fe8253a0e49e6548' => 'ARB',
-                  '0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24' => 'RNDR', '6p6xghyf7aee6tzksmfsko444wqop15icusqi2jfgipn' => 'TRUMP'] as $addr => $sym) {
+                  '0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24' => 'RNDR', '6p6xghyf7aee6tzksmfsko444wqop15icusqi2jfgipn' => 'TRUMP',
+                  /* 2.7.0 batch 4 */
+                  '0xdc035d45d973e3ec169d2276ddab16f1e407384f' => 'USDS', '0x4c9edd5852cd905f086c759e8383e09bff1e68b3' => 'USDe',
+                  '0x6b175474e89094c44da98b954eedeac495271d0f' => 'DAI', '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d' => 'USD1',
+                  '0x68749665ff8d2d112fa859aa293f07a622782f38' => 'XAUT', '0x4a220e6096b25eadb88358cb44068a3248254675' => 'QNT',
+                  '0x6c3ea9036406852006290770bedfcaba0e23a0e8' => 'PYUSD', '0x8292bb45bf1ee4d140127049757c2e0ff06317ed' => 'RLUSD',
+                  '0x96f6ef951840721adbf46ac996b59e0235cb985c' => 'USDY', 'pumpcmxqmfrsakq5r49wcjnrayyrqmxz6ae8h7h9dfn' => 'PUMP',
+                  '0x163f8c2467924be0ae7b5347228cabf260318753' => 'WLD', '0x45804880de22913dafe09f4980848ece6ecbaf78' => 'PAXG',
+                  '0x56072c95faa701256059aa122697b133aded9279' => 'SKY', '0x58d97b57bb95320f9a05dc918aef65434969c2b2' => 'MORPHO',
+                  '0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf' => 'VVV', 'jupyiwryjfskupiha7hker8vutaefosybkedznsdvcn' => 'JUP',
+                  '0xf34960d9d60be18cc1d5afc1a6f012a723a28811' => 'KCS', '0x940181a94a35a4569e4529a3cdfb74e38fd98631' => 'AERO',
+                  '0xb62132e35a6c13ee1ee0f84dc5d40bad8d815206' => 'NEXO', '0xe28b3b32b6c345a34ff64674606124dd5aceca30' => 'INJ',
+                  '0x6985884c4392d348587b19cb9eaaf157f13271cd' => 'ZRO', '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82' => 'CAKE',
+                  '0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f' => 'GHO', 'hz1jovnivvgrgniiyveozevgz58xau3rkwx8eacqbct3' => 'PYTH'] as $addr => $sym) {
             if (str_contains(strtolower($path), $addr)) {
                 $symbol = $sym;
             }
