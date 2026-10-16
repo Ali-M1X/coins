@@ -89,3 +89,16 @@ a.list-coin__name:hover { color: var(--v2-accent); }
   .list-head__title { font-size: 30px; }
   .list-coin__name { max-width: 22ch; }
 }
+
+/* 2.8.0 — asset categories: a filter bar of plain links, and each coin's
+   category beside its symbol (coins with a page only). */
+.list-cats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.list-cats__label { color: var(--v2-muted); font-size: 13px; }
+.list-cats__item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 13px;
+  color: var(--v2-text); text-decoration: none; border: 1px solid var(--v2-line); background: rgba(148, 163, 184, .06); }
+.list-cats__item:hover, .list-cats__item:focus-visible { border-color: rgba(25, 227, 177, .5); }
+.list-cats__item.is-current { background: rgba(25, 227, 177, .14); border-color: rgba(25, 227, 177, .55); color: var(--v2-accent); font-weight: 600; }
+.list-cats__n { color: var(--v2-muted); font-size: 12px; }
+.list-coin__cat { color: var(--v2-accent); font-size: 11px; text-decoration: none; padding: 0 6px; border-radius: 999px;
+  border: 1px solid rgba(25, 227, 177, .35); white-space: nowrap; }
+.list-coin__cat:hover, .list-coin__cat:focus-visible { background: rgba(25, 227, 177, .14); }

@@ -51,6 +51,20 @@ final class Schema
             $this->breadcrumbs($coin, $url),
         ];
 
+        /* 2.8.0, v2 pages only (the classic output is frozen): what the page
+           is about, with its asset category as schema.org's
+           disambiguatingDescription — a plain Thing, no invented type. */
+        $category = Design::isV2() ? Categories::of($coin) : null;
+        if ($category !== null) {
+            $graph[0]['about'] = [
+                '@type' => 'Thing',
+                'name' => $coin->name,
+                'alternateName' => $coin->symbol,
+                'disambiguatingDescription' => $category['fa'],
+            ];
+            $graph[0]['keywords'] = implode('، ', [$coin->name, $coin->symbol, $category['fa'], $category['en']]);
+        }
+
         $dataset = $this->dataset($coin, $model, $url);
         if ($dataset) {
             $graph[] = $dataset;

@@ -63,8 +63,15 @@ final class Settings
                 'provider' => 'beaconchain',
                 'url'      => 'https://beaconcha.in/user/settings#api',
                 'free'     => '10 calls/minute on the free tier',
+                /* 2.8.0: beaconcha.in's API terms require a valid key on every
+                   request; keyless calls left the validator rows loading. So
+                   without a key it is never ASKED (`needs_key`): the scheduler
+                   skips it and the v2 page drops its rows. It is not switched
+                   off, which would change the frozen classic page's data. The
+                   key is free from the account page. */
                 'required' => false,
-                'note'     => 'اعتبارسنج‌ها و بازده استیکینگ. بدون کلید هم پاسخ می‌دهد اما سقف آن بسیار پایین‌تر است.',
+                'needs_key' => true,
+                'note'     => 'اعتبارسنج‌ها و اتر در استیکینگ. طبق شرایط beaconcha.in هر درخواست به کلید نیاز دارد؛ کلید رایگان است. بدون کلید این ردیف‌ها نمایش داده نمی‌شوند.',
             ],
             'github_token' => [
                 'label'    => 'GitHub',
@@ -135,6 +142,8 @@ final class Settings
                 if (!empty($spec['required'])) {
                     $config['providers'][$provider]['enabled'] = false;
                     $config['providers'][$provider]['disabled_reason'] = 'no API key configured';
+                } elseif (!empty($spec['needs_key'])) {
+                    $config['providers'][$provider]['unkeyed'] = true;   // 2.8.0: see keys()
                 }
                 continue;
             }

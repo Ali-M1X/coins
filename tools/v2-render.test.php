@@ -283,8 +283,12 @@ section('score');
 
 $vm = $plugin->pipeline->viewModel($plugin->coins->find(10));
 $v = $plugin->v2($plugin->coins->find(10));
-ok($v['dna']['score'] === (int) round($vm['analytics']['value']),
-   'the DNA centre shows the classic analytics value (' . $v['dna']['score'] . ')');
+$rescored = $vm['derived'];
+if ($v['dna']['activity'] !== null) {
+    $rescored['activityGrowth30d'] = ['value' => $v['dna']['activity']['value'], 'available' => true] + (array) $rescored['activityGrowth30d'];
+}
+ok($v['dna']['score'] === (int) round(\TheHybit\Coins\Scoring::score($rescored)['value']),
+   'the DNA centre is the classic Scoring model, with the 2.8.0 network-activity component filled in where it can be (' . $v['dna']['score'] . ')');
 ok($v['story']['score'] === $v['dna']['score'], 'and the story score ring shows the same number');
 ok(count($v['dna']['axes']) === count($vm['analytics']['components']),
    'the radar has exactly the scoring model\'s ' . count($v['dna']['axes']) . ' components — no invented axis');
@@ -474,7 +478,7 @@ unset($GLOBALS['thb_probe_override']);
 
 $free();
 $gp = (new C\GrowThePie($cfg2))->fetch($eth2, 'activity');
-ok($gp['latest'] === 498000.0 && $gp['weekAgo'] === 480000.0 && count($gp['series']) === 30,
+ok($gp['latest'] === 498000.0 && $gp['weekAgo'] === 480000.0 && count($gp['series']) === 45,
    'growthepie: Ethereum\'s daa rows only, latest and a week earlier (other chains and metrics filtered out)');
 ok((new C\GrowThePie($cfg2))->fetch($btc2, 'activity') === null, 'and Bitcoin is not asked about');
 try {
@@ -509,6 +513,59 @@ $labels = array_merge(array_column($failBuild['keyMetrics'], 'label'), array_col
 ok(!in_array('آدرس‌های فعال روزانه', $labels, true) && !in_array('آدرس‌های فعال (روز گذشته)', $labels, true),
    'when growthepie fails, the active-address rows are left out, not shown as "unavailable"');
 update_option(\TheHybit\Coins\Cache::OPTION_ERRORS, []);
+
+/* 2.8.0 — a pulse row whose source never answers is removed once the
+   scheduler has had time to ask (FIRST_GRACE), instead of loading forever. */
+$pulseLabels = static function () use ($plugin, $eth2, $failCfg): array {
+    $vmP = $plugin->pipeline->viewModel($eth2);
+    $vmP['staking'] = ['available' => false, 'state' => 'pending', 'data' => null, 'source' => 'beaconcha.in', 'fetchedAt' => null];
+    $b = (new Model($failCfg, new \TheHybit\Coins\Cache($failCfg)))->build($eth2, $vmP);
+    return array_column($b['flow']['pulse'], 'label');
+};
+delete_option(\TheHybit\Coins\Scheduler::OPTION_FIRST_TICK);
+ok(in_array('اعتبارسنج‌های فعال', $pulseLabels(), true), 'a brand-new install shows the validator row as on its way while beaconcha.in has not been asked');
+update_option(\TheHybit\Coins\Scheduler::OPTION_FIRST_TICK, \Clock::$now - 3 * 3600);
+ok(!in_array('اعتبارسنج‌های فعال', $pulseLabels(), true) && !in_array('اتر در استیکینگ (امنیت شبکه)', $pulseLabels(), true),
+   'three hours on, with still nothing from beaconcha.in, its rows are removed — never «در حال دریافت داده» indefinitely');
+delete_option(\TheHybit\Coins\Scheduler::OPTION_FIRST_TICK);
+$o = (array) get_option(\TheHybit\Coins\Settings::OPTION, []);
+$keep = $o;
+unset($o['beaconchain_key']);
+update_option(\TheHybit\Coins\Settings::OPTION, $o);
+$noKey = \TheHybit\Coins\Settings::apply($plugin->config);
+update_option(\TheHybit\Coins\Settings::OPTION, $keep);
+ok(!empty($noKey['providers']['beaconchain']['unkeyed']) && !empty($noKey['providers']['beaconchain']['enabled'])
+   && !(new \TheHybit\Coins\Datasets($noKey))->covers('staking', $eth2),
+   'beaconcha.in needs a key (its API terms): without one it is never asked and its rows are not drawn — but not switched off, so the frozen classic page is unchanged');
+
+/* 2.8.0 — network activity for the score, from our own Blockchair readings. */
+$GLOBALS['thb_history_reads'] = true;
+$hist = $GLOBALS['wpdb'];
+$keep = $hist->historyRows;
+$hist->historyRows = array_values(array_filter($hist->historyRows, static fn($r) => $r['coin_slug'] !== 'chain:Bitcoin'));
+$base = count($hist->historyRows);
+foreach ([1, 2, 3, 4, 5, 6] as $d) {
+    $hist->historyRows[] = ['coin_slug' => 'chain:Bitcoin', 'dataset' => 'network', 'captured_at' => gmdate('Y-m-d H:i:s', \Clock::$now - $d * 86400 + 600), 'payload' => json_encode(['transactions24h' => 500000])];
+}
+foreach ([31, 32, 33, 34, 35] as $d) {
+    $hist->historyRows[] = ['coin_slug' => 'chain:Bitcoin', 'dataset' => 'network', 'captured_at' => gmdate('Y-m-d H:i:s', \Clock::$now - $d * 86400), 'payload' => json_encode(['transactions24h' => 400000])];
+}
+$btcV = (new Model($failCfg, $plugin->cache, new \TheHybit\Coins\History($failCfg)))->build($btc2, $plugin->pipeline->viewModel($btc2));
+$act = $btcV['dna']['activity'];
+ok(is_array($act) && $act['measure'] === 'transactions' && abs($act['value'] - 25.0) < 0.01 && $act['source'] === 'Blockchair',
+   'Bitcoin: 30-day activity = this week\'s average daily transactions against the same week a month earlier (+25%), from our own readings');
+$hist->historyRows = array_slice($hist->historyRows, 0, $base + 6);
+$btcShort = (new Model($failCfg, $plugin->cache, new \TheHybit\Coins\History($failCfg)))->build($btc2, $plugin->pipeline->viewModel($btc2));
+ok($btcShort['dna']['activity'] === null, 'with no readings from a month ago yet, the component stays out of the score — never a shorter window passed off as 30 days');
+$hist->historyRows = $keep;
+$GLOBALS['thb_history_reads'] = false;
+(new \TheHybit\Coins\Budget($failCfg))->reset('growthepie');
+delete_transient('thb_c_' . md5('activity|' . $plugin->cache->keyFor('activity', $eth2)));
+$plugin->pipeline->warm($eth2, 'activity');
+$ethV = (new Model($failCfg, $plugin->cache, $plugin->history))->build($eth2, $plugin->pipeline->viewModel($eth2));
+ok(($ethV['dna']['activity']['measure'] ?? null) === 'addresses' && $ethV['dna']['coverage'][0] > 0
+   && in_array('رشد فعالیت شبکه (30 روز)', array_column(array_filter($ethV['dna']['axes'], static fn($a) => $a['value'] !== null), 'label'), true),
+   'Ethereum: the component is filled from growthepie\'s daily active addresses and counts in the score');
 
 $free();
 $int = (new C\Wikimedia($cfg2))->fetch($eth2, 'interest');
@@ -894,7 +951,15 @@ ok(\TheHybit\Coins\Format::fromJalali('1397-03-10') === '2018-05-31' && \TheHybi
    && \TheHybit\Coins\Format::gregorian('2018-05-31') === '31 مه 2018',
    'a launch date stored in the Jalali calendar (a Jalali-date plugin) is converted, never printed as a Gregorian year 1397');
 ok(str_contains($html, 'توزیع کارمزدهای پرداخت‌شده در ۲۴ ساعت گذشته') && !str_contains($html, 'از کجا آمدند'), 'flow: the formal subtitle');
-ok((bool) preg_match('#class="v2-flow__pct"[^>]*>[0-9.]+% · \$[0-9.]+[KMB]?<#', $html), 'flow: each band shows its share AND its amount');
+$bands = substr_count($html, 'class="v2-flow__node');
+ok($bands >= 3 && preg_match_all('#class="v2-flow__amt"[^>]*>\$[0-9.]+[KMB]?<#', $html) === $bands
+   && preg_match_all('#class="v2-flow__pct"[^>]*>[0-9.]+%<#', $html) === $bands,
+   '2.8.0 flow: every band carries its dollar amount INSIDE it and its share beside its name ('. $bands . ' bands)');
+ok(preg_match_all('#<text class="v2-flow__(?:label v2-fa|pct)" x="(924|196)"#', $html) === 2 * $bands
+   && preg_match_all('#<text class="v2-flow__amt" x="(890|242)"#', $html) === $bands,
+   '2.8.0 flow: names and shares sit outside the bands, beyond their node bars (x 924 / 196); amounts inside (890 / 242)');
+ok(str_contains($html, 'class="v2-flow__mbar"') && str_contains($html, 'class="v2-flow__mcore"'),
+   '2.8.0 flow: phones get a stacked layout — name and share above each bar, the amount inside it');
 ok(!str_contains($html, 'v2-event__title') && str_contains($html, 'data-v2-pop'), 'price story: no side panel; an explanation box instead');
 
 /* 12 — ecosystem: ten nodes with long names never overlap, labels included. */

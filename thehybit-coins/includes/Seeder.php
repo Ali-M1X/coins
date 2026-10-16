@@ -20,7 +20,7 @@ final class Seeder
     /** Fields fillEditorial() may write: content only, never configuration. */
     public const EDITORIAL = ['thb_tagline', 'thb_timeline', 'thb_learn', 'thb_audience', 'thb_faq',
                               'thb_unlocks', 'thb_wikipedia', 'thb_github_repo', 'thb_price_events',
-                              'thb_seo_title', 'thb_meta_description'];
+                              'thb_seo_title', 'thb_meta_description', 'thb_category'];
 
     /** The version whose new coins have been created; see addMissing(). */
     public const OPTION_COINS = 'thb_coins_coins_seeded';

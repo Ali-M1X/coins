@@ -253,6 +253,150 @@ final class Svg
     }
 
     /**
+     * Width of a price-story label box, from its own two lines (2.8.0).
+     *
+     * An estimate of the rendered text in viewBox units: Persian letters at
+     * the 14-unit bold title average about 8 units, Latin capitals and
+     * digits about 9.3; the 11.5-unit date line is narrower. Generous on purpose — a box
+     * a little wide costs a little room, one too narrow lets text spill into
+     * the next label.
+     */
+    public static function labelWidth(string $title, string $meta): float
+    {
+        $units = static function (string $s, float $fa, float $latin): float {
+            $w = 0.0;
+            foreach (mb_str_split($s) as $ch) {
+                $w += preg_match('/[A-Z0-9]/', $ch) ? $latin : (preg_match('/\s/u', $ch) ? $fa * 0.5 : $fa);
+            }
+            return $w;
+        };
+        return max(96.0, round(max($units($title, 8.0, 9.3), $units($meta, 6.6, 7.2)) + 22, 1));
+    }
+
+    /**
+     * Place labels in rows so that none overlap (2.8.0, price story).
+     *
+     * Input: each label's anchor x and width; output: its row, its left edge
+     * (centred on the anchor, kept inside [2, W-2]) and its width. Row 0 is
+     * the top. Its arrow runs from its box straight down through every row
+     * below it, so a row is chosen in this order of preference:
+     *   1. free in that row, its arrow crosses no box in a lower row, and its
+     *      box covers no arrow of a label in a higher row;
+     *   2. a new bottom row, when that is clean and keeps six rows or fewer;
+     * each tried with the box centred on its arrow, then slid sideways (its
+     * arrow always stays inside it) — so a neighbour's arrow can be cleared;
+     *   3. free in that row;
+     *   4. a new row.
+     * Labels are taken in x order, so the result does not depend on the
+     * order the editor wrote them in.
+     *
+     * @param array<int, array{x:float, w:float}> $labels
+     * @return array<int, array{x:float, w:float, lx:float, row:int}>
+     */
+    public static function packLabels(array $labels, float $W, float $gap = 8.0): array
+    {
+        /* Packed from the left and from the right; the layout with fewer
+           arrows behind a label wins, then the one with fewer rows. Near the
+           right edge recent events are boxed in against the chart's end, and
+           packing from that side first lets them take the clear spots. */
+        $best = null;
+        foreach ([1, -1] as $dir) {
+            $try = self::packOnce($labels, $W, $gap, $dir);
+            $crossings = 0;
+            foreach ($try as $a) {
+                foreach ($try as $b) {
+                    if ($a['row'] < $b['row'] && $a['x'] > $b['lx'] && $a['x'] < $b['lx'] + $b['w']) {
+                        $crossings++;
+                    }
+                }
+            }
+            $rows = $try === [] ? 0 : max(array_column($try, 'row')) + 1;
+            if ($best === null || [$crossings, $rows] < [$best[0], $best[1]]) {
+                $best = [$crossings, $rows, $try];
+            }
+        }
+        return $best[2] ?? [];
+    }
+
+    /** One packing pass, labels taken left to right ($dir 1) or right to left (-1). */
+    private static function packOnce(array $labels, float $W, float $gap, int $dir): array
+    {
+        $order = array_keys($labels);
+        usort($order, static fn($a, $b) => $dir * ($labels[$a]['x'] <=> $labels[$b]['x']));
+        $out = [];
+        $rows = [];   // row => list of [lx, rx, x]
+        $free = static function (array $rows, int $r, float $lx, float $rx) use ($gap): bool {
+            foreach ($rows[$r] ?? [] as [$a, $b]) {
+                if ($lx < $b + $gap && $rx > $a - $gap) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $clean = static function (array $rows, int $r, float $lx, float $rx, float $x): bool {
+            foreach ($rows as $rr => $items) {
+                foreach ($items as [$a, $b, $ax]) {
+                    if ($rr > $r && $x >= $a - 3 && $x <= $b + 3) {
+                        return false;   // this arrow would cross a lower label
+                    }
+                    if ($rr < $r && $ax >= $lx - 3 && $ax <= $rx + 3) {
+                        return false;   // this box would sit on a higher label's arrow
+                    }
+                }
+            }
+            return true;
+        };
+        foreach ($order as $k) {
+            $x = (float) $labels[$k]['x'];
+            $w = (float) $labels[$k]['w'];
+            /* Where the box may sit: centred on its arrow first, then slid
+               either way in 6-unit steps, always keeping its own arrow at
+               least 6 units inside it. */
+            $clamp = static fn(float $l): float => max(2.0, min($W - $w - 2, $l));
+            $spots = [$clamp($x - $w / 2)];
+            for ($d = 6.0; $d <= $w / 2 - 8; $d += 6.0) {
+                $spots[] = $clamp($x - $w / 2 + $d);
+                $spots[] = $clamp($x - $w / 2 - $d);
+            }
+            $spots = array_values(array_unique(array_filter($spots, static fn($l) => $x >= $l + 6 && $x <= $l + $w - 6) ?: [$clamp($x - $w / 2)]));
+            $n = count($rows);
+            $pick = null;
+            for ($r = 0; $r < $n && $pick === null; $r++) {
+                foreach ($spots as $l) {
+                    if ($free($rows, $r, $l, $l + $w) && $clean($rows, $r, $l, $l + $w, $x)) {
+                        $pick = [$r, $l];
+                        break;
+                    }
+                }
+            }
+            /* No clean row: a new bottom row (nothing below it) — opened
+               while that keeps the chart within six rows. */
+            if ($pick === null && $n < 7) {
+                foreach ($spots as $l) {
+                    if ($clean($rows, $n, $l, $l + $w, $x)) {
+                        $pick = [$n, $l];
+                        break;
+                    }
+                }
+            }
+            for ($r = 0; $r < $n && $pick === null; $r++) {
+                foreach ($spots as $l) {
+                    if ($free($rows, $r, $l, $l + $w)) {
+                        $pick = [$r, $l];
+                        break;
+                    }
+                }
+            }
+            $pick ??= [$n, $spots[0]];
+            [$row, $lx] = $pick;
+            $rows[$row][] = [$lx, $lx + $w, $x];
+            $out[$k] = ['x' => $x, 'w' => $w, 'lx' => round($lx, 1), 'row' => $row];
+        }
+        ksort($out);
+        return $out;
+    }
+
+    /**
      * Push circles apart until none overlap (plus `gap`), keeping each inside
      * [x0,x1]×[y0,y1]. Each moves the least it must: overlapping pairs are
      * separated along the line between their centres, half each. Used for

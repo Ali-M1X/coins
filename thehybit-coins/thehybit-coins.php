@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.7.0
+ * Version:     2.8.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.7.0');
+define('THB_COINS_VERSION', '2.8.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -32,6 +32,7 @@ require_once THB_COINS_DIR . 'includes/Design.php';
 require_once THB_COINS_DIR . 'includes/LivePrice.php';
 require_once THB_COINS_DIR . 'includes/LiveFeed.php';
 require_once THB_COINS_DIR . 'includes/Sitemap.php';
+require_once THB_COINS_DIR . 'includes/Categories.php';
 require_once THB_COINS_DIR . 'includes/Datasets.php';
 require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';

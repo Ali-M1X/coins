@@ -162,7 +162,7 @@ final class Datasets
      * cache entry rather than silently sharing another chain's data, which would
      * be far worse than an extra request.
      */
-    private static function chainOf(?Coin $coin): string
+    public static function chainOf(?Coin $coin): string
     {
         if (!$coin) {
             return 'unknown';
@@ -202,6 +202,11 @@ final class Datasets
         $spec = $this->all()[$dataset] ?? null;
         $provider = $spec['provider'] ?? null;
         if ($provider === null || !$coin->usesProvider($provider, $this->config) || !$this->isEnabled($dataset)) {
+            return false;
+        }
+        /* 2.8.0: a provider whose terms require a key, with none configured,
+           is not asked and not drawn (Settings::keys() `needs_key`). */
+        if (!empty($this->config['providers'][$provider]['unkeyed'])) {
             return false;
         }
         if (!$this->servesChain($provider, $coin)) {

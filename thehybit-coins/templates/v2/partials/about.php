@@ -20,6 +20,7 @@ $c = $v['coin'];
         <p class="v2-about__text"><?= esc_html($a['description']) ?></p>
       <?php endif; ?>
       <dl class="v2-about__facts">
+        <?php if (!empty($v['coin']['category'])) : ?><div><dt>دسته</dt><dd><?= esc_html($v['coin']['category']['fa']) ?></dd></div><?php endif; ?>
         <?php if (!empty($a['founder'])) : ?><div><dt>بنیان‌گذار</dt><dd><?= esc_html($a['founder']) ?></dd></div><?php endif; ?>
         <?php if (!empty($a['launchDate'])) : ?><div><dt>راه‌اندازی</dt><dd><time datetime="<?= esc_attr(substr(Format::fromJalali((string) $a['launchDate']), 0, 10)) ?>"><?= esc_html(Format::gregorian($a['launchDate'])) ?></time></dd></div><?php endif; ?>
         <?php if (!empty($a['consensus'])) : ?><div><dt>اجماع</dt><dd><?= esc_html($a['consensus']) ?></dd></div><?php endif; ?>

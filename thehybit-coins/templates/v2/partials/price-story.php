@@ -37,8 +37,8 @@ $c = $v['coin'];
 
   <div class="v2-pstory__grid v2-pstory__grid--full">
     <div class="v2-card v2-pstory__chart" data-v2-pstory>
-      <div class="v2-xscroll" style="--min: 720px">
-        <svg viewBox="0 -205 960 585" role="img" aria-label="قیمت هفتگی <?= esc_attr($c['name']) ?> از <?= esc_attr($p['from']) ?> تا امروز، مقیاس لگاریتمی، با <?= count($p['events']) ?> رویداد">
+      <div class="v2-xscroll" style="--min: 860px">
+        <svg viewBox="<?= esc_attr($p['viewBox']) ?>" role="img" aria-label="قیمت هفتگی <?= esc_attr($c['name']) ?> از <?= esc_attr($p['from']) ?> تا امروز، مقیاس لگاریتمی، با <?= count($p['events']) ?> رویداد">
         <defs>
           <linearGradient id="v2-ps-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="var(--v2-accent)" stop-opacity=".4"/>
@@ -46,8 +46,8 @@ $c = $v['coin'];
           </linearGradient>
         </defs>
         <?php foreach ($p['years'] as $yr) : ?>
-          <line class="v2-grid" x1="<?= $yr['x'] ?>" y1="0" x2="<?= $yr['x'] ?>" y2="360"/>
-          <text class="v2-axis" x="<?= $yr['x'] ?>" y="378" text-anchor="middle"><?= esc_html($yr['label']) ?></text>
+          <line class="v2-grid" x1="<?= $yr['x'] ?>" y1="0" x2="<?= $yr['x'] ?>" y2="<?= $p['height'] ?>"/>
+          <text class="v2-axis" x="<?= $yr['x'] ?>" y="<?= $p['height'] + 19 ?>" text-anchor="middle"><?= esc_html($yr['label']) ?></text>
         <?php endforeach; ?>
         <?php foreach ($p['ticks'] as $tk) : ?>
           <text class="v2-axis" x="4" y="<?= $tk['y'] - 4 ?>" text-anchor="start"><?= esc_html($tk['label']) ?></text>
@@ -59,7 +59,7 @@ $c = $v['coin'];
         <?php endif; ?>
         <g data-v2-layer-el="articles" hidden>
           <?php foreach ($p['articles'] as $a) : ?>
-            <line class="v2-pstory__article" x1="<?= $a['x'] ?>" y1="0" x2="<?= $a['x'] ?>" y2="360"><title><?= esc_html($a['title']) ?></title></line>
+            <line class="v2-pstory__article" x1="<?= $a['x'] ?>" y1="0" x2="<?= $a['x'] ?>" y2="<?= $p['height'] ?>"><title><?= esc_html($a['title']) ?></title></line>
           <?php endforeach; ?>
         </g>
         <g data-v2-layer-el="events">
@@ -68,15 +68,23 @@ $c = $v['coin'];
               <path d="M0 0 L10 5 L0 10 Z" class="v2-pin__head"/>
             </marker>
           </defs>
-          <?php foreach ($p['events'] as $e) :
-              $lw = 132; $lx = max(2, min(960 - $lw - 2, $e['x'] - $lw / 2)); ?>
+          <?php /* 2.8.0: every arrow first, then every label, so a label box is
+             always on top and no arrow is ever drawn across a label. */ ?>
+          <g aria-hidden="true">
+          <?php foreach ($p['events'] as $e) : ?>
+            <line class="v2-pin__arrow" x1="<?= $e['x'] ?>" y1="<?= $e['ly'] + 34 ?>" x2="<?= $e['x'] ?>" y2="<?= $e['y'] - 9 ?>" marker-end="url(#v2-arrowhead)"/>
+          <?php endforeach; ?>
+          </g>
+          <?php foreach ($p['events'] as $e) : $lx = $e['lx']; $lw = $e['lw']; ?>
             <g class="v2-pin" data-v2-event="<?= $e['key'] ?>" tabindex="0" role="button"
                aria-label="<?= esc_attr($e['title'] . '، ' . $e['dateFa'] . '. ' . $e['text']) ?>">
-              <line class="v2-pin__arrow" x1="<?= $e['x'] ?>" y1="<?= $e['ly'] + 38 ?>" x2="<?= $e['x'] ?>" y2="<?= $e['y'] - 9 ?>" marker-end="url(#v2-arrowhead)"/>
+              <?php /* The arrow itself is drawn underneath every label; this
+                 invisible, wider twin makes hovering it open this event. */ ?>
+              <line class="v2-pin__hit" x1="<?= $e['x'] ?>" y1="<?= $e['ly'] + 34 ?>" x2="<?= $e['x'] ?>" y2="<?= $e['y'] ?>"/>
               <circle cx="<?= $e['x'] ?>" cy="<?= $e['y'] ?>" r="5"/>
-              <rect class="v2-pin__box" x="<?= $lx ?>" y="<?= $e['ly'] ?>" width="<?= $lw ?>" height="38" rx="7"/>
-              <text class="v2-pin__title v2-fa" x="<?= $lx + $lw / 2 ?>" y="<?= $e['ly'] + 16 ?>" text-anchor="middle"><?= esc_html($e['title']) ?></text>
-              <text class="v2-pin__meta" x="<?= $lx + $lw / 2 ?>" y="<?= $e['ly'] + 32 ?>" text-anchor="middle"><?= esc_html($e['monthFa']) ?></text>
+              <rect class="v2-pin__box" x="<?= $lx ?>" y="<?= $e['ly'] ?>" width="<?= $lw ?>" height="34" rx="7"/>
+              <text class="v2-pin__title v2-fa" x="<?= $lx + $lw / 2 ?>" y="<?= $e['ly'] + 15 ?>" text-anchor="middle"><?= esc_html($e['title']) ?></text>
+              <text class="v2-pin__meta" x="<?= $lx + $lw / 2 ?>" y="<?= $e['ly'] + 29 ?>" text-anchor="middle"><?= esc_html($e['monthFa']) ?></text>
             </g>
           <?php endforeach; ?>
         </g>

@@ -168,6 +168,9 @@ html:has(.thb-v2) { overflow-x: clip; }
   background: rgba(139, 92, 246, .16); border: 1px solid rgba(139, 92, 246, .35);
 }
 .v2-chip--muted { background: rgba(148, 163, 184, .08); border-color: var(--v2-line); color: var(--v2-muted); font-weight: 400; }
+/* 2.8.0: the asset category, linking to the list filtered to it. */
+.v2-chip--cat { background: rgba(25, 227, 177, .12); border-color: rgba(25, 227, 177, .4); color: var(--v2-accent); text-decoration: none; }
+.v2-chip--cat:hover, .v2-chip--cat:focus-visible { background: rgba(25, 227, 177, .22); }
 
 .v2-delta { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; font-size: 14px; }
 .v2-delta small { color: var(--v2-muted); font-weight: 400; font-size: 12px; }
@@ -395,7 +398,7 @@ html:has(.thb-v2) { overflow-x: clip; }
 
 /* ---------- 3. flow ---------- */
 
-.v2-flow__sankey { align-self: start; }
+.v2-flow__sankey { align-self: start; container: flowcard / inline-size; }
 .v2-flow__sankey svg { width: 100%; height: auto; }
 .v2-ribbon { fill: var(--tone); opacity: .45; transition: opacity .2s; }
 .v2-ribbon:hover { opacity: .65; }
@@ -409,15 +412,35 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-flow__total { fill: #fff; font-size: 22px; font-weight: 700; }
 .v2-flow__sub { fill: var(--v2-muted); font-size: 13px; }
 .v2-flow__legend { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--v2-muted); font-size: 12px; margin-top: 8px; }
+/* 2.8.0: the amount inside its band — white on the band's own colour, with a dark halo for contrast on the lighter tones. */
+.v2-flow__amt { fill: #fff; font-size: 15px; font-weight: 700; paint-order: stroke; stroke: rgba(5, 7, 13, .7); stroke-width: 3.5px; font-variant-numeric: tabular-nums; }
+.v2-flow__label { stroke-width: 0; fill: var(--v2-text); font-size: 16px; }
+.v2-flow__pct { stroke-width: 0; fill: var(--v2-muted); font-size: 14px; }
 .v2-flow__mobile { display: none; }
 .v2-flow__mtitle { font-size: 13px; color: var(--v2-muted); margin: 12px 0 6px; font-weight: 600; }
-.v2-flow__mlist li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
-.v2-flow__mlist .v2-num { margin-right: auto; /* physical: the number is dir=ltr, so a logical margin would point the wrong way */ color: var(--v2-accent); font-weight: 700; }
+.v2-flow__mlist { display: grid; gap: 10px; }
+.v2-flow__mlist li { display: grid; gap: 4px; font-size: 14px; }
+.v2-flow__mhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.v2-flow__mhead .v2-num { color: var(--v2-muted); font-weight: 600; }
+.v2-flow__mbar { display: block; width: max(4.75rem, var(--w)); max-width: 100%; min-height: 28px; border-radius: 6px;
+  background: color-mix(in srgb, var(--tone) 70%, #0b1020); display: flex; align-items: center; padding: 0 8px; }
+.v2-flow__mbar > span { color: #fff; font-weight: 700; font-size: 13px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.v2-flow__mcore { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding: 10px 14px; border-radius: 12px;
+  background: rgba(30, 27, 75, .92); border: 1px solid rgba(139, 92, 246, .8); }
+.v2-flow__mcore strong { font-size: 20px; color: #fff; }
+.v2-flow__mcore span { color: var(--v2-muted); font-size: 13px; }
 .v2-swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--tone); flex: none; }
 @container v2 (max-width: 599px) {
   .v2-flow__mobile { display: block; }
-  .v2-flow__label, .v2-flow__pct { display: none; }
+  .v2-flow__sankey .v2-flow__svg { display: none; }
   .v2-hide-sm { display: none; }
+}
+/* 2.8.0: below 640px of CARD width the diagram's text would shrink under
+   11px (tablets put the card in a 1.7fr column), so the stacked layout is
+   used there too, not only on phones. */
+@container flowcard (max-width: 639px) {
+  .v2-flow__mobile { display: block; }
+  .v2-flow__sankey .v2-flow__svg { display: none; }
 }
 .v2-flow__side { display: grid; gap: var(--v2-gap); align-content: start; min-width: 0; }
 .v2-facts { display: grid; gap: var(--v2-gap); grid-template-columns: minmax(0, 1fr); margin-top: var(--v2-gap); }
@@ -523,7 +546,9 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-pstory__chart { position: relative; }
 .v2-pstory__chart svg { width: 100%; height: auto; }
 /* 2.5.0: the event's explanation, beside the event (v2.js places it). */
-.v2-pop { position: absolute; z-index: 5; width: min(320px, calc(100% - 16px)); padding: 14px 16px; border-radius: 14px; background: rgba(7, 11, 20, .97); border: 1px solid rgba(25, 227, 177, .55); box-shadow: 0 12px 32px rgba(0, 0, 0, .55); direction: rtl; text-align: right; pointer-events: auto; }
+.v2-pop { position: absolute; z-index: 5; width: min(320px, calc(100% - 16px)); padding: 14px 16px; border-radius: 14px; background: rgba(7, 11, 20, .97); border: 1px solid rgba(25, 227, 177, .55); box-shadow: 0 12px 32px rgba(0, 0, 0, .55); direction: rtl; text-align: right;
+  /* 2.8.0: text only, so it never blocks the event beneath it — with the flatter chart an open box can sit over the next marker. */
+  pointer-events: none; }
 .v2-pop[hidden] { display: none; }
 .v2-pop__title { font-size: 16px; font-weight: 700; color: var(--v2-text); }
 .v2-pop__date { font-size: 12px; color: var(--v2-muted); margin-top: 2px; }
@@ -536,11 +561,12 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-pstory__tvl { fill: none; stroke: var(--v2-violet); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .v2-pstory__article { stroke: var(--v2-amber); stroke-dasharray: 3 5; opacity: .8; }
 .v2-pin { cursor: pointer; }
-.v2-pin__arrow { stroke: rgba(25, 227, 177, .7); stroke-width: 1.5; }
+.v2-pin__arrow { stroke: rgba(25, 227, 177, .7); stroke-width: 1.5; pointer-events: none; }
+.v2-pin__hit { stroke: transparent; stroke-width: 12; pointer-events: stroke; }
 .v2-pin__head { fill: rgba(25, 227, 177, .9); }
 .v2-pin__box { fill: rgba(7, 11, 20, .92); stroke: rgba(25, 227, 177, .45); }
-.v2-pin__title { fill: var(--v2-text); font-size: 13px; font-weight: 700; }
-.v2-pin__meta { fill: var(--v2-muted); font-size: 11px; }
+.v2-pin__title { fill: var(--v2-text); font-size: 14px; font-weight: 700; }
+.v2-pin__meta { fill: var(--v2-muted); font-size: 11.5px; }
 .v2-pin__chg--up { fill: var(--v2-accent); }
 .v2-pin__chg--down { fill: var(--v2-red); }
 .v2-pin.is-on .v2-pin__box { stroke: var(--v2-accent); stroke-width: 2; }

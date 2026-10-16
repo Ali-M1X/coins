@@ -87,14 +87,15 @@ final class History
             return false;
         }
 
-        $last = $this->lastCapturedAt($coin->slug, $dataset);
+        $slug = self::slugFor($coin, $rule);
+        $last = $this->lastCapturedAt($slug, $dataset);
         if ($last !== null && (time() - $last) < (int) $rule['interval']) {
             return false; // too soon; the cache already serves this
         }
 
         global $wpdb;
         $wpdb->insert($this->table(), [
-            'coin_slug'   => $coin->slug,
+            'coin_slug'   => $slug,
             'dataset'     => $dataset,
             'provider'    => $provider,
             'captured_at' => gmdate('Y-m-d H:i:s'),
@@ -105,6 +106,22 @@ final class History
         $this->seriesMemo = [];
 
         return true;
+    }
+
+    /**
+     * Whose row this is. A rule with `by => chain` (2.8.0: Blockchair's
+     * network stats) belongs to the chain, not to whichever coin's refresh
+     * happened to fetch it: stored as «chain:Ethereum», read back the same way.
+     */
+    public static function slugFor(Coin $coin, ?array $rule): string
+    {
+        return ($rule['by'] ?? null) === 'chain' ? 'chain:' . Datasets::chainOf($coin) : $coin->slug;
+    }
+
+    /** The slug a dataset's rows are kept under for this coin. */
+    public function keyFor(Coin $coin, string $dataset): string
+    {
+        return self::slugFor($coin, $this->config['history']['datasets'][$dataset] ?? null);
     }
 
     private function lastCapturedAt(string $slug, string $dataset): ?int
@@ -142,7 +159,7 @@ final class History
              ORDER BY captured_at ASC LIMIT %d",
             $slug,
             $dataset,
-            gmdate('Y-m-d H:i:s', strtotime($since)),
+            gmdate('Y-m-d H:i:s', strtotime($since, time())),
             $limit
         ), ARRAY_A) ?: [];
 

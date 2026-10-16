@@ -161,7 +161,7 @@ const heroPrice = (page) => page.$eval('[data-live-usd] .v2-num', (e) => e.textC
   ok(kr.length === 1 && nb.length === 1, `list page: exactly one Kraken and one Nobitex socket for all its live rows (${s.length} sockets)`);
   const sub = JSON.parse(kr[0].sent[0] || '{}');
   ok(sub.method === 'subscribe' && sub.params?.channel === 'ticker'
-    && JSON.stringify([...sub.params.symbol].sort()) === JSON.stringify(['BTC/USD', 'ETH/USD', 'SOL/USD', 'USDT/USD']),
+    && JSON.stringify([...sub.params.symbol].sort()) === JSON.stringify(['BTC/USD', 'ETH/USD', 'SOL/USD', 'USDC/USD', 'USDT/USD']),
     'Kraken: one subscribe message for every mapped row (' + (sub.params?.symbol || []).join(', ') + ')');
   ok(JSON.parse(nb[0].sent[0] || '{}').connect && nb[0].sent.length === 1, 'Nobitex: connect first, no subscription before the server accepts');
   await recv(page, 'nobitex', '{"id":1,"connect":{"client":"c"}}');

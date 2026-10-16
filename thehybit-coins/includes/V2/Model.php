@@ -100,6 +100,9 @@ final class Model
     /** What each section could not show for this coin, and why: section => [text]. */
     private array $gaps = [];
 
+    /** How the network-activity component was measured for this coin (2.8.0), or null. */
+    private ?array $activity = null;
+
     /** @param History|null $history our own stored readings (net inflation from Etherscan supply) */
     public function __construct(private array $config, private Cache $cache, private ?\TheHybit\Coins\History $history = null)
     {
@@ -126,6 +129,8 @@ final class Model
             'ethlocations' => $this->peek('ethlocations', $coin, 'Etherscan'),
             'interest'     => $this->peek('interest', $coin, 'Wikimedia'),
         ];
+
+        $m = $this->withActivity($coin, $m);
 
         $returns = self::dailyReturns($m['series']['1y'] ?? null);
         $vol = self::annualisedVolatility(array_slice($returns, -30, null, true));
@@ -208,6 +213,7 @@ final class Model
             'logo'     => $m['coin']['logo'] ?? null,
             'rank'     => $m['coin']['rank'] ?? null,
             'tagline'  => trim((string) $coin->meta('tagline', '')),
+            'category' => \TheHybit\Coins\Categories::of($coin),   // 2.8.0
             'tradeUrl' => $trade !== '' ? $trade : null,
             'newsUrl'  => $m['coin']['newsCategoryUrl'] ?? null,
             'isBenchmark' => $coin->slug === ($this->config['benchmark']['slug'] ?? ''),
@@ -561,6 +567,11 @@ final class Model
         /* Only rows a source exists for, for this coin: no Etherscan gas on
            Solana, no Blockchair figures on a token. */
         $pulse = array_values(array_filter($pulse, fn($row) => $row['ds'] === null || $this->applies($row['ds'])));
+        /* 2.8.0: a row is shown with its figure, or — only while the
+           scheduler is new — as on its way. A source that failed, is paused
+           or never answered removes the row rather than leaving it loading. */
+        $pulse = array_values(array_filter($pulse, fn($row) => $row['value'] !== null
+            || ($row['ds'] !== null && $this->awaiting($row['ds'], ['state' => $row['state']]))));
 
         /* 2.5.0 — chains with no native network source (Tron, Solana, BNB
            Chain, Cardano …: Blockchair's shapes are verified only for five
@@ -643,8 +654,11 @@ final class Model
                and LEAVES on the left. `left`/`right` in this array are the
                data's roles — sources and destinations — drawn on the right and
                left of the diagram respectively. */
-            'ribbonsSources' => $ok ? Svg::ribbons(array_column($left, 'share'), 850, 580, 20, 360, 12, 140, 120, 44.0) : [],
-            'ribbonsDest'    => $ok && $right !== [] ? Svg::ribbons(array_column($right, 'share'), 150, 420, 60, 280, 24, 140, 120, 60) : [],
+            /* 2.8.0: the node bars moved inward (900 and 206–218) to leave
+               room for the names and shares OUTSIDE the bands; every band's
+               outer end keeps a floor tall enough for its amount inside. */
+            'ribbonsSources' => $ok ? Svg::ribbons(array_column($left, 'share'), 900, 580, 20, 360, 12, 140, 120, 44.0) : [],
+            'ribbonsDest'    => $ok && $right !== [] ? Svg::ribbons(array_column($right, 'share'), 218, 420, 60, 280, 24, 140, 120, 60) : [],
             'whales'  => $whales,
             'showSankey' => $this->applies('protocols'),
             'showWhales' => $this->applies('whales'),
@@ -789,6 +803,7 @@ final class Model
             'score'     => ($a['available'] ?? false) ? (int) round((float) $a['value']) : null,
             'band'      => $a['band']['label'] ?? null,
             'coverage'  => [$available, $n],
+            'activity'  => $this->activity,
             'axes'      => $axes,
             'grid'      => array_map(static fn($r) => Svg::ring(200, 200, $r, max(3, $n)), [35, 70, 105, 140]),
             'polygon'   => $n >= 3 ? Svg::radar(200, 200, 140, $values) : '',
@@ -878,10 +893,16 @@ final class Model
         return ['list' => $list, 'byIndex' => $byIndex, 'featured' => $featured];
     }
 
+    /** Price-story geometry (2.8.0): wider and flatter than 2.7's 960×360, so the section takes far less height. */
+    public const PS_W = 1200.0;
+    public const PS_H = 220.0;
+    /** One row of event labels: a 34-unit box and a 6-unit gap. */
+    public const PS_ROW = 40;
+
     private function priceStory(array $m, array $long, array $protocols, array $events): array
     {
-        $W = 960.0;
-        $H = 360.0;
+        $W = self::PS_W;
+        $H = self::PS_H;
         $t = (array) ($long['data']['t'] ?? []);
         $p = (array) ($long['data']['price'] ?? []);
         $n = count($t);
@@ -912,19 +933,25 @@ final class Model
 
         $markers = [];
         /* Labels sit in rows above the line, each with an arrow down to the
-           price on the day. A label goes in the first row where it clears the
-           previous label by its own width; four rows hold the densest decade. */
-        $rowEnds = [];
+           price on the day. 2.8.0: packed so that NO two labels ever overlap
+           — each label's width comes from its own text, every row is checked
+           (not just the previous label), and a new row is opened when none
+           has room. Rows where the label's arrow would cross another label,
+           or where it would cover another label's arrow, are preferred. The
+           SVG scales uniformly, so what does not overlap here does not
+           overlap at any screen width. */
+        $placed = Svg::packLabels(array_map(fn($e) => [
+            'x' => $x($e['ts']),
+            'w' => Svg::labelWidth($e['title'], explode(' ', Format::gregorian($e['date']), 2)[1] ?? $e['date']),
+        ], $events['list']), $W);
+        $rows = $placed === [] ? 0 : max(array_column($placed, 'row')) + 1;
+        $top = $rows * self::PS_ROW + 6;
         foreach ($events['list'] as $k => $e) {
-            $mx = $x($e['ts']);
-            $row = 0;
-            while (isset($rowEnds[$row]) && $mx - $rowEnds[$row] < 150 && $row < 3) {
-                $row++;
-            }
-            $rowEnds[$row] = $mx;
+            $mx = $placed[$k]['x'];
+            $row = $placed[$k]['row'];
             $markers[] = $e + [
                 'x' => $mx, 'y' => $y((float) $e['price']), 'key' => $k,
-                'row' => $row, 'ly' => -196 + $row * 46,   // label rows above the plot area
+                'row' => $row, 'ly' => -$top + 4 + $row * self::PS_ROW, 'lx' => $placed[$k]['lx'], 'lw' => $placed[$k]['w'],
                 'c90' => $e['change90'] !== null ? Format::pct($e['change90'], true, 0) : null,
                 'dir90' => Format::direction($e['change90']),
                 'dateFa' => Format::gregorian($e['date']),
@@ -976,6 +1003,8 @@ final class Model
             'tvl'      => $tvlPath,
             'tvlState' => $protocols['state'],
             'events'   => $markers,
+            'viewBox'  => sprintf('0 %d %d %d', -$top, (int) $W, $top + (int) $H + 28),
+            'height'   => (int) $H,
             'featured' => $featured !== null ? $markers[$featured] : null,
             'articles' => $articles,
             'years'    => $years,
@@ -1907,14 +1936,121 @@ final class Model
         return $c ? $c + ['source' => 'CoinMetrics'] : null;
     }
 
+    /* ------------------------------------------------------------------
+     * Network activity, 30 days (2.8.0) — the score's fifth component
+     * ---------------------------------------------------------------- */
+
+    /** Days averaged at each end, so one quiet Sunday cannot swing the figure. */
+    private const ACTIVITY_WINDOW = 7;
+
+    /**
+     * Fill the score's «رشد فعالیت شبکه (۳۰ روز)» from data already held.
+     *
+     * The classic model reads it from an on-chain provider this site does not
+     * have, so on every coin it was «بدون داده» and the score ran on four of
+     * five parts. Two real measures are already in hand, at no new request:
+     *   1. growthepie's daily active addresses (Ethereum, Arbitrum, Mantle),
+     *      a daily series the pulse already fetches;
+     *   2. Blockchair's 24-hour transaction count, which the pulse fetches
+     *      for six chains and History now keeps four times a day per chain.
+     * Either way it is the average of the last 7 days against the same
+     * 7 days a month earlier. The classic page is untouched: this is applied
+     * to the v2 page's copy of the model only.
+     */
+    private function withActivity(Coin $coin, array $m): array
+    {
+        $this->activity = null;
+        if (!empty($m['derived']['activityGrowth30d']['available'])) {
+            return $m;
+        }
+        $g = $this->activityFromGrowthepie() ?? $this->activityFromHistory($coin);
+        if ($g === null) {
+            return $m;
+        }
+        $this->activity = $g;
+        $m['derived']['activityGrowth30d'] = array_merge((array) ($m['derived']['activityGrowth30d'] ?? []),
+            ['value' => $g['value'], 'available' => true, 'missing' => []]);
+        $m['analytics'] = \TheHybit\Coins\Scoring::score($m['derived']);
+        $m['insight'] = \TheHybit\Coins\Scoring::insight($m['analytics']);
+        return $m;
+    }
+
+    /** @return array{value:float, measure:string, source:string, now:float, then:float, to:string}|null */
+    private function activityFromGrowthepie(): ?array
+    {
+        $series = (array) ($this->x['activity']['data']['series'] ?? []);
+        if ($series === []) {
+            return null;
+        }
+        ksort($series);
+        $last = (string) array_key_last($series);
+        $at = static fn(int $daysBack) => gmdate('Y-m-d', strtotime($last . ' UTC') - $daysBack * 86400);
+        $avg = static function (int $from, int $to) use ($series, $at): ?float {
+            $v = [];
+            for ($d = $from; $d <= $to; $d++) {
+                if (isset($series[$at($d)]) && is_numeric($series[$at($d)])) {
+                    $v[] = (float) $series[$at($d)];
+                }
+            }
+            return count($v) >= self::ACTIVITY_WINDOW - 2 ? array_sum($v) / count($v) : null;
+        };
+        $now = $avg(0, self::ACTIVITY_WINDOW - 1);
+        $then = $avg(30, 30 + self::ACTIVITY_WINDOW - 1);
+        if ($now === null || $then === null || $then <= 0) {
+            return null;
+        }
+        return ['value' => ($now - $then) / $then * 100, 'measure' => 'addresses', 'source' => 'growthepie',
+                'now' => $now, 'then' => $then, 'to' => $last];
+    }
+
+    /** From our own readings of Blockchair's 24-hour transaction count. */
+    private function activityFromHistory(Coin $coin): ?array
+    {
+        if ($this->history === null || !$this->applies('network')) {
+            return null;
+        }
+        $rows = $this->history->series($this->history->keyFor($coin, 'network'), 'network', '-' . (31 + self::ACTIVITY_WINDOW) . ' days');
+        $recent = $old = [];
+        $now = time();
+        foreach ($rows as $r) {
+            $v = $r['payload']['transactions24h'] ?? null;
+            if (!is_numeric($v) || (float) $v <= 0) {
+                continue;
+            }
+            $age = ($now - strtotime($r['capturedAt'] . ' UTC')) / 86400;
+            if ($age < self::ACTIVITY_WINDOW) {
+                $recent[] = (float) $v;
+            } elseif ($age >= 30 && $age < 30 + self::ACTIVITY_WINDOW) {
+                $old[] = (float) $v;
+            }
+        }
+        /* At least four readings at each end (a day's worth): a gap in cron
+           must not turn one reading into "the month". */
+        if (count($recent) < 4 || count($old) < 4) {
+            return null;
+        }
+        $a = array_sum($recent) / count($recent);
+        $b = array_sum($old) / count($old);
+        if ($b <= 0) {
+            return null;
+        }
+        return ['value' => ($a - $b) / $b * 100, 'measure' => 'transactions', 'source' => 'Blockchair',
+                'now' => $a, 'then' => $b, 'to' => gmdate('Y-m-d', $now)];
+    }
+
     /**
      * True only while a figure's source has simply not been asked yet. A
      * source that failed, is switched off or does not cover this chain makes
      * the row disappear instead of standing empty.
      */
-    private function awaiting(string $dataset): bool
+    private function awaiting(string $dataset, ?array $state = null): bool
     {
-        return ($this->x[$dataset]['state'] ?? '') === 'pending' && !isset(Cache::lastErrors()[$dataset]);
+        $state ??= $this->x[$dataset] ?? [];
+        /* 2.8.0: "not asked yet" is only believable while the scheduler is
+           new. A provider that is blocked, paused or refused never writes an
+           entry, so without this its rows read «در حال دریافت داده» forever. */
+        return ($state['state'] ?? '') === 'pending' && !isset(Cache::lastErrors()[$dataset])
+            && \TheHybit\Coins\Scheduler::inGrace();
     }
 
     private static function risk(string $label, ?string $value, ?string $tone, ?string $source, ?string $note = null): array
@@ -2034,6 +2170,9 @@ final class Model
             $label = (string) $axis['label'];
             $isTvl = str_contains($label, 'قفل') || stripos($label, 'tvl') !== false;
             $kind = $isTvl && !$defi ? 'na' : ($isTvl && str_contains($label, 'رشد') ? 'later' : 'nosource');
+            if (str_contains($label, 'فعالیت') && $this->applies('network')) {
+                $kind = 'later';   // 2.8.0: fills from our own daily readings after 37 days
+            }
             $this->gap('dna', 'مؤلفه امتیاز: ' . $label, $kind);
         }
         if (!$defi) {

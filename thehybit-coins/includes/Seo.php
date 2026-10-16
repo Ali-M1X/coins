@@ -128,6 +128,17 @@ final class Seo
         $model = $this->pipeline->viewModel($coin);
         $price = $model['market']['price'] ?? null;
 
+        /* 2.8.0: on v2 pages the fallback says what kind of asset it is. */
+        $category = Design::isV2() ? Categories::of($coin) : null;
+        if ($price !== null && $category !== null) {
+            return sprintf(
+                'قیمت لحظه‌ای %s (%s)، %s؛ نمودار قیمت، ارزش بازار، عملکرد و تحلیل‌های اختصاصی %s.',
+                $coin->name,
+                $coin->symbol,
+                $category['fa'],
+                self::BRAND_SUFFIX
+            );
+        }
         if ($price !== null) {
             return sprintf(
                 'قیمت لحظه‌ای %s (%s)، نمودار قیمت، ارزش بازار، عملکرد و تحلیل‌های اختصاصی %s.',

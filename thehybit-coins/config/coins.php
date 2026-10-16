@@ -37,6 +37,27 @@ return (static function (array $coins): array {
             $coins[$slug]['fields'][$field] = $new;
         }
     }
+    /* 2.8.0: «آینده» — announced or scheduled items appended to the story
+       timeline (config/future-2.8.php). The text they replace is kept as
+       `previous`, so a live coin whose field is still the shipped seed is
+       upgraded and an edited one is left alone. */
+    foreach (require __DIR__ . '/future-2.8.php' as $slug => $lines) {
+        if (!isset($coins[$slug])) {
+            continue;
+        }
+        $old = (string) ($coins[$slug]['fields']['thb_timeline'] ?? '');
+        $new = rtrim($old) . "\n" . implode("\n", $lines);
+        $coins[$slug]['fields']['previous']['thb_timeline'][] = $old;
+        $coins[$slug]['fields']['thb_timeline'] = $new;
+    }
+
+    /* 2.8.0: every coin's main category, from config/categories.php.
+       Seeded into an empty field only; an editor's choice stands. */
+    foreach ((require __DIR__ . '/categories.php')['defaults'] as $slug => $cat) {
+        if (isset($coins[$slug]) && !isset($coins[$slug]['fields']['thb_category'])) {
+            $coins[$slug]['fields']['thb_category'] = $cat;
+        }
+    }
     return $coins;
 })([
 

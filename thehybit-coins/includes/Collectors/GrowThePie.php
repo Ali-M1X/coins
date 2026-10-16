@@ -72,7 +72,9 @@ final class GrowThePie extends Collector
             'latest'  => $series[$date],
             'date'    => $date,
             'weekAgo' => $series[$weekAgo] ?? null,
-            'series'  => array_slice($series, -30, null, true),
+            /* 2.8.0: 45 days, so a 30-day change can compare this week's
+               average with the same week a month earlier (score, DNA). */
+            'series'  => array_slice($series, -45, null, true),
         ];
     }
 }

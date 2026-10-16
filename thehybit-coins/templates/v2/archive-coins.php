@@ -25,7 +25,8 @@ use TheHybit\Coins\V2\View;
 defined('ABSPATH') || exit;
 
 $plugin = Plugin::instance();
-$L = $plugin->listing->view(Listing::currentPage());
+$cat = Listing::currentCategory();
+$L = $plugin->listing->view(Listing::currentPage(), $cat);
 $base = trailingslashit((string) (get_post_type_archive_link(\TheHybit\Coins\CoinRepository::POST_TYPE) ?: home_url('/coins/')));
 $pageUrl = static fn(int $n): string => $n <= 1 ? $base : $base . 'page/' . $n . '/';
 $from = ($L['page'] - 1) * $L['perPage'] + 1;
@@ -55,8 +56,13 @@ get_header();
     </nav>
 
     <header class="list-head">
-      <h1 class="list-head__title">قیمت ارزهای دیجیتال<?= $L['page'] > 1 ? ' — صفحه ' . View::n((string) $L['page']) : ' امروز' ?></h1>
-      <p class="list-head__sub">ارزهای رتبه <?= View::n(Format::num((float) $from, 0)) ?> تا <?= View::n(Format::num((float) $to, 0)) ?> بر اساس ارزش بازار، به دلار.</p>
+      <?php if ($L['category']) : ?>
+        <h1 class="list-head__title">قیمت ارزهای دسته «<?= esc_html($L['category']['fa']) ?>»</h1>
+        <p class="list-head__sub">ارزهایی که در <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> صفحه دارند و در این دسته‌اند، به ترتیب ارزش بازار.</p>
+      <?php else : ?>
+        <h1 class="list-head__title">قیمت ارزهای دیجیتال<?= $L['page'] > 1 ? ' — صفحه ' . View::n((string) $L['page']) : ' امروز' ?></h1>
+        <p class="list-head__sub">ارزهای رتبه <?= View::n(Format::num((float) $from, 0)) ?> تا <?= View::n(Format::num((float) $to, 0)) ?> بر اساس ارزش بازار، به دلار.</p>
+      <?php endif; ?>
       <ul class="list-stats">
         <li class="list-stat">
           <span class="list-stat__label">بازار در ۷ روز اخیر</span>
@@ -79,8 +85,24 @@ get_header();
       </ul>
     </header>
 
+    <?php /* 2.8.0: filter by asset category — plain links, so every view
+       works without script; category views are noindex (Design::applies). */ ?>
+    <?php if ($L['counts'] !== []) : ?>
+      <nav class="list-cats" aria-label="فیلتر بر اساس دسته">
+        <span class="list-cats__label">دسته:</span>
+        <a class="list-cats__item<?= $cat === null ? ' is-current' : '' ?>" href="<?= esc_url($base) ?>"<?= $cat === null ? ' aria-current="page"' : '' ?>>همه</a>
+        <?php foreach (\TheHybit\Coins\Categories::all() as $key => $lab) : if (empty($L['counts'][$key])) { continue; } ?>
+          <a class="list-cats__item<?= $cat === $key ? ' is-current' : '' ?>" href="<?= esc_url($base . '?cat=' . rawurlencode($key)) ?>"<?= $cat === $key ? ' aria-current="page"' : '' ?>><?= esc_html($lab['fa']) ?> <span class="list-cats__n"><?= View::n((string) $L['counts'][$key]) ?></span></a>
+        <?php endforeach; ?>
+      </nav>
+    <?php endif; ?>
+
     <section class="v2-card list-card" aria-labelledby="list-table-title">
-      <h2 class="list-card__title" id="list-table-title">جدول قیمت — رتبه <?= View::n(Format::num((float) $from, 0)) ?> تا <?= View::n(Format::num((float) $to, 0)) ?></h2>
+      <?php if ($L['category']) : ?>
+        <h2 class="list-card__title" id="list-table-title">جدول قیمت — <?= esc_html($L['category']['fa']) ?> (<?= View::n((string) count($L['rows'])) ?> ارز)</h2>
+      <?php else : ?>
+        <h2 class="list-card__title" id="list-table-title">جدول قیمت — رتبه <?= View::n(Format::num((float) $from, 0)) ?> تا <?= View::n(Format::num((float) $to, 0)) ?></h2>
+      <?php endif; ?>
 
       <?php if ($L['rows'] === []) : ?>
         <?= View::na('pending', 'فهرست ارزها چند دقیقه پس از نصب از CoinGecko دریافت می‌شود.') ?>
@@ -125,6 +147,9 @@ get_header();
                         <span class="list-coin__name"><?= esc_html($name) ?></span>
                       <?php endif; ?>
                       <bdi class="list-coin__sym" dir="ltr"><?= esc_html($r['symbol']) ?></bdi>
+                      <?php if (!empty($r['category'])) : ?>
+                        <a class="list-coin__cat" href="<?= esc_url($base . '?cat=' . rawurlencode($r['category']['key'])) ?>"><?= esc_html($r['category']['fa']) ?></a>
+                      <?php endif; ?>
                     </span>
                   </span>
                 </th>

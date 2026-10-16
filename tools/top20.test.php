@@ -144,10 +144,31 @@ foreach (array_keys($ids) as $id) {
 }
 $status = [];
 $pages = [];
+$scores = [];
+$pulseRows = [];
+$labelOverlaps = $arrowCrossings = [];
+$psRows = [];
 foreach ($ids as $id => $slug) {
     $html = v2_render($id);
     $pages[$slug] = $html;
     $v = $plugin->v2($plugin->coins->find($id));
+    foreach ((array) ($v['priceStory']['events'] ?? []) as $i => $e1) {
+        foreach ((array) $v['priceStory']['events'] as $j => $e2) {
+            if ($j <= $i) { continue; }
+            if ($e1['row'] === $e2['row'] && $e1['lx'] < $e2['lx'] + $e2['lw'] && $e2['lx'] < $e1['lx'] + $e1['lw']) {
+                $labelOverlaps[] = "{$slug}: «{$e1['title']}» / «{$e2['title']}»";
+            }
+            foreach ([[$e1, $e2], [$e2, $e1]] as [$up, $low]) {
+                if ($up['row'] < $low['row'] && $up['x'] > $low['lx'] && $up['x'] < $low['lx'] + $low['lw']) {
+                    $arrowCrossings[] = "{$slug}: «{$up['title']}» arrow behind «{$low['title']}»";
+                }
+            }
+        }
+    }
+    $psRows[$slug] = count(array_unique(array_column((array) ($v['priceStory']['events'] ?? []), 'row')));
+    $pulseRows[$slug] = array_map(static fn($r) => $r['label'] . ' (' . ($r['source'] ?? '') . ')', (array) ($v['flow']['pulse'] ?? []));
+    $scores[$slug] = ['score' => $v['dna']['score'], 'coverage' => $v['dna']['coverage'],
+                      'axes' => array_column($v['dna']['axes'], 'value', 'label'), 'activity' => $v['dna']['activity'] ?? null];
     $status[$slug] = ['name' => $seeds[$slug]['fields']['thb_name_fa'], 'symbol' => $seeds[$slug]['fields']['thb_symbol'], 'sections' => $v['sections']];
     $clean = !str_contains($html, 'Warning:') && !str_contains($html, 'Deprecated:') && !str_contains($html, 'Fatal');
     ok($clean && substr_count($html, '<h1') === 1 && str_contains($html, 'id="overview"'),
@@ -398,11 +419,100 @@ $plugin->cache->put('market', $plugin->cache->keyFor('market', $diCoin), ['price
 $dp = (object) ['ID' => array_search('dai', $ids, true), 'post_modified_gmt' => '2024-01-01 00:00:00', 'post_type' => 'thb_coin'];
 ok(isset($sm->core(['loc' => 'x'], $dp, 'thb_coin')['lastmod']), 'sitemap: the new pages carry lastmod too');
 
+section('price story labels (2.8.0)');
+ok($labelOverlaps === [], 'no two event labels overlap on any of the ' . count($ids) . ' price charts' . ($labelOverlaps ? ': ' . implode('; ', array_slice($labelOverlaps, 0, 5)) : ''));
+/* An arrow behind another label is not an overlap — arrows are drawn under
+   every box — and two events days apart cannot avoid it (their arrows share
+   an x). 2.7.0 had 39 such cases; this keeps them from creeping back. */
+ok(count($arrowCrossings) <= 20, 'arrows that pass behind another label: ' . count($arrowCrossings) . ' across all charts (2.7.0 layout: 39)');
+ok(max($psRows) <= 7, 'label rows per chart: at most ' . max($psRows));
+
+if (getenv('THB_PULSE_MD')) {
+    $pm = "| Coin | Network Pulse rows shown (source) |\n|---|---|\n";
+    foreach ($pulseRows as $slug => $rows) {
+        $pm .= sprintf("| %s (%s) | %s |\n", $seeds[$slug]['fields']['thb_name_fa'], $seeds[$slug]['fields']['thb_symbol'], $rows ? implode('<br>', $rows) : '— (no free network source: rows and box removed)');
+    }
+    file_put_contents((string) getenv('THB_PULSE_MD'), $pm);
+}
+section('«آینده» — planned items (2.8.0)');
+$future = require THB_COINS_DIR . 'config/future-2.8.php';
+$withPlan = [];
+foreach ($pages as $slug => $html) {
+    if (substr_count($html, 'برنامه‌ریزی‌شده') > 0) {
+        $withPlan[] = $slug;
+    }
+}
+$expected = array_values(array_unique(array_merge(['ethereum', 'bitcoin', 'solana', 'litecoin'], array_keys($future))));
+sort($expected);
+sort($withPlan);
+ok($withPlan === $expected, 'planned items appear on exactly the coins with an announced or scheduled item (' . count($withPlan) . '): ' . implode(', ', $withPlan));
+$bad = [];
+foreach ($future as $slug => $lines) {
+    foreach ($lines as $line) {
+        [$d, $t, $x] = array_map('trim', explode('|', $line));
+        if (!str_starts_with($d, '>') || !str_contains($seeds[$slug]['fields']['thb_timeline'], $line)) {
+            $bad[] = $slug;
+        }
+        if (!preg_match('/^(\d{4}|بدون تاریخ رسمی|حدود \d{4}|حداکثر .+ \d{4}|پس از .+|ژوئیه \d{4})$/u', ltrim($d, '>'))) {
+            $bad[] = "{$slug} date «{$d}»";
+        }
+    }
+}
+ok($bad === [], 'every planned item is marked planned, is on its coin\'s timeline, and its date is a year, an approximate year, a condition or «بدون تاریخ رسمی» — never an invented day' . ($bad ? ': ' . implode(', ', $bad) : ''));
+ok(substr_count($pages['usdc'], 'is-planned') === 2 && str_contains($pages['usdc'], 'اجرای قانون GENIUS'), 'USDC: the GENIUS Act\'s effective date and Circle\'s Arc');
+ok(!str_contains($pages['dogecoin'], 'برنامه‌ریزی‌شده') && !str_contains($pages['pepe'], 'برنامه‌ریزی‌شده'), 'a coin with nothing credible planned shows nothing — no filler');
+
+section('asset categories (2.8.0)');
+$catLabels = \TheHybit\Coins\Categories::all();
+$noCat = array_keys(array_filter($seeds, static fn($sp) => !isset($catLabels[$sp['fields']['thb_category'] ?? ''])));
+ok($noCat === [], 'every one of the ' . count($seeds) . ' coins ships with a main category' . ($noCat ? ': missing ' . implode(', ', $noCat) : ''));
+ok(in_array('thb_category', \TheHybit\Coins\Seeder::EDITORIAL, true), 'and the seeder writes it into an empty field on existing coins (never over an editor\'s choice)');
+$acf = json_decode((string) file_get_contents(THB_COINS_DIR . 'acf-json/group_thb_coin.json'), true);
+$catField = array_values(array_filter($acf['fields'], static fn($f) => ($f['name'] ?? '') === 'thb_category'))[0] ?? null;
+ok($catField !== null && $catField['type'] === 'select' && array_keys($catField['choices']) === array_keys($catLabels),
+   'wp-admin: «دسته» is a select with exactly the configured categories');
+ok(str_contains($pages['ethereum'], 'class="v2-chip v2-chip--cat"') && str_contains($pages['ethereum'], '>لایه ۱</a>')
+   && str_contains($pages['dai'], '>استیبل‌کوین</a>') && str_contains($pages['pax-gold'], '>توکن پشتوانه طلا</a>'),
+   'the hero shows the category beside the name and symbol (Ethereum: لایه ۱, Dai: استیبل‌کوین, PAX Gold: طلا)');
+ok(str_contains($pages['ethereum'], '<dt>دسته</dt><dd>لایه ۱</dd>'), 'and the about box names it');
+v2_warm_list();
+$_GET = [];
+$list1 = v2_render_list(1);
+ok(str_contains($list1, '<nav class="list-cats"') && str_contains($list1, '?cat=stablecoin') && str_contains($list1, 'class="list-coin__cat"'),
+   '/coins/: a category filter bar, and each coin with a page carries its category');
+$_GET = ['cat' => 'stablecoin'];
+$listS = v2_render_list(1);
+preg_match_all('#<tr[^>]*>.*?</tr>#s', explode('<tbody>', $listS)[1] ?? '', $trs);
+$names = array_map(static fn($tr) => preg_match('#class="list-coin__name"[^>]*>([^<]+)<#', $tr, $mm) ? $mm[1] : '', $trs[0]);
+ok(in_array('تتر', $names, true) && in_array('دای', $names, true) && !in_array('بیت‌کوین', $names, true) && !str_contains($listS, 'class="list-pages"'),
+   '/coins/?cat=stablecoin lists the stablecoins with a page across all list pages (Tether on page 1, Dai on page 2), nothing else, no pagination (' . implode('، ', $names) . ')');
+ok(str_contains($listS, 'قیمت ارزهای دسته «استیبل‌کوین»') && str_contains($listS, 'aria-current="page">استیبل‌کوین'), 'with its own heading and the filter marked');
+$GLOBALS['thb_is_list'] = true;
+ok((new \TheHybit\Coins\Design())->coreRobots(['index' => true])['noindex'] ?? false, 'a category view is noindex, follow — a filter of /coins/, not a page of its own');
+$_GET = [];
+ok(!isset((new \TheHybit\Coins\Design())->coreRobots(['index' => true])['noindex']), 'the unfiltered list stays indexable');
+unset($GLOBALS['thb_is_list']);
+$_GET = ['thb_design' => 'v2'];
+$GLOBALS['thb_current_post'] = array_search('dai', $ids, true);
+ob_start();
+(new \TheHybit\Coins\Schema($plugin->coins, $plugin->pipeline))->output();
+$ld = (string) ob_get_clean();
+ok(str_contains($ld, '"disambiguatingDescription":"استیبل‌کوین"') && str_contains($ld, '"keywords":"دای، DAI، استیبل‌کوین، Stablecoin"'),
+   'structured data (v2): WebPage.about names the asset with its category; keywords include it');
+$_GET = [];
+ob_start();
+(new \TheHybit\Coins\Schema($plugin->coins, $plugin->pipeline))->output();
+ok(!str_contains((string) ob_get_clean(), 'disambiguatingDescription'), 'the classic page\'s structured data is unchanged');
+unset($GLOBALS['thb_current_post']);
+
+if (getenv('THB_SCORES')) {
+    file_put_contents((string) getenv('THB_SCORES'), json_encode($scores, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+}
 if (getenv('THB_STATUS_MD')) {
     file_put_contents((string) getenv('THB_STATUS_MD'), $md);
 }
 if (getenv('THB_TOP20_DIR')) {
-    foreach (['solana', 'tether', 'dogecoin', 'xrp', 'tron', 'ethereum', 'aave', 'zcash', 'near', 'dai', 'worldcoin', 'stacks', 'pax-gold'] as $slug) {
+    foreach (['solana', 'tether', 'dogecoin', 'xrp', 'tron', 'ethereum', 'aave', 'zcash', 'near', 'dai', 'worldcoin', 'stacks', 'pax-gold', 'usdc', 'bittensor'] as $slug) {
         file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . "/v2-{$slug}.html", $pages[$slug]);
     }
 }

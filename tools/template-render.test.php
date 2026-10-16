@@ -276,6 +276,7 @@ section('classic design frozen');
 require_once __DIR__ . '/golden-normalize.php';
 $goldenPath = __DIR__ . '/golden/classic.html';
 $current = thb_golden_normalize($html);
+if (getenv('THB_DUMP_CLASSIC')) { file_put_contents((string) getenv('THB_DUMP_CLASSIC'), $current); }
 
 if (getenv('THB_UPDATE_GOLDEN')) {
     file_put_contents($goldenPath, $current);

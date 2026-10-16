@@ -44,6 +44,7 @@ final class CoinRepository
         'thb_contract_network'    => 'meta.contractNetwork',
         'thb_contract_network_fa' => 'meta.contractNetworkFa',
         'thb_tags'                => 'meta.tags',
+        'thb_category'            => 'meta.category',   // 2.8.0: config/categories.php keys
         'thb_social_twitter'      => 'meta.social.twitter',
         'thb_social_github'       => 'meta.social.github',
         'thb_social_discord'      => 'meta.social.discord',

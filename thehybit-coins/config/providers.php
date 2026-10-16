@@ -781,9 +781,12 @@ return [
             'min_interval' => 6,
             'budget'   => ['per_minute' => 1, 'per_hour' => 6, 'per_day' => 24],
             'cooldown' => 30 * MINUTE_IN_SECONDS,
-            'chains'   => ['Ethereum'],
+            'chains'   => ['Ethereum', 'Arbitrum', 'Mantle'],
             'datasets' => ['activity'],
-            'origins'  => ['Ethereum' => 'ethereum'],   // growthepie origin_key by DefiLlama chain name
+            /* growthepie origin_key by DefiLlama chain name. 2.8.0: Arbitrum
+               and Mantle added (same file, same metric; origin keys to verify
+               — a wrong one throws "no rows" and the row is removed). */
+            'origins'  => ['Ethereum' => 'ethereum', 'Arbitrum' => 'arbitrum', 'Mantle' => 'mantle'],
             'metric'   => 'daa',                        // daily active addresses
         ],
 
@@ -860,6 +863,11 @@ return [
                measured from our own readings a week apart (2.0.5: CoinMetrics,
                which supplied it, is location-blocked). */
             'supply'  => ['interval' => 6 * HOUR_IN_SECONDS,  'retain' => YEAR_IN_SECONDS],
+            /* 2.8.0: Blockchair's rolling 24-hour transaction count, kept per
+               CHAIN so a 30-day change in network activity can be measured
+               from our own readings — no new request, it is the network
+               fetch the pulse already makes. Four rows a day per chain. */
+            'network' => ['interval' => 6 * HOUR_IN_SECONDS,  'retain' => 120 * DAY_IN_SECONDS, 'by' => 'chain'],
         ],
     ],
 

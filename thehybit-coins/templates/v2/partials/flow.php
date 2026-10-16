@@ -38,29 +38,30 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
     <?php if ($f['showSankey']) : ?>
     <div class="v2-card v2-flow__sankey">
       <?php if ($f['state'] === 'ok') : ?>
-        <div class="v2-xscroll" style="--min: 0px">
         <?php /* Right to left, as a Persian reader reads: fees ENTER on the
            right (by protocol type), pass through the chain, and LEAVE on the
-           left (who keeps them). Column titles and an arrowhead at every
-           ribbon's arriving end make the direction explicit. */ ?>
-        <svg viewBox="-20 -50 1100 450" role="img" aria-label="جریان کارمزد <?= esc_attr($c['name']) ?> از راست به چپ: <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['left']))) ?> وارد شبکه شد (مجموع <?= esc_attr(Format::usdCompact($f['fees'])) ?>) و به <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['right']))) ?> رسید">
-          <text class="v2-flow__head v2-fa" x="856" y="-20" text-anchor="middle">ورودی</text>
-          <text class="v2-flow__head v2-fa" x="144" y="-20" text-anchor="middle">خروجی</text>
+           left (who keeps them). 2.8.0: each band's name and share sit
+           OUTSIDE it, beside its node; its dollar amount sits INSIDE the
+           band, at the outer end where every band is at least 44px tall. */ ?>
+        <svg class="v2-flow__svg" viewBox="-10 -50 1120 450" role="img" aria-label="جریان کارمزد <?= esc_attr($c['name']) ?> از راست به چپ: <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['left']))) ?> وارد شبکه شد (مجموع <?= esc_attr(Format::usdCompact($f['fees'])) ?>) و به <?= esc_attr(implode('، ', array_map(static fn($n) => $n['label'] . ' ' . Format::pct($n['share'] * 100, false, 1), $f['right']))) ?> رسید">
+          <text class="v2-flow__head v2-fa" x="1000" y="-20" text-anchor="middle">ورودی</text>
+          <text class="v2-flow__head v2-fa" x="100" y="-20" text-anchor="middle">خروجی</text>
           <text class="v2-flow__dir" x="500" y="-20" text-anchor="middle">◀ ─────── جهت جریان ─────── ◀</text>
-          <?php foreach ($f['ribbonsSources'] as $i => $r) : $mid = $r['cy'] + $r['ch'] / 2; ?>
+          <?php foreach ($f['ribbonsSources'] as $i => $r) : $mid = $r['cy'] + $r['ch'] / 2; $ym = $r['y'] + $r['h'] / 2; ?>
             <path class="v2-ribbon v2-t--<?= $tones[$i % 5] ?>" d="<?= esc_attr($r['d']) ?>"/>
             <polygon class="v2-flow__arrow v2-t--<?= $tones[$i % 5] ?>" points="<?= 598 ?>,<?= $mid - 7 ?> <?= 598 ?>,<?= $mid + 7 ?> 584,<?= $mid ?>"/>
-            <rect class="v2-flow__node v2-t--<?= $tones[$i % 5] ?>" x="850" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
-            <?php /* 2.5.0: name, share AND amount inside the band, at its outer end where it is full height. */ ?>
-            <text class="v2-flow__label v2-fa" x="836" y="<?= $r['y'] + $r['h'] / 2 - 4 ?>" text-anchor="start"><?= esc_html($f['left'][$i]['label']) ?></text>
-            <text class="v2-flow__pct" x="836" y="<?= $r['y'] + $r['h'] / 2 + 15 ?>" text-anchor="end"><?= esc_html(Format::pct($f['left'][$i]['share'] * 100, false, 1) . ' · ' . Format::usdCompact((float) $f['left'][$i]['value'], 1)) ?></text>
+            <rect class="v2-flow__node v2-t--<?= $tones[$i % 5] ?>" x="900" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
+            <text class="v2-flow__amt" x="890" y="<?= $ym + 6 ?>" text-anchor="end" direction="ltr"><?= esc_html(Format::usdCompact((float) $f['left'][$i]['value'], 1)) ?></text>
+            <text class="v2-flow__label v2-fa" x="924" y="<?= $ym - 3 ?>" text-anchor="end" direction="rtl"><?= esc_html($f['left'][$i]['label']) ?></text>
+            <text class="v2-flow__pct" x="924" y="<?= $ym + 16 ?>" text-anchor="end" direction="rtl"><?= esc_html(Format::pct($f['left'][$i]['share'] * 100, false, 1)) ?></text>
           <?php endforeach; ?>
           <?php foreach ($f['ribbonsDest'] as $i => $r) : $mid = $r['y'] + $r['h'] / 2; ?>
             <path class="v2-ribbon v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" d="<?= esc_attr($r['d']) ?>"/>
-            <polygon class="v2-flow__arrow v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" points="166,<?= $mid - 8 ?> 166,<?= $mid + 8 ?> 152,<?= $mid ?>"/>
-            <rect class="v2-flow__node v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" x="138" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
-            <text class="v2-flow__label v2-fa" x="180" y="<?= $r['y'] + $r['h'] / 2 - 4 ?>" text-anchor="end"><?= esc_html($f['right'][$i]['label']) ?></text>
-            <text class="v2-flow__pct" x="180" y="<?= $r['y'] + $r['h'] / 2 + 16 ?>" text-anchor="start"><?= esc_html(Format::pct($f['right'][$i]['share'] * 100, false, 1) . ' · ' . Format::usdCompact((float) $f['right'][$i]['value'], 1)) ?></text>
+            <polygon class="v2-flow__arrow v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" points="234,<?= $mid - 8 ?> 234,<?= $mid + 8 ?> 220,<?= $mid ?>"/>
+            <rect class="v2-flow__node v2-t--<?= $i === 0 ? 'green' : 'teal' ?>" x="206" y="<?= $r['y'] ?>" width="12" height="<?= $r['h'] ?>" rx="3"/>
+            <text class="v2-flow__amt" x="242" y="<?= $mid + 6 ?>" text-anchor="start" direction="ltr"><?= esc_html(Format::usdCompact((float) $f['right'][$i]['value'], 1)) ?></text>
+            <text class="v2-flow__label v2-fa" x="196" y="<?= $mid - 3 ?>" text-anchor="start" direction="rtl"><?= esc_html($f['right'][$i]['label']) ?></text>
+            <text class="v2-flow__pct" x="196" y="<?= $mid + 16 ?>" text-anchor="start" direction="rtl"><?= esc_html(Format::pct($f['right'][$i]['share'] * 100, false, 1)) ?></text>
           <?php endforeach; ?>
           <rect class="v2-flow__core" x="420" y="130" width="160" height="140" rx="24"/>
           <?php if (!empty($c['logo'])) : ?>
@@ -69,17 +70,23 @@ $tones = ['violet', 'blue', 'teal', 'pink', 'slate'];
           <text class="v2-flow__total" x="500" y="236" text-anchor="middle"><?= esc_html(Format::usdCompact($f['fees'], 1)) ?></text>
           <text class="v2-flow__sub v2-fa" x="500" y="256" text-anchor="middle">کارمزد ۲۴ ساعته</text>
         </svg>
-        </div>
-        <?php /* Phone layout: the diagram fits the card and its labels move into
-           this list, where they can be read at full size. */ ?>
+        <?php /* Phone: a stacked flow — what came in, the total, where it
+           went. Name and share above each bar, the amount inside the bar;
+           bar length is the share (with a floor so the amount always fits). */ ?>
         <div class="v2-flow__mobile">
-          <?php foreach ([['ورودی', $f['left'], $tones], ['خروجی', $f['right'], ['green', 'teal']]] as [$title, $nodes, $tn]) : ?>
-            <?php if ($nodes === []) { continue; } ?>
+          <?php foreach ([['ورودی', $f['left'], $tones], null, ['خروجی', $f['right'], ['green', 'teal']]] as $block) : ?>
+            <?php if ($block === null) : ?>
+              <div class="v2-flow__mcore"><strong dir="ltr"><?= esc_html(Format::usdCompact($f['fees'], 1)) ?></strong><span>کارمزد ۲۴ ساعته</span></div>
+              <?php continue; ?>
+            <?php endif; ?>
+            <?php [$title, $nodes, $tn] = $block; if ($nodes === []) { continue; } ?>
             <h3 class="v2-flow__mtitle"><?= esc_html($title) ?></h3>
             <ul class="v2-flow__mlist">
               <?php foreach ($nodes as $i => $node) : ?>
-                <li><span class="v2-swatch v2-t--<?= esc_attr($tn[$i % count($tn)]) ?>" aria-hidden="true"></span><?= esc_html($node['label']) ?>
-                  <?= View::n(Format::pct($node['share'] * 100, false, 1) . ' · ' . Format::usdCompact((float) $node['value'], 1)) ?></li>
+                <li class="v2-t--<?= esc_attr($tn[$i % count($tn)]) ?>">
+                  <span class="v2-flow__mhead"><span><?= esc_html($node['label']) ?></span><?= View::n(Format::pct($node['share'] * 100, false, 1)) ?></span>
+                  <span class="v2-flow__mbar" style="--w: <?= esc_attr((string) round(max(0.0, min(1.0, (float) $node['share'])) * 100, 1)) ?>%"><span dir="ltr"><?= esc_html(Format::usdCompact((float) $node['value'], 1)) ?></span></span>
+                </li>
               <?php endforeach; ?>
             </ul>
           <?php endforeach; ?>

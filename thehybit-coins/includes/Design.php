@@ -98,6 +98,12 @@ final class Design
 
     private static function applies(): bool
     {
+        /* 2.8.0: a category view of the list (/coins/?cat=…) is a filter
+           of /coins/, not a page of its own: noindex, follow. */
+        if (Listing::currentCategory() !== null && function_exists('is_post_type_archive')
+            && is_post_type_archive(CoinRepository::POST_TYPE)) {
+            return true;
+        }
         return self::isParameterised()
             && function_exists('is_singular')
             && is_singular(CoinRepository::POST_TYPE);

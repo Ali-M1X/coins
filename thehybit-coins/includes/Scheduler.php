@@ -75,6 +75,19 @@ final class Scheduler
     /** Where the next tick's coin-scoped candidate window starts. */
     public const OPTION_COIN_OFFSET = 'thb_warm_coin_offset';
 
+    /** When the scheduler first ran (2.8.0). After FIRST_GRACE from then, a
+        figure still without data has had every chance to arrive: the page
+        drops its row instead of showing «در حال دریافت داده» indefinitely. */
+    public const OPTION_FIRST_TICK = 'thb_warm_first_tick';
+    public const FIRST_GRACE = 2 * HOUR_IN_SECONDS;
+
+    /** True while the scheduler is new enough that a missing figure may simply not have been asked yet. */
+    public static function inGrace(): bool
+    {
+        $first = (int) get_option(self::OPTION_FIRST_TICK, 0);
+        return $first === 0 || time() - $first < self::FIRST_GRACE;
+    }
+
     /** Where the last queue() call's coin window stopped; tick() persists it. */
     private int $windowEnd = 0;
 
@@ -344,6 +357,9 @@ final class Scheduler
         /* Inside a tick, a remembered failure is held for MISS_RETRY, not the
            one-minute miss window page renders use (see Cache::remember). */
         Cache::$missHold = self::MISS_RETRY;
+        if (!get_option(self::OPTION_FIRST_TICK)) {
+            update_option(self::OPTION_FIRST_TICK, time(), false);
+        }
         try {
             return $this->run();
         } finally {

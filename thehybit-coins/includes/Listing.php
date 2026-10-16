@@ -182,6 +182,7 @@ final class Listing
                 'url'  => (string) get_permalink($coin->postId),
                 'name' => $coin->name,
                 'logo' => get_the_post_thumbnail_url($coin->postId, 'thumbnail') ?: null,
+                'category' => Categories::of($coin),   // 2.8.0
             ];
         }
         return $this->ours;
@@ -193,23 +194,56 @@ final class Listing
      * @return array{page:int, pages:int, perPage:int, state:string, fetchedAt:?string,
      *               market7d:?float, rows:array<int, array>}
      */
-    public function view(int $page): array
+    public function view(int $page, ?string $category = null): array
     {
         $page = max(1, $page);
-        $e = $this->entry($page);
         $market = $this->market7d();
         $ours = $this->ours();
+        $row = fn(array $r, int $position) => $r + [
+            'position' => $position,
+            'url'      => $ours[$r['id']]['url'] ?? null,
+            'nameFa'   => $ours[$r['id']]['name'] ?? null,
+            'logo'     => $ours[$r['id']]['logo'] ?? $r['image'],
+            'category' => $ours[$r['id']]['category'] ?? null,
+            'vsMarket' => $market !== null && isset($r['change7d']) ? (float) $r['change7d'] - $market : null,
+        ];
 
+        /* 2.8.0 — /coins/?cat=stablecoin: every coin WITH A PAGE in that
+           category, gathered from all the list pages already in the cache
+           (no request), in market-cap order, on one page. Categories are
+           assigned only to coins with a page, so the filter is over those. */
+        $counts = [];
+        foreach ($ours as $own) {
+            if (!empty($own['category'])) {
+                $counts[$own['category']['key']] = ($counts[$own['category']['key']] ?? 0) + 1;
+            }
+        }
+        if ($category !== null) {
+            $rows = [];
+            $newest = null;
+            for ($p = 1; $p <= $this->pages(); $p++) {
+                $e = $this->entry($p);
+                foreach ((array) ($e['data']['rows'] ?? []) as $i => $r) {
+                    if (($ours[$r['id']]['category']['key'] ?? null) === $category) {
+                        $rows[] = $row($r, ($p - 1) * $this->perPage() + $i + 1);
+                    }
+                }
+                $newest = max($newest ?? 0, (int) ($e['fetchedAt'] ?? 0)) ?: $newest;
+            }
+            return [
+                'page' => 1, 'pages' => 1, 'perPage' => $this->perPage(),
+                'state' => $newest === null ? 'pending' : 'ok',
+                'fetchedAt' => $newest ? gmdate('c', $newest) : null,
+                'market7d' => $market, 'rows' => $rows,
+                'category' => ['key' => $category] + (Categories::all()[$category] ?? ['fa' => $category, 'en' => $category]),
+                'counts' => $counts,
+            ];
+        }
+
+        $e = $this->entry($page);
         $rows = [];
         foreach ((array) ($e['data']['rows'] ?? []) as $i => $r) {
-            $own = $ours[$r['id']] ?? null;
-            $rows[] = $r + [
-                'position' => ($page - 1) * $this->perPage() + $i + 1,
-                'url'      => $own['url'] ?? null,
-                'nameFa'   => $own['name'] ?? null,
-                'logo'     => $own['logo'] ?? $r['image'],
-                'vsMarket' => $market !== null && isset($r['change7d']) ? (float) $r['change7d'] - $market : null,
-            ];
+            $rows[] = $row($r, ($page - 1) * $this->perPage() + $i + 1);
         }
 
         return [
@@ -220,7 +254,16 @@ final class Listing
             'fetchedAt' => $e !== null ? gmdate('c', (int) $e['fetchedAt']) : null,
             'market7d'  => $market,
             'rows'      => $rows,
+            'category'  => null,
+            'counts'    => $counts,
         ];
+    }
+
+    /** The ?cat= filter of the list, when it names a known category (2.8.0). */
+    public static function currentCategory(): ?string
+    {
+        $cat = isset($_GET['cat']) ? sanitize_key(wp_unslash((string) $_GET['cat'])) : '';
+        return $cat !== '' && isset(Categories::all()[$cat]) ? $cat : null;
     }
 
     /* ------------------------------------------------------------------

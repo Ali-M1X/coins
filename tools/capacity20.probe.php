@@ -129,7 +129,10 @@ function simulate(array $config, int $n, array $seeds): array
     $worst = [];
     foreach ($ids as $id => $slug) {
         $coin = $plugin->coins->find($id);
-        foreach (['chart.24h', 'chart.7d', 'chart.30d', 'chart.90d', 'chart.1y', 'metadata', 'historical', 'structure'] as $ds) {
+        $fresh = getenv('THB_FRESH_SETS') ? explode(',', (string) getenv('THB_FRESH_SETS'))
+            : ['chart.24h', 'chart.7d', 'chart.30d', 'chart.90d', 'chart.1y', 'metadata', 'historical', 'structure'];
+        foreach ($fresh as $ds) {
+            if (!$sets->covers($ds, $coin)) { continue; }
             $e = $cache->peek($ds, $cache->keyFor($ds, $coin));
             $age = is_array($e) ? (Clock::$now - (int) ($e['fetchedAt'] ?? 0)) / max(1, $cache->ttl($ds)) : INF;
             $worst[$ds] = max($worst[$ds] ?? 0, $age);

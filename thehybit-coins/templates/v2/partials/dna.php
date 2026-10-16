@@ -81,6 +81,11 @@ $sent = $d['sentiment'];
           <text x="200" y="228" text-anchor="middle" class="v2-radar__of v2-fa">از ۱۰۰ · <?= esc_html((string) $d['band']) ?></text>
         </svg>
         <p class="v2-muted v2-center"><?= View::n($d['coverage'][0] . '/' . $d['coverage'][1]) ?> مؤلفه داده دارند؛ مؤلفه بدون داده سهمی در امتیاز ندارد.</p>
+        <?php if (!empty($d['activity'])) : $act = $d['activity']; ?>
+          <p class="v2-dna__measure v2-muted v2-center">رشد فعالیت شبکه: میانگین ۷ روز اخیر <?= $act['measure'] === 'addresses' ? 'آدرس‌های فعال روزانه' : 'تراکنش‌های روزانه' ?> شبکه
+            (<?= View::n(Format::compact((float) $act['now'])) ?>) در برابر همان میانگین ۳۰ روز قبل (<?= View::n(Format::compact((float) $act['then'])) ?>):
+            <strong dir="ltr"><?= View::n(Format::pct((float) $act['value'], true, 1)) ?></strong>.</p>
+        <?php endif; ?>
       <?php else : ?>
         <?= View::na('pending', 'امتیاز پس از رسیدن داده‌های بازار و دیفای محاسبه می‌شود') ?>
       <?php endif; ?>

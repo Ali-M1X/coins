@@ -126,7 +126,9 @@ function probe_payload(string $url): array
         $per = (int) ($q['per_page'] ?? 100);
         $page = (int) ($q['page'] ?? 1);
         $named = [1 => ['bitcoin', 'btc', 'Bitcoin', 62012.5], 2 => ['ethereum', 'eth', 'Ethereum', 3245.67],
-                  3 => ['tether', 'usdt', 'Tether', 1.0], 4 => ['solana', 'sol', 'Solana', 148.2]];
+                  3 => ['tether', 'usdt', 'Tether', 1.0], 4 => ['solana', 'sol', 'Solana', 148.2],
+                  /* 2.8.0: two more stablecoins, one on page 2, for the category filter. */
+                  5 => ['usd-coin', 'usdc', 'USDC', 1.0], 150 => ['dai', 'dai', 'Dai', 1.0]];
         $rows = [];
         for ($i = 0; $i < $per; $i++) {
             $rank = ($page - 1) * $per + $i + 1;
@@ -268,9 +270,13 @@ function probe_payload(string $url): array
        chains and metrics are there to be filtered out. ---- */
     if (str_contains($url, 'api.growthepie.com/v1/fundamentals.json')) {
         $rows = [];
-        for ($i = 29; $i >= 0; $i--) {
+        /* 2.8.0: 60 days, so the 30-day activity change has both ends:
+           days 30–36 back sit at 440,000 (Ethereum) and 260,000 (Arbitrum). */
+        for ($i = 59; $i >= 0; $i--) {
             $date = gmdate('Y-m-d', Clock::$now - ($i + 1) * 86400);
-            $rows[] = ['metric_key' => 'daa', 'origin_key' => 'ethereum', 'date' => $date, 'value' => $i === 0 ? 498000.0 : ($i === 7 ? 480000.0 : 470000.0 + $i)];
+            $rows[] = ['metric_key' => 'daa', 'origin_key' => 'ethereum', 'date' => $date, 'value' => $i === 0 ? 498000.0 : ($i === 7 ? 480000.0 : ($i >= 30 ? 440000.0 : 470000.0 + $i))];
+            $rows[] = ['metric_key' => 'daa', 'origin_key' => 'arbitrum', 'date' => $date, 'value' => $i >= 30 ? 260000.0 : 250000.0];
+            $rows[] = ['metric_key' => 'daa', 'origin_key' => 'mantle', 'date' => $date, 'value' => $i >= 30 ? 40000.0 : 46000.0];
             $rows[] = ['metric_key' => 'daa', 'origin_key' => 'base', 'date' => $date, 'value' => 1900000.0];
             $rows[] = ['metric_key' => 'txcount', 'origin_key' => 'ethereum', 'date' => $date, 'value' => 1210000.0];
         }
