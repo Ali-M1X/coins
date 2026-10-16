@@ -45,7 +45,7 @@ function get_header(...$a): void
     echo "<meta name=\"robots\" content=\"noindex, follow\">\n";
     echo "<title>" . htmlspecialchars($title) . "</title>\n";
     echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/v2.css\">\n";
-    if (!empty($GLOBALS['thb_is_list'])) {
+    if (!empty($GLOBALS['thb_is_list']) || \TheHybit\Coins\Tools::current() !== null) {
         echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/list.css\">\n";
     }
     echo "</head>\n<body>\n";
@@ -79,12 +79,15 @@ function get_footer(...$a): void
     }
     /* 2.10.0: the converter's rates and script, as Plugin::assetsConverter() enqueues them. */
     $tool = \TheHybit\Coins\Tools::current();
-    if ($tool !== null || (empty($GLOBALS['thb_is_list']) && $coin)) {
+    if ($tool === 'convert' || ($tool === null && empty($GLOBALS['thb_is_list']) && $coin)) {
         $conv = $plugin->converter()->forCoin($tool !== null ? null : $coin);
         if ($conv !== null) {
             echo "<script>window.__THB_CONV__ = " . wp_json_encode(\TheHybit\Coins\V2\Converter::client($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
             echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/converter.js\"></script>\n";
         }
+    }
+    if ($tool === 'compare') {
+        echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/compare.js\"></script>\n";
     }
     if (!empty($GLOBALS['thb_is_list'])) {
         // 2.9.0: the list's instant search, as Plugin::assets() enqueues it.

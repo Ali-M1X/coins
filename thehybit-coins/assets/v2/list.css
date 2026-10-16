@@ -127,3 +127,46 @@ a.list-coin__name:hover { color: var(--v2-accent); }
 .list-tools__link { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; text-decoration: none;
   color: var(--v2-accent); border: 1px solid rgba(25, 227, 177, .4); background: rgba(25, 227, 177, .06); }
 .list-tools__link:hover, .list-tools__link:focus-visible { background: rgba(25, 227, 177, .16); }
+
+/* 2.11.0 — comparison. */
+.cmp-pick { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); margin-bottom: var(--v2-gap); }
+@container v2 (min-width: 760px) { .cmp-pick { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; } }
+.cmp-pick__field { display: grid; gap: 6px; min-width: 0; }
+.cmp-pick__field label { font-size: 13px; color: var(--v2-muted); font-weight: 600; }
+.cmp-pick__go { height: 46px; }
+.cmp-pick__note { grid-column: 1 / -1; font-size: 13px; color: var(--v2-amber); min-height: 0; }
+.cmp-pick__note:empty { display: none; }
+.cmp { margin-bottom: var(--v2-gap); }
+.cmp__table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+.cmp__table th, .cmp__table td { padding: 10px 8px; border-bottom: 1px solid var(--v2-line); text-align: right; vertical-align: top; overflow-wrap: anywhere; }
+.cmp__corner { width: 30%; }
+.cmp__coin a { color: var(--v2-text); font-weight: 700; text-decoration: none; display: block; }
+.cmp__coin a:hover, .cmp__coin a:focus-visible { color: var(--v2-accent); }
+.cmp__group th { color: var(--v2-accent); font-size: 13px; padding-top: 18px; border-bottom-color: rgba(25, 227, 177, .3); }
+.cmp__label { color: var(--v2-muted); font-weight: 500; }
+.cmp__note { display: block; font-size: 11px; color: var(--v2-muted); opacity: .85; margin-top: 2px; font-weight: 400; }
+.cmp__cell { font-weight: 600; }
+.cmp__cell.is-empty { color: var(--v2-muted); font-weight: 400; }
+.cmp__foot { font-size: 12px; margin-top: 12px; }
+.cmp__share { font-size: 12px; margin-top: 6px; color: var(--v2-muted); overflow-wrap: anywhere; }
+.cmp__share a { color: var(--v2-accent); }
+.cmp-start { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Phones: each figure becomes its own block — the label on one line, the
+   coins' values beneath it, each named — so nothing is squeezed sideways. */
+@container v2 (max-width: 599px) {
+  .cmp__table, .cmp__table thead, .cmp__table tbody, .cmp__table tr { display: block; }
+  .cmp__table thead tr { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; }
+  .cmp__corner { display: none; }
+  .cmp__table thead th { border-bottom: 0; text-align: center; }
+  .cmp__group th { display: block; }
+  .cmp__table .cmp__row { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--v2-line); }
+  .cmp__row th, .cmp__row td { border: 0; padding: 2px 4px; }
+  .cmp__label { grid-column: 1 / -1; }
+  .cmp__cell { text-align: center; }
+  .cmp__cell::before { content: attr(data-coin); display: block; font-size: 10px; color: var(--v2-muted); font-weight: 400; }
+}
+.list-coin__cmp { color: var(--v2-muted); text-decoration: none; font-size: 13px; padding: 0 4px; border-radius: 6px; }
+.list-coin__cmp:hover, .list-coin__cmp:focus-visible { color: var(--v2-accent); background: rgba(25, 227, 177, .12); }
+/* Phones: the per-row compare link would widen the coin cell past the
+   card; the header link and each coin's own page still offer it. */
+@container v2 (max-width: 599px) { .list-coin__cmp { display: none; } .list-coin__text { flex-wrap: wrap; } }

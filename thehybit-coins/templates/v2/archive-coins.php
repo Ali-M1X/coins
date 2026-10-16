@@ -29,6 +29,8 @@ $cat = Listing::currentCategory();
 $q = \TheHybit\Coins\Search::currentQuery();
 $L = $plugin->listing->view(Listing::currentPage(), $cat, $q);
 $S = $L['search'];
+$ourSlug = [];   // 2.11.0: coingecko id → our slug, for the compare links
+foreach ($plugin->coins->all() as $oc) { $ourSlug[$oc->coingeckoId] = $oc->slug; }
 $base = trailingslashit((string) (get_post_type_archive_link(\TheHybit\Coins\CoinRepository::POST_TYPE) ?: home_url('/coins/')));
 $pageUrl = static fn(int $n): string => $n <= 1 ? $base : $base . 'page/' . $n . '/';
 $catUrl = static function (?string $key) use ($base, $q): string {
@@ -98,6 +100,7 @@ get_header();
        works without script; category views are noindex (Design::applies). */ ?>
     <nav class="list-tools" aria-label="ابزارها">
       <a class="list-tools__link" href="<?= esc_url(\TheHybit\Coins\Tools::url('convert')) ?>">مبدل قیمت ارز به دلار و تومان</a>
+      <a class="list-tools__link" href="<?= esc_url(\TheHybit\Coins\V2\Compare::url([])) ?>">مقایسه ارزها</a>
     </nav>
 
     <?php /* 2.9.0: search every coin of the list. A plain GET form — it works
@@ -195,6 +198,9 @@ get_header();
                         <span class="list-coin__name"><?= esc_html($name) ?></span>
                       <?php endif; ?>
                       <bdi class="list-coin__sym" dir="ltr"><?= esc_html($r['symbol']) ?></bdi>
+                      <?php if ($r['url'] && !empty($ourSlug[$r['id']])) : ?>
+                        <a class="list-coin__cmp" href="<?= esc_url(\TheHybit\Coins\V2\Compare::url([$ourSlug[$r['id']]])) ?>" aria-label="مقایسه <?= esc_attr($name) ?> با ارز دیگر" title="مقایسه با ارز دیگر">⇄</a>
+                      <?php endif; ?>
                       <?php if (!empty($r['category'])) : ?>
                         <a class="list-coin__cat" href="<?= esc_url($base . '?cat=' . rawurlencode($r['category']['key'])) ?>"><?= esc_html($r['category']['fa']) ?></a>
                       <?php endif; ?>

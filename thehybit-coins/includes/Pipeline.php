@@ -449,7 +449,7 @@ final class Pipeline
          * A miss is reported as `pending` rather than as a failure, because
          * "cron has not reached this yet" and "the provider refused" are
          * different things and the page says different things about them. */
-        if ($renderPass && $sets->rendersFromCacheOnly($dataset)) {
+        if ($renderPass && (self::$cacheOnly || $sets->rendersFromCacheOnly($dataset))) {
             $entry = $this->cache->peek($dataset, $this->cache->keyFor($dataset, $coin));
 
             if (!is_array($entry) || !is_array($entry['data'] ?? null)) {
@@ -518,6 +518,14 @@ final class Pipeline
      * A window that is stale but could not be refreshed keeps its previous
      * value, so the chart never loses a period it already had.
      */
+    /**
+     * 2.11.0: while true, building a view model never asks a provider — every
+     * dataset, the charts included, is read from the cache as it stands
+     * (stale or missing). Set by pages that draw several coins at once
+     * (the comparison), which must add no request to a page view.
+     */
+    public static bool $cacheOnly = false;
+
     private function chartSeries(Coin $coin): ?array
     {
         $collector = $this->collectors['coingecko'] ?? null;
@@ -561,6 +569,9 @@ final class Pipeline
             $order = array_merge(['90d'], array_values(array_diff($order, ['90d'])));
         }
 
+        if (self::$cacheOnly) {
+            $budget = 0;   // read what we hold; refresh nothing
+        }
         foreach ($order as $period) {
             if ($budget <= 0) {
                 break;

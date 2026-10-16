@@ -29,6 +29,10 @@ $liveId = !empty($c['coingeckoId']) && \TheHybit\Coins\LiveFeed::covers(\TheHybi
       <?php if (!empty($c['category'])) : ?>
         <a class="v2-chip v2-chip--cat" href="<?= esc_url(trailingslashit((string) (get_post_type_archive_link(\TheHybit\Coins\CoinRepository::POST_TYPE) ?: home_url('/coins/'))) . '?cat=' . rawurlencode($c['category']['key'])) ?>" title="دسته دارایی: <?= esc_attr($c['category']['fa']) ?> — همه ارزهای این دسته"><?= esc_html($c['category']['fa']) ?></a>
       <?php endif; ?>
+      <?php $cmpWith = (new \TheHybit\Coins\V2\Compare(\TheHybit\Coins\Plugin::instance()))->partner($coin); ?>
+      <?php if ($cmpWith !== null) : ?>
+        <a class="v2-chip v2-chip--muted v2-chip--cmp" href="<?= esc_url(\TheHybit\Coins\V2\Compare::url([$c['slug'], $cmpWith])) ?>">⇄ مقایسه</a>
+      <?php endif; ?>
       <?php if (!empty($c['rank'])) : ?>
         <span class="v2-chip v2-chip--muted">رتبه <?= View::n('#' . $c['rank']) ?></span>
       <?php endif; ?>

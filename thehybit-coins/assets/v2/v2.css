@@ -760,3 +760,6 @@ html:has(.thb-v2) { overflow-x: clip; }
 .v2-conv__table th, .v2-conv__table td { padding: 8px 6px; border-bottom: 1px solid var(--v2-line); text-align: right; }
 .v2-conv__table thead th { color: var(--v2-muted); font-weight: 600; font-size: 12px; }
 .v2-conv__text { font-size: 13.5px; line-height: 1.9; color: #c4ccd8; }
+/* 2.11.0: "compare with" in the hero. */
+.v2-chip--cmp { text-decoration: none; }
+.v2-chip--cmp:hover, .v2-chip--cmp:focus-visible { color: var(--v2-accent); border-color: rgba(25, 227, 177, .45); }

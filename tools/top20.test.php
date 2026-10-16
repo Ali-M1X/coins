@@ -646,6 +646,53 @@ if (getenv('THB_TOP20_DIR')) {
     ], JSON_UNESCAPED_UNICODE));
 }
 
+section('coin comparison (2.11.0)');
+use TheHybit\Coins\V2\Compare;
+$_GET = ['c' => 'bitcoin,ethereum,solana'];
+Probe::reset(keepCache: true);
+$cmp3 = v2_render_tool('compare');
+ok(Probe::count() === 0, 'a comparison reads the cache only — no provider request');
+ok(str_contains($cmp3, '<h1 class="list-head__title">مقایسه بیت‌کوین و اتریوم و سولانا</h1>') && substr_count($cmp3, 'class="cmp__coin"') === 3,
+   'three coins side by side, named in the heading');
+preg_match_all('#<th scope="row" class="cmp__label">([^<]+)#u', $cmp3, $labels3);
+foreach (['قیمت', 'تغییر ۲۴ ساعته', 'ارزش بازار', 'حجم معاملات ۲۴ ساعته', 'عرضه در گردش', 'امتیاز تحلیلی', 'دسته'] as $want) {
+    if (!in_array($want, $labels3[1], true)) { ok(false, "comparison row missing: {$want}"); }
+}
+ok(true, 'price, market cap, 24h change, volume, supply, score with its components, category and key facts are compared');
+ok(str_contains($cmp3, 'class="cmp__cell is-empty" data-coin="BTC"><bdi class="v2-num" dir="ltr">—</bdi>'), 'a figure a coin has no source for is a dash (Bitcoin has no TVL), never a number');
+$_GET = ['c' => 'tether,usdc'];
+$cmpS = v2_render_tool('compare');
+ok(!str_contains($cmpS, '>ارزش قفل‌شده (TVL) زنجیره'), 'a row neither coin has is left out altogether (two stablecoins: no TVL row)');
+$_GET = ['c1' => 'dai', 'c2' => 'dai', 'c3' => 'no-such-coin'];
+$cmpBad = v2_render_tool('compare');
+ok(Compare::requested($plugin->coins) === ['dai'] && str_contains($cmpBad, 'یک ارز دیگر انتخاب کنید') && !str_contains($cmpBad, 'cmp__table'),
+   'duplicates and unknown slugs are dropped; one coin asks for a second instead of drawing a table');
+$_GET = ['c' => 'bitcoin,ethereum,solana,tron'];
+ok(count(Compare::requested($plugin->coins)) === 3, 'at most three coins');
+$GLOBALS['thb_query_vars'][\TheHybit\Coins\Tools::VAR] = 'compare';
+$_GET = ['c' => 'bitcoin,ethereum'];
+$toolsC = new \TheHybit\Coins\Tools();
+ok(($toolsC->coreRobots(['index' => true])['noindex'] ?? false) && $toolsC->canonical('x') === 'https://thehybit.com/coins/compare/'
+   && $toolsC->seoTitle('x') === 'مقایسه بیت‌کوین و اتریوم | های بیت',
+   'every pair is noindex, follow, with its canonical on /coins/compare/ (its title still names the coins, for sharing)');
+$_GET = [];
+ok(!isset($toolsC->coreRobots(['index' => true])['noindex']) && $toolsC->seoTitle('x') === 'مقایسه ارزهای دیجیتال | های بیت', 'the bare /coins/compare/ is the one indexable page');
+$cmp0 = v2_render_tool('compare');
+ok(str_contains($cmp0, 'data-cmp-form') && substr_count($cmp0, '<label for="cmp-c') === 3 && str_contains($cmp0, 'مقایسه‌های پرکاربرد')
+   && str_contains($cmp0, '?c=bitcoin,ethereum'), 'the bare page: a labelled picker for three coins and a few starting points');
+unset($GLOBALS['thb_query_vars'][\TheHybit\Coins\Tools::VAR]);
+$noCmp = array_keys(array_filter($pages, static fn($h) => !str_contains($h, 'class="v2-chip v2-chip--muted v2-chip--cmp" href="https://thehybit.com/coins/compare/?c=')));
+ok($noCmp === [], 'every coin page has a «⇄ مقایسه» entry in its hero, paired with a peer that has a page');
+ok(str_contains($list0, 'class="list-coin__cmp" href="https://thehybit.com/coins/compare/?c=') && str_contains($list0, '>مقایسه ارزها</a>'),
+   'and the list: a compare link on each coin with a page, and in the header');
+$_GET = ['c' => 'bitcoin,ethereum,solana'];
+if (getenv('THB_TOP20_DIR')) {
+    file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . '/v2-compare.html', $cmp3);
+    $_GET = [];
+    file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . '/v2-compare-pick.html', $cmp0);
+}
+$_GET = [];
+
 if (getenv('THB_SCORES')) {
     file_put_contents((string) getenv('THB_SCORES'), json_encode($scores, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.10.0
+ * Version:     2.11.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.10.0');
+define('THB_COINS_VERSION', '2.11.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -56,6 +56,7 @@ require_once THB_COINS_DIR . 'includes/V2/Svg.php';
 require_once THB_COINS_DIR . 'includes/V2/Model.php';
 require_once THB_COINS_DIR . 'includes/V2/View.php';
 require_once THB_COINS_DIR . 'includes/V2/Converter.php';
+require_once THB_COINS_DIR . 'includes/V2/Compare.php';
 require_once THB_COINS_DIR . 'includes/Tools.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Collector.php';
 require_once THB_COINS_DIR . 'includes/Collectors/CoinGecko.php';
@@ -196,7 +197,11 @@ final class Plugin
         if (Tools::current() !== null) {
             wp_enqueue_style('thb-v2', THB_COINS_URL . 'assets/v2/v2.css', [], THB_COINS_VERSION);
             wp_enqueue_style('thb-list', THB_COINS_URL . 'assets/v2/list.css', ['thb-v2'], THB_COINS_VERSION);
-            $this->assetsConverter(null);
+            if (Tools::current() === 'convert') {
+                $this->assetsConverter(null);
+            } else {
+                wp_enqueue_script('thb-compare', THB_COINS_URL . 'assets/v2/compare.js', [], THB_COINS_VERSION, true);
+            }
             return;
         }
         if (is_post_type_archive(CoinRepository::POST_TYPE)) {

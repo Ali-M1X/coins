@@ -32,6 +32,14 @@ final class Tools
             'description' => 'تبدیل بیت‌کوین، اتریوم، تتر و ده‌ها ارز دیگر به دلار، تومان و به یکدیگر با آخرین قیمت ذخیره‌شده و قیمت زنده هر جا در دسترس است؛ با زمان دقیق هر نرخ — %s.',
             'params' => ['from', 'to', 'amount'],
         ],
+        /* 2.11.0. Every pair or trio is a state of this one page:
+           noindex, canonical here — see parameterised(). */
+        'compare' => [
+            'template' => 'compare.php',
+            'title' => 'مقایسه ارزهای دیجیتال',
+            'description' => 'دو یا سه ارز دیجیتال را کنار هم مقایسه کنید: قیمت، ارزش بازار، حجم معاملات، عرضه، امتیاز تحلیلی و مؤلفه‌های آن، دسته و ارزش قفل‌شده؛ فقط با داده واقعی — %s.',
+            'params' => ['c', 'c1', 'c2', 'c3'],
+        ],
     ];
 
     public function register(): void
@@ -107,6 +115,18 @@ final class Tools
 
     public static function title(string $tool): string
     {
+        /* A comparison names its coins (it is noindex, but shared links and
+           browser tabs read the title). */
+        if ($tool === 'compare' && self::parameterised()) {
+            $bySlug = [];
+            foreach (Plugin::instance()->coins->all() as $c) {
+                $bySlug[$c->slug] = $c->name;
+            }
+            $names = array_map(static fn($s) => $bySlug[$s], V2\Compare::requested(Plugin::instance()->coins));
+            if (count($names) >= 2) {
+                return 'مقایسه ' . implode(' و ', $names) . ' | ' . Seo::BRAND_SUFFIX;
+            }
+        }
         return self::PAGES[$tool]['title'] . ' | ' . Seo::BRAND_SUFFIX;
     }
 
