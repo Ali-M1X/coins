@@ -597,6 +597,29 @@ ok(!isset($filled['bitcoin']), 'a coin that does not exist is skipped — no pos
 ok(Seeder::fillEditorial() === [], 'and it runs once per plugin version');
 unset($GLOBALS['thb_pages'], $GLOBALS['thb_coin_fields'][77]);
 
+/* 2.8.1 — fact-check corrections reach untouched fields only. A coin whose
+   timeline still holds the 2.8.0 seed is upgraded; an edited one is not. */
+$seeds = require THB_COINS_DIR . 'config/coins.php';
+$fixes = require THB_COINS_DIR . 'config/editorial-2.5.php';
+$seed280 = strtr($seeds['tron']['fields']['thb_timeline'], $fixes['tron']['corrected']);
+ok(str_contains($seed280, '2021-12 | تبدیل به DAO') && in_array($seed280, $seeds['tron']['fields']['previous']['thb_timeline'], true),
+   '2.8.1: the timeline as shipped in 2.8.0 is recorded as a previous seed');
+$GLOBALS['thb_pages'] = ['tron' => (object) ['ID' => 78], 'sui' => (object) ['ID' => 79]];
+$GLOBALS['thb_coin_fields'][78] = ['thb_timeline' => $seed280, 'thb_symbol' => 'TRX'];
+$GLOBALS['thb_coin_fields'][79] = ['thb_timeline' => strtr($seeds['sui']['fields']['thb_timeline'], $fixes['sui']['corrected']) . ' (edited)', 'thb_symbol' => 'SUI'];
+delete_option(Seeder::OPTION_EDITORIAL);
+Seeder::fillEditorial();
+ok(str_contains($GLOBALS['thb_coin_fields'][78]['thb_timeline'], '2022-01 | تبدیل به DAO') && !str_contains($GLOBALS['thb_coin_fields'][78]['thb_timeline'], '2021-12 | تبدیل'),
+   '2.8.1: an untouched 2.8.0 timeline (Tron) gets the corrected DAO line');
+ok(str_contains($GLOBALS['thb_coin_fields'][79]['thb_timeline'], 'حدود ۲۰۰ میلیون دلار') && str_ends_with($GLOBALS['thb_coin_fields'][79]['thb_timeline'], '(edited)'),
+   '2.8.1: a timeline an editor changed (Sui) is left exactly as they wrote it');
+unset($GLOBALS['thb_pages'], $GLOBALS['thb_coin_fields'][78], $GLOBALS['thb_coin_fields'][79]);
+$all = '';
+foreach ($seeds as $sp) { $all .= ($sp['fields']['thb_timeline'] ?? '') . "\n" . ($sp['fields']['thb_price_events'] ?? ''); }
+ok(!str_contains($all, '2021-12 | تبدیل به DAO') && !str_contains($seeds['hyperliquid']['fields']['thb_timeline'] . $seeds['hyperliquid']['fields']['thb_price_events'], 'با رأی اعتبارسنج‌ها') && !str_contains($all, 'حدود ۲۰۰ میلیون دلار از صرافی')
+   && !str_contains($all, 'جامعه هایپرلیکوئید') && str_contains($all, 'حدود ۱۶۲ میلیون دلار') && str_contains($all, 'Native Markets'),
+   '2.8.1: the four corrected lines ship; the old wording is gone from every default');
+
 /* =====================================================================
  * 14. Live price — once a minute, one request for every coin
  * ================================================================== */

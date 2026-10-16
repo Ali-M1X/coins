@@ -24,13 +24,13 @@ Also check:
 | USDC | 2023 \| پایان کنسرسیوم سنتر |
 | Dogecoin | 2023-04-03 \| نماد توییتر |
 | Tron | 2018-01-04 \| اوج ۲۰۱۸ |
-| Tron | 2021-12 \| تبدیل به DAO |
+| Tron | 2022-01 \| تبدیل به DAO | ✔ corrected in 2.8.1 (TRON DAO announcement, 5 Jan 2022) |
 | Tron | 2024-12-04 \| رکورد تازه |
 | Cardano | 2018-01-04 \| اوج ۲۰۱۸ |
 | Hyperliquid | 2025-02-18 \| راه‌اندازی HyperEVM |
 | Hyperliquid | 2025-03-12 \| زیان صندوق نقدینگی |
-| Hyperliquid | 2025-03-26 \| ماجرای JELLY |
-| Hyperliquid | 2025-09 \| استیبل‌کوین USDH |
+| Hyperliquid | 2025-03-26 \| ماجرای JELLY | ✔ corrected in 2.8.1 (neutral wording; no claim of a validator vote) |
+| Hyperliquid | 2025-09 \| استیبل‌کوین USDH | ✔ corrected in 2.8.1 (validators chose Native Markets; live September 2025) |
 | Hyperliquid | 2025-11 \| آغاز آزادسازی تیم |
 | Chainlink | 2021-04-15 \| وایت‌پیپر دوم |
 | Chainlink | 2025-08-07 \| ذخیره چین‌لینک |
@@ -56,3 +56,6 @@ Also check:
 | Shiba Inu | 2025-09-12 \| حمله به پل شیباریوم |
 
 Only Ethereum has no flagged line: its entries are the 2.4 ones, reworded so each starts with a Persian word.
+
+
+**2.8.1:** also corrected — Sui `2025-05-22 | هک سِتوس`: more than $220M stolen, about $162M frozen.

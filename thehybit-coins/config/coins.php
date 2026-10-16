@@ -34,6 +34,13 @@ return (static function (array $coins): array {
             if ($old !== '' && $old !== $new) {
                 $coins[$slug]['fields']['previous'][$field][] = $old;
             }
+            /* 2.8.1: lines corrected after fact-checking. The field as
+               shipped up to 2.8.0 is a previous seed too, so it is upgraded
+               where untouched; a hand-edited field is left alone. */
+            $shipped = strtr($new, (array) ($e['corrected'] ?? []));
+            if ($shipped !== $new) {
+                $coins[$slug]['fields']['previous'][$field][] = $shipped;
+            }
             $coins[$slug]['fields'][$field] = $new;
         }
     }
