@@ -194,8 +194,31 @@ final class Listing
      * @return array{page:int, pages:int, perPage:int, state:string, fetchedAt:?string,
      *               market7d:?float, rows:array<int, array>}
      */
-    public function view(int $page, ?string $category = null): array
+    public function view(int $page, ?string $category = null, string $query = ''): array
     {
+        /* 2.9.0 — /coins/?q=…: the search, server-side, for visitors without
+           script and for shared links. Every coin, ranked by match, within
+           the category when one is chosen; one page, no pagination. */
+        if (trim($query) !== '') {
+            $market = $this->market7d();
+            $all = array_values(array_filter($this->allRows(), static fn($r) => $category === null || ($r['category']['key'] ?? null) === $category));
+            $found = Search::match($all, $query);
+            $counts = [];
+            foreach ($this->ours() as $own) {
+                if (!empty($own['category'])) {
+                    $counts[$own['category']['key']] = ($counts[$own['category']['key']] ?? 0) + 1;
+                }
+            }
+            return [
+                'page' => 1, 'pages' => 1, 'perPage' => $this->perPage(),
+                'state' => 'ok', 'fetchedAt' => null, 'market7d' => $market,
+                'rows' => array_map(static fn($r) => $r + ['vsMarket' => $market !== null && isset($r['change7d']) ? (float) $r['change7d'] - $market : null], $found['rows']),
+                'category' => $category !== null ? ['key' => $category] + (Categories::all()[$category] ?? ['fa' => $category, 'en' => $category]) : null,
+                'counts' => $counts,
+                'search' => ['query' => trim($query), 'relayout' => $found['relayout'], 'total' => count($found['rows'])],
+            ];
+        }
+
         $page = max(1, $page);
         $market = $this->market7d();
         $ours = $this->ours();
@@ -237,6 +260,7 @@ final class Listing
                 'market7d' => $market, 'rows' => $rows,
                 'category' => ['key' => $category] + (Categories::all()[$category] ?? ['fa' => $category, 'en' => $category]),
                 'counts' => $counts,
+                'search' => null,
             ];
         }
 
@@ -256,7 +280,60 @@ final class Listing
             'rows'      => $rows,
             'category'  => null,
             'counts'    => $counts,
+            'search'    => null,
         ];
+    }
+
+    /**
+     * Every coin the list knows (2.9.0): all list pages in the cache, in
+     * rank order, then any coin with a page here that none of them carries,
+     * from its own cached market entry. Cache reads only.
+     *
+     * @return array<int, array> list rows plus position, page, url, nameFa, logo, category, fetchedAt
+     */
+    public function allRows(): array
+    {
+        $ours = $this->ours();
+        $out = [];
+        $seen = [];
+        for ($p = 1; $p <= $this->pages(); $p++) {
+            $e = $this->entry($p);
+            foreach ((array) ($e['data']['rows'] ?? []) as $i => $r) {
+                if (isset($seen[$r['id']])) {
+                    continue;
+                }
+                $seen[$r['id']] = true;
+                $out[] = $r + [
+                    'position'  => ($p - 1) * $this->perPage() + $i + 1,
+                    'page'      => $p,
+                    'url'       => $ours[$r['id']]['url'] ?? null,
+                    'nameFa'    => $ours[$r['id']]['name'] ?? null,
+                    'logo'      => $ours[$r['id']]['logo'] ?? $r['image'],
+                    'category'  => $ours[$r['id']]['category'] ?? null,
+                    'fetchedAt' => (int) ($e['fetchedAt'] ?? 0),
+                ];
+            }
+        }
+        foreach ($this->coins->all() as $coin) {
+            if ($coin->coingeckoId === '' || isset($seen[$coin->coingeckoId])) {
+                continue;
+            }
+            $m = $this->cache->peek('market', $this->cache->keyFor('market', $coin));
+            $d = is_array($m['data'] ?? null) ? $m['data'] : [];
+            $own = $ours[$coin->coingeckoId] ?? [];
+            $out[] = [
+                'id' => $coin->coingeckoId, 'symbol' => strtoupper($coin->symbol),
+                'name' => $coin->nameEn !== '' ? $coin->nameEn : $coin->name, 'image' => null,
+                'rank' => isset($d['rank']) ? (int) $d['rank'] : null,
+                'price' => isset($d['price']) ? (float) $d['price'] : null,
+                'marketCap' => $d['marketCap'] ?? null, 'volume24h' => $d['volume24h'] ?? null,
+                'change24h' => $d['change24h'] ?? null, 'change7d' => $d['change7d'] ?? null, 'sparkline' => null,
+                'position' => null, 'page' => null,
+                'url' => $own['url'] ?? null, 'nameFa' => $own['name'] ?? null, 'logo' => $own['logo'] ?? null,
+                'category' => $own['category'] ?? null, 'fetchedAt' => (int) ($m['fetchedAt'] ?? 0),
+            ];
+        }
+        return $out;
     }
 
     /** The ?cat= filter of the list, when it names a known category (2.8.0). */

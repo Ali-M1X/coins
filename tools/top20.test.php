@@ -505,6 +505,75 @@ ob_start();
 ok(!str_contains((string) ob_get_clean(), 'disambiguatingDescription'), 'the classic page\'s structured data is unchanged');
 unset($GLOBALS['thb_current_post']);
 
+section('search on /coins/ (2.9.0)');
+use TheHybit\Coins\Search;
+$norm = [
+    ['بيتكوين', 'بیت‌کوین'], ['بیت کوین', 'بیت‌کوین'], ['BTC', 'btc'], ['اِتِریوم', 'اتریوم'], ['۱۲۳', '123'], ['١٢٣', '123'],
+    ['آوه', 'اوه'], ['لایه‌۲', 'لایه2'], ['  Shiba-Inu ', 'shibainu'],
+];
+$bad = array_filter($norm, static fn($c) => Search::normalize($c[0]) !== Search::normalize($c[1]));
+ok($bad === [], 'normalisation: ي/ك, ZWNJ and spaces, case, diacritics, Persian and Arabic digits, hyphens all fold together');
+ok(Search::relayout(Search::normalize('ذفز')) === 'btc' && Search::relayout('btc') === null, 'a symbol typed on the Persian layout is read again as English keys («ذفز» → btc)');
+v2_warm_list();
+(new \TheHybit\Coins\Budget($plugin->config))->reset('coingecko');
+$GLOBALS['thb_probe_background'] = true;
+foreach (array_chunk($plugin->coins->all(), 50) as $chunk) { $plugin->pipeline->warmBatch($chunk, 'market'); }
+$GLOBALS['thb_probe_background'] = false;
+$allRows = $plugin->listing->allRows();
+ok(array_filter($allRows, static fn($r) => $r['url'] !== null && $r['price'] === null) === [], 'every coin with a page has its cached price in the index');
+$search = new Search($plugin->listing);
+$top = static fn(string $q, ?string $cat = null) => (Search::match(array_values(array_filter($allRows, static fn($r) => $cat === null || ($r['category']['key'] ?? null) === $cat)), $q)['rows'][0]['id'] ?? null);
+ok($top('btc') === 'bitcoin' && $top('BTC') === 'bitcoin' && $top('بيتكوين') === 'bitcoin' && $top('بیت کوین') === 'bitcoin' && $top('bitcoin') === 'bitcoin',
+   'by symbol, English name, Persian name — with Arabic letters or a space instead of the half-space');
+ok($top('ذفز') === 'bitcoin' && Search::match($allRows, 'ذفز')['relayout'] === 'btc', 'and «ذفز» finds Bitcoin, saying it read «btc»');
+ok($top('eth') === 'ethereum' && $top('تتر') === 'tether' && $top('دای') === 'dai', 'ETH, تتر, دای');
+ok($top('coin 487') === 'coin-487', 'every coin of the list is searched, not just page 1 (rank 487 is on page 5)');
+ok($top('xaut') === 'tether-gold' && in_array('tether-gold', array_column($allRows, 'id'), true),
+   'and a coin with a page here that is not in the 500-coin list (Tether Gold in the fixture) is searched too');
+$inCat = Search::match(array_values(array_filter($allRows, static fn($r) => ($r['category']['key'] ?? null) === 'stablecoin')), 'usd')['rows'];
+ok($inCat !== [] && array_unique(array_map(static fn($r) => $r['category']['key'], $inCat)) === ['stablecoin'], 'with ?cat=, the search stays inside the category (' . count($inCat) . ' stablecoins match «usd»)');
+ok(Search::match($allRows, 'zzzzqq')['rows'] === [], 'nonsense finds nothing (the page says so)');
+$_SERVER['REMOTE_ADDR'] = '203.0.113.7';
+delete_transient('thb_coins_index');
+$res = $search->respond();
+$body = $res->get_data();
+ok($res->get_status() === 200 && count($body['rows']) >= 500 && str_contains($res->headers['Cache-Control'] ?? '', 'max-age=300'),
+   'GET /wp-json/thehybit/v1/coins-index: ' . count($body['rows']) . ' coins, browser-cacheable for five minutes');
+$json = wp_json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+ok(strlen($json) < 90000, 'the index is compact: ' . number_format(strlen($json)) . ' bytes before compression, fetched once per visit');
+$before = Probe::$calls;
+for ($i = 0; $i < Search::RATE_MAX + 2; $i++) { $last = $search->respond(); }
+ok(count(Probe::$calls) === count($before), 'it never calls a provider — built from the cache only');
+ok($last->get_status() === 429 && ($last->headers['Retry-After'] ?? '') === (string) Search::RATE_WINDOW,
+   'rate-limited per visitor: more than ' . Search::RATE_MAX . ' a minute get 429 with Retry-After');
+$_SERVER['REMOTE_ADDR'] = '203.0.113.8';
+ok($search->respond()->get_status() === 200, 'another visitor is unaffected');
+$_GET = ['q' => 'بيتكوين'];
+$listQ = v2_render_list(1);
+ok(str_contains($listQ, 'جستجوی «بيتكوين» در ارزها') && str_contains($listQ, '>بیت‌کوین</a>') && !str_contains($listQ, 'data-list-pages'),
+   '/coins/?q= works without script: server-rendered results, no pagination');
+$GLOBALS['thb_is_list'] = true;
+ok((new \TheHybit\Coins\Design())->coreRobots(['index' => true])['noindex'] ?? false, 'and a search view is noindex, follow');
+unset($GLOBALS['thb_is_list']);
+$_GET = ['q' => 'zzzzqq'];
+ok(str_contains(v2_render_list(1), 'هیچ ارزی با «zzzzqq» در نام یا نماد پیدا نشد'), 'no results: said plainly, with a way back to all coins');
+$_GET = ['q' => 'usd', 'cat' => 'stablecoin'];
+$listQC = v2_render_list(1);
+ok(str_contains($listQC, 'فقط دسته «استیبل‌کوین»') && !str_contains($listQC, '>بیت‌کوین</a>'), 'search and category filter together');
+$_GET = [];
+$list0 = v2_render_list(1);
+ok(str_contains($list0, '<label class="list-search__label" for="list-q">') && str_contains($list0, 'data-index="https://thehybit.com/wp-json/thehybit/v1/coins-index"')
+   && str_contains($list0, 'id="rank-1"'), 'the form has a real label, points at the index, and every row can be linked to');
+if (getenv('THB_TOP20_DIR')) {
+    $dir = rtrim((string) getenv('THB_TOP20_DIR'), '/');
+    file_put_contents($dir . '/v2-list.html', $list0);
+    file_put_contents($dir . '/coins-index.json', $json);
+    file_put_contents($dir . '/search-cases.json', wp_json_encode([
+        'normalize' => array_map(static fn($c) => [$c[0], Search::normalize($c[0])], $norm),
+        'top' => array_map(static fn($q) => [$q, $top($q)], ['btc', 'بيتكوين', 'بیت کوین', 'ذفز', 'eth', 'تتر', 'coin 487', 'xaut']),
+    ], JSON_UNESCAPED_UNICODE));
+}
+
 if (getenv('THB_SCORES')) {
     file_put_contents((string) getenv('THB_SCORES'), json_encode($scores, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 }

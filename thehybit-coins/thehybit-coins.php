@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.8.1
+ * Version:     2.9.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.8.1');
+define('THB_COINS_VERSION', '2.9.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -33,6 +33,8 @@ require_once THB_COINS_DIR . 'includes/LivePrice.php';
 require_once THB_COINS_DIR . 'includes/LiveFeed.php';
 require_once THB_COINS_DIR . 'includes/Sitemap.php';
 require_once THB_COINS_DIR . 'includes/Categories.php';
+require_once THB_COINS_DIR . 'includes/RateLimit.php';
+require_once THB_COINS_DIR . 'includes/Search.php';
 require_once THB_COINS_DIR . 'includes/Datasets.php';
 require_once THB_COINS_DIR . 'includes/Budget.php';
 require_once THB_COINS_DIR . 'includes/Lock.php';
@@ -171,6 +173,7 @@ final class Plugin
 
         /* The coin list at /coins/ (the post type's archive). */
         $this->listing->register();
+        (new Search($this->listing))->register();   // 2.9.0: the list's search index
         (new Sitemap($this->cache, $this->coins))->register();
 
         (new Scheduler($this->config, $this->coins, $this->pipeline, $this->history, $this->listing))->register();
@@ -192,6 +195,8 @@ final class Plugin
             wp_enqueue_style('thb-list', THB_COINS_URL . 'assets/v2/list.css', ['thb-v2'], THB_COINS_VERSION);
             $rows = (array) ($this->listing->entry(Listing::currentPage())['data']['rows'] ?? []);
             LiveFeed::enqueue($this->config, array_map(static fn($r) => (string) ($r['id'] ?? ''), $rows));
+            /* 2.9.0: instant search. The index is fetched once, on first use. */
+            wp_enqueue_script('thb-list', THB_COINS_URL . 'assets/v2/list.js', [], THB_COINS_VERSION, true);
             return;
         }
         if (!is_singular(CoinRepository::POST_TYPE)) {

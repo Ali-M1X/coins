@@ -98,9 +98,10 @@ final class Design
 
     private static function applies(): bool
     {
-        /* 2.8.0: a category view of the list (/coins/?cat=…) is a filter
-           of /coins/, not a page of its own: noindex, follow. */
-        if (Listing::currentCategory() !== null && function_exists('is_post_type_archive')
+        /* 2.8.0 / 2.9.0: a category view (/coins/?cat=…) or a search
+           (/coins/?q=…) is a view of /coins/, not a page of its own:
+           noindex, follow. */
+        if ((Listing::currentCategory() !== null || Search::currentQuery() !== '') && function_exists('is_post_type_archive')
             && is_post_type_archive(CoinRepository::POST_TYPE)) {
             return true;
         }

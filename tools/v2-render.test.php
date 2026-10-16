@@ -841,7 +841,7 @@ ok($lst->due() === null, 'and then nothing is due');
 Probe::reset(keepCache: true);
 $l1 = v2_render_list(1);
 ok(Probe::count() === 0, 'a warm list render makes no provider request');
-preg_match_all('#<tr(?: class="is-ours")?(?: data-live-id="[a-z0-9-]+")?>\s*<td class="c-rank">#', $l1, $trs);
+preg_match_all('#<tr(?: id="rank-\d+")?(?: class="is-ours")?(?: data-live-id="[a-z0-9-]+")?>\s*<td class="c-rank">#', $l1, $trs);
 ok(count($trs[0]) === 99, 'page 1 lists the 100 top coins less the one CoinGecko sent without a price (' . count($trs[0]) . ' rows)');
 ok(substr_count($l1, '<h1') === 1 && substr_count($l1, '<h2') >= 2 && str_contains($l1, '<th scope="col"') && str_contains($l1, '<th scope="row"'),
    'one h1, section h2s, and a real table with column and row headers');

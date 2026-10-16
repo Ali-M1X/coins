@@ -219,8 +219,10 @@ const heroPrice = (page) => page.$eval('[data-live-usd] .v2-num', (e) => e.textC
   await recv(page, 'kraken', heartbeat);
   const box0 = await page.$eval('[data-live-chg]', (e) => e.getBoundingClientRect().right);
   await recv(page, 'kraken', kTick('ETH/USD', 2999.5, -0.2));
-  await sleep(80);
-  const flashDown = await page.$eval('[data-live-usd]', (e) => e.className);
+  /* Repaints are throttled to one a second per coin, so the flash lands
+     within that second — waited for, not assumed after a fixed sleep. */
+  const flashDown = await page.waitForFunction(() => document.querySelector('[data-live-usd]').className.includes('is-tick-down'), null, { timeout: 1500, polling: 20 })
+    .then(() => 'is-tick-down').catch(async () => page.$eval('[data-live-usd]', (e) => e.className));
   ok(flashDown.includes('is-tick-down'), 'a fall flashes red (is-tick-down)');
   await sleep(1100);
   await recv(page, 'kraken', heartbeat);

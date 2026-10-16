@@ -97,6 +97,8 @@ if [ -f node_modules/playwright/package.json ]; then
       node tools/dom-v2.test.mjs
   run "Browser — live price over WebSocket (mocked feeds)" \
       node tools/live.test.mjs
+  run "Browser — list search (2.9.0)" \
+      node tools/search.test.mjs
 else
   echo
   echo "  SKIPPED: browser tests (run 'npm install playwright' first)"

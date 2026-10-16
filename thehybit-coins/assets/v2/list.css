@@ -102,3 +102,22 @@ a.list-coin__name:hover { color: var(--v2-accent); }
 .list-coin__cat { color: var(--v2-accent); font-size: 11px; text-decoration: none; padding: 0 6px; border-radius: 999px;
   border: 1px solid rgba(25, 227, 177, .35); white-space: nowrap; }
 .list-coin__cat:hover, .list-coin__cat:focus-visible { background: rgba(25, 227, 177, .14); }
+
+/* 2.9.0 — search. */
+.list-search { margin: 0 0 14px; }
+.list-search__label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.list-search__row { display: flex; gap: 8px; }
+.list-search__input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 12px; font: inherit; font-size: 15px;
+  color: var(--v2-text); background: rgba(148, 163, 184, .08); border: 1px solid var(--v2-line); }
+.list-search__input::placeholder { color: var(--v2-muted); opacity: 1; }
+.list-search__input:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 1px; border-color: transparent; }
+.list-search__go { flex: none; height: 44px; padding: 0 18px; border-radius: 12px; font: inherit; font-weight: 600; cursor: pointer;
+  color: #06231b; background: var(--v2-accent); border: 0; }
+.list-search__go:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.list-search__hint { color: var(--v2-muted); font-size: 12px; margin-top: 6px; }
+.list-results { margin-bottom: var(--v2-gap); }
+.list-results__status { font-size: 14px; margin-bottom: 8px; }
+.list-results__note, .list-results__empty { color: var(--v2-muted); font-size: 14px; margin: 6px 0 10px; }
+.list-results__empty a { color: var(--v2-accent); }
+.list-coin__name--plain { color: var(--v2-text); text-decoration: none; }
+.list-table--results .c-coin .list-coin__text { flex-wrap: wrap; }

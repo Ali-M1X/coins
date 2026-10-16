@@ -77,6 +77,10 @@ function get_footer(...$a): void
         echo "<script>window.__THB_LIVE__ = " . wp_json_encode($live, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
         echo "<script type=\"module\" src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/live.js\"></script>\n";
     }
+    if (!empty($GLOBALS['thb_is_list'])) {
+        // 2.9.0: the list's instant search, as Plugin::assets() enqueues it.
+        echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/list.js\"></script>\n";
+    }
     if (!empty($GLOBALS['thb_theme_boxed'])) {
         echo "<footer style=\"padding:14px 16px;color:#555;font:13px sans-serif\">پانویس قالب</footer></div>\n";
     }

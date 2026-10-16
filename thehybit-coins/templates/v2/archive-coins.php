@@ -26,9 +26,15 @@ defined('ABSPATH') || exit;
 
 $plugin = Plugin::instance();
 $cat = Listing::currentCategory();
-$L = $plugin->listing->view(Listing::currentPage(), $cat);
+$q = \TheHybit\Coins\Search::currentQuery();
+$L = $plugin->listing->view(Listing::currentPage(), $cat, $q);
+$S = $L['search'];
 $base = trailingslashit((string) (get_post_type_archive_link(\TheHybit\Coins\CoinRepository::POST_TYPE) ?: home_url('/coins/')));
 $pageUrl = static fn(int $n): string => $n <= 1 ? $base : $base . 'page/' . $n . '/';
+$catUrl = static function (?string $key) use ($base, $q): string {
+    $args = array_filter(['cat' => $key, 'q' => $q !== '' ? $q : null]);
+    return $args === [] ? $base : add_query_arg(array_map('rawurlencode', $args), $base);
+};
 $from = ($L['page'] - 1) * $L['perPage'] + 1;
 $to = $from + $L['perPage'] - 1;
 $market = $L['market7d'];
@@ -56,7 +62,10 @@ get_header();
     </nav>
 
     <header class="list-head">
-      <?php if ($L['category']) : ?>
+      <?php if ($S) : ?>
+        <h1 class="list-head__title">جستجوی «<?= esc_html($S['query']) ?>» در ارزها</h1>
+        <p class="list-head__sub">در نام فارسی، نام انگلیسی و نماد همه ارزهای فهرست<?= $L['category'] ? ' — فقط دسته «' . esc_html($L['category']['fa']) . '»' : '' ?>.</p>
+      <?php elseif ($L['category']) : ?>
         <h1 class="list-head__title">قیمت ارزهای دسته «<?= esc_html($L['category']['fa']) ?>»</h1>
         <p class="list-head__sub">ارزهایی که در <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> صفحه دارند و در این دسته‌اند، به ترتیب ارزش بازار.</p>
       <?php else : ?>
@@ -87,24 +96,59 @@ get_header();
 
     <?php /* 2.8.0: filter by asset category — plain links, so every view
        works without script; category views are noindex (Design::applies). */ ?>
+    <?php /* 2.9.0: search every coin of the list. A plain GET form — it works
+       without script (/coins/?q=…, server-rendered, noindex); with script,
+       list.js answers as you type from an index fetched once. */ ?>
+    <form class="list-search" role="search" action="<?= esc_url($base) ?>" method="get" data-list-search
+          data-index="<?= esc_url(\TheHybit\Coins\Search::url()) ?>"
+          data-cats="<?= esc_attr(wp_json_encode(array_map(static fn($c) => $c['fa'], \TheHybit\Coins\Categories::all()), JSON_UNESCAPED_UNICODE)) ?>"<?= $cat !== null ? ' data-cat="' . esc_attr($cat) . '"' : '' ?>>
+      <label class="list-search__label" for="list-q">جستجوی ارز</label>
+      <div class="list-search__row">
+        <input class="list-search__input" id="list-q" name="q" type="search" value="<?= esc_attr($q) ?>" maxlength="40"
+               placeholder="نام یا نماد، مثلاً بیت‌کوین یا BTC" autocomplete="off" spellcheck="false" enterkeyhint="search"
+               aria-describedby="list-q-hint" aria-controls="list-results">
+        <?php if ($cat !== null) : ?><input type="hidden" name="cat" value="<?= esc_attr($cat) ?>"><?php endif; ?>
+        <button class="list-search__go" type="submit">جستجو</button>
+      </div>
+      <p class="list-search__hint" id="list-q-hint">در همه <?= View::n(Format::num((float) ($L['perPage'] * $plugin->listing->pages()), 0)) ?> ارز بزرگ فهرست، با نام فارسی، انگلیسی یا نماد<?= $cat !== null ? ' — در همین دسته' : '' ?>.</p>
+    </form>
+    <div class="v2-card list-results" id="list-results" data-list-results hidden>
+      <p class="list-results__status" role="status" aria-live="polite" data-list-status></p>
+      <table class="list-table list-table--results" data-list-table hidden>
+        <caption class="screen-reader-text">نتایج جستجو</caption>
+        <thead><tr>
+          <th scope="col" class="c-rank">#</th><th scope="col" class="c-coin">ارز</th>
+          <th scope="col" class="c-num c-price">قیمت</th><th scope="col" class="c-num c-24h">۲۴ ساعت</th>
+        </tr></thead>
+        <tbody data-list-rows></tbody>
+      </table>
+    </div>
+
     <?php if ($L['counts'] !== []) : ?>
       <nav class="list-cats" aria-label="فیلتر بر اساس دسته">
         <span class="list-cats__label">دسته:</span>
-        <a class="list-cats__item<?= $cat === null ? ' is-current' : '' ?>" href="<?= esc_url($base) ?>"<?= $cat === null ? ' aria-current="page"' : '' ?>>همه</a>
+        <a class="list-cats__item<?= $cat === null ? ' is-current' : '' ?>" href="<?= esc_url($catUrl(null)) ?>"<?= $cat === null ? ' aria-current="page"' : '' ?>>همه</a>
         <?php foreach (\TheHybit\Coins\Categories::all() as $key => $lab) : if (empty($L['counts'][$key])) { continue; } ?>
-          <a class="list-cats__item<?= $cat === $key ? ' is-current' : '' ?>" href="<?= esc_url($base . '?cat=' . rawurlencode($key)) ?>"<?= $cat === $key ? ' aria-current="page"' : '' ?>><?= esc_html($lab['fa']) ?> <span class="list-cats__n"><?= View::n((string) $L['counts'][$key]) ?></span></a>
+          <a class="list-cats__item<?= $cat === $key ? ' is-current' : '' ?>" href="<?= esc_url($catUrl($key)) ?>"<?= $cat === $key ? ' aria-current="page"' : '' ?>><?= esc_html($lab['fa']) ?> <span class="list-cats__n"><?= View::n((string) $L['counts'][$key]) ?></span></a>
         <?php endforeach; ?>
       </nav>
     <?php endif; ?>
 
-    <section class="v2-card list-card" aria-labelledby="list-table-title">
-      <?php if ($L['category']) : ?>
+    <section class="v2-card list-card" aria-labelledby="list-table-title" data-list-main>
+      <?php if ($S) : ?>
+        <h2 class="list-card__title" id="list-table-title"><?= $S['total'] > 0 ? 'نتایج — ' . View::n((string) $S['total']) . ' ارز' : 'نتیجه‌ای پیدا نشد' ?></h2>
+        <?php if ($S['relayout']) : ?>
+          <p class="list-results__note">نتایج برای «<bdi dir="ltr"><?= esc_html($S['relayout']) ?></bdi>» — همان کلیدها روی صفحه‌کلید انگلیسی.</p>
+        <?php endif; ?>
+      <?php elseif ($L['category']) : ?>
         <h2 class="list-card__title" id="list-table-title">جدول قیمت — <?= esc_html($L['category']['fa']) ?> (<?= View::n((string) count($L['rows'])) ?> ارز)</h2>
       <?php else : ?>
         <h2 class="list-card__title" id="list-table-title">جدول قیمت — رتبه <?= View::n(Format::num((float) $from, 0)) ?> تا <?= View::n(Format::num((float) $to, 0)) ?></h2>
       <?php endif; ?>
 
-      <?php if ($L['rows'] === []) : ?>
+      <?php if ($S && $L['rows'] === []) : ?>
+        <p class="list-results__empty">هیچ ارزی با «<?= esc_html($S['query']) ?>» در نام یا نماد پیدا نشد<?= $L['category'] ? ' (در این دسته)' : '' ?>. املای دیگری را امتحان کنید، یا <a href="<?= esc_url($base) ?>">همه ارزها</a> را ببینید.</p>
+      <?php elseif ($L['rows'] === []) : ?>
         <?= View::na('pending', 'فهرست ارزها چند دقیقه پس از نصب از CoinGecko دریافت می‌شود.') ?>
       <?php else : ?>
         <table class="list-table">
@@ -131,7 +175,7 @@ get_header();
               <?php /* data-live-*: live.js (2.4.0) replaces the price and 24h change
                  with real WebSocket ticks for coins a feed carries. Volume
                  stays the server's global figure. */ ?>
-              <tr<?= $r['url'] ? ' class="is-ours"' : '' ?><?= \TheHybit\Coins\LiveFeed::covers($liveConfig, (string) $r['id']) ? ' data-live-id="' . esc_attr((string) $r['id']) . '"' : '' ?>>
+              <tr<?= !empty($r['rank']) ? ' id="rank-' . (int) $r['rank'] . '"' : '' ?><?= $r['url'] ? ' class="is-ours"' : '' ?><?= \TheHybit\Coins\LiveFeed::covers($liveConfig, (string) $r['id']) ? ' data-live-id="' . esc_attr((string) $r['id']) . '"' : '' ?>>
                 <td class="c-rank"><?= View::n((string) ($r['rank'] ?? $r['position'])) ?></td>
                 <th scope="row" class="c-coin">
                   <span class="list-coin">
@@ -181,7 +225,7 @@ get_header();
     </section>
 
     <?php if ($L['pages'] > 1) : ?>
-      <nav class="list-pages" aria-label="صفحه‌های فهرست">
+      <nav class="list-pages" aria-label="صفحه‌های فهرست" data-list-pages>
         <?php if ($L['page'] > 1) : ?>
           <a class="list-pages__step" href="<?= esc_url($pageUrl($L['page'] - 1)) ?>" rel="prev">→ صد ارز قبلی</a>
         <?php endif; ?>

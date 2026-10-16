@@ -205,9 +205,9 @@ for (const [width, cols] of [[1440, 9], [900, 7], [390, 4]]) {
   const p = await browser.newPage({ viewport: { width, height: 900 } });
   await p.goto(`http://localhost:${PORT}/list-fit.html`, { waitUntil: 'load' });
   const r = await p.evaluate(() => {
-    const row = document.querySelector('.list-table tbody tr');
+    const row = document.querySelector('[data-list-main] .list-table tbody tr');
     const visible = [...row.children].filter((c) => getComputedStyle(c).display !== 'none' && c.getBoundingClientRect().width > 0);
-    const table = document.querySelector('.list-table').getBoundingClientRect();
+    const table = document.querySelector('[data-list-main] .list-table').getBoundingClientRect();
     const card = document.querySelector('.list-card').getBoundingClientRect();
     return { cols: visible.length, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
              fits: table.right <= card.right + 0.5 && table.left >= card.left - 0.5,
