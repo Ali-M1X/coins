@@ -117,6 +117,12 @@ final class Converter
         ];
     }
 
+    /** 2.12.0: what alerts.js needs about this page's coin. */
+    public static function alertClient(array $c): array
+    {
+        return ['coin' => $c['base']['id'], 'name' => $c['base']['name'], 'symbol' => $c['base']['symbol'], 'price' => $c['base']['price']];
+    }
+
     /** The data island the script converts from. */
     public static function client(array $c): array
     {

@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const [prefix, file, selector = '', fill = '', click = ''] = process.argv.slice(2);
+const [prefix, file, selector = '', fill = '', click = '', script = ''] = process.argv.slice(2);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
 const server = createServer(async (req, res) => {
   try {
@@ -40,6 +40,8 @@ for (const [label, width] of [['desktop', 1440], ['phone', 360]]) {
     await page.waitForTimeout(500);
   }
   if (click) { await page.locator(click).first().click(); await page.waitForTimeout(400); }
+  if (script) { await page.evaluate(script); await page.waitForTimeout(400); }
+  if (selector === 'viewport') { await page.screenshot({ path: `${prefix}-${label}.png` }); await page.close(); continue; }
   const target = selector ? page.locator(selector).first() : page;
   await target.screenshot({ path: `${prefix}-${label}.png`, ...(selector ? {} : { fullPage: true }) });
   await page.close();

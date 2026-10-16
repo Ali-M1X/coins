@@ -99,6 +99,7 @@ get_header();
         $standalone = false;
         $state = ['from' => $conv['base']['id'], 'to' => 'usd', 'amount' => '1'];
         require $parts . 'converter.php';
+        require $parts . 'alerts.php';   // 2.12.0: browser-only price alerts (revealed by script)
     }
     foreach (['ecosystem', 'flow', 'story', 'dna', 'price-story', 'pulse', 'peers', 'supply'] as $section) {
         if ($v['sections'][$section]['show'] ?? true) {

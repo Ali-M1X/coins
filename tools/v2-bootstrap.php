@@ -84,6 +84,10 @@ function get_footer(...$a): void
         if ($conv !== null) {
             echo "<script>window.__THB_CONV__ = " . wp_json_encode(\TheHybit\Coins\V2\Converter::client($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
             echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/converter.js\"></script>\n";
+            if ($tool === null) {
+                echo "<script>window.__THB_ALERT__ = " . wp_json_encode(\TheHybit\Coins\V2\Converter::alertClient($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
+                echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/alerts.js\"></script>\n";
+            }
         }
     }
     if ($tool === 'compare') {

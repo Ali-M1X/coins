@@ -693,6 +693,16 @@ if (getenv('THB_TOP20_DIR')) {
 }
 $_GET = [];
 
+section('price alerts in the browser (2.12.0)');
+$noAlerts = array_keys(array_filter($pages, static fn($h) => !str_contains($h, 'data-v2-alerts hidden')));
+ok($noAlerts === [], 'every coin page carries the alerts card, hidden until the script (and storage) can run it');
+ok(str_contains($pages['ethereum'], '<legend>وقتی قیمت اتریوم</legend>') && str_contains($pages['ethereum'], '<label for="alert-price">')
+   && str_contains($pages['ethereum'], 'چیزی به سرور ما فرستاده نمی‌شود'), 'labelled fields, and the privacy note in Persian');
+$GLOBALS['thb_rest_routes'] = [];
+do_action('rest_api_init');
+ok(array_keys($GLOBALS['thb_rest_routes'] ?? []) === array_values(array_filter(array_keys($GLOBALS['thb_rest_routes'] ?? []), static fn($r) => !str_contains($r, 'alert'))),
+   'no alert endpoint exists: nothing is stored on, or sent to, this server');
+
 if (getenv('THB_SCORES')) {
     file_put_contents((string) getenv('THB_SCORES'), json_encode($scores, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 }

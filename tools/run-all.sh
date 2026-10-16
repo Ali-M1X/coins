@@ -103,6 +103,8 @@ if [ -f node_modules/playwright/package.json ]; then
       node tools/converter.test.mjs
   run "Browser — coin comparison (2.11.0)" \
       node tools/compare.test.mjs
+  run "Browser — price alerts (2.12.0)" \
+      node tools/alerts.test.mjs
 else
   echo
   echo "  SKIPPED: browser tests (run 'npm install playwright' first)"

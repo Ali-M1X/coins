@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.11.0
+ * Version:     2.12.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.11.0');
+define('THB_COINS_VERSION', '2.12.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -331,6 +331,11 @@ final class Plugin
         }
         wp_enqueue_script('thb-conv', THB_COINS_URL . 'assets/v2/converter.js', [], THB_COINS_VERSION, true);
         wp_add_inline_script('thb-conv', 'window.__THB_CONV__ = ' . wp_json_encode(V2\Converter::client($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';', 'before');
+        if ($coin !== null) {
+            /* 2.12.0: browser-only price alerts, on coin pages. */
+            wp_enqueue_script('thb-alerts', THB_COINS_URL . 'assets/v2/alerts.js', ['thb-conv'], THB_COINS_VERSION, true);
+            wp_add_inline_script('thb-alerts', 'window.__THB_ALERT__ = ' . wp_json_encode(V2\Converter::alertClient($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';', 'before');
+        }
     }
 
     public function v2(Coin $coin): array
