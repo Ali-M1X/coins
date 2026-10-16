@@ -96,6 +96,10 @@ get_header();
 
     <?php /* 2.8.0: filter by asset category — plain links, so every view
        works without script; category views are noindex (Design::applies). */ ?>
+    <nav class="list-tools" aria-label="ابزارها">
+      <a class="list-tools__link" href="<?= esc_url(\TheHybit\Coins\Tools::url('convert')) ?>">مبدل قیمت ارز به دلار و تومان</a>
+    </nav>
+
     <?php /* 2.9.0: search every coin of the list. A plain GET form — it works
        without script (/coins/?q=…, server-rendered, noindex); with script,
        list.js answers as you type from an index fetched once. */ ?>

@@ -574,6 +574,78 @@ if (getenv('THB_TOP20_DIR')) {
     ], JSON_UNESCAPED_UNICODE));
 }
 
+section('price converter (2.10.0)');
+use TheHybit\Coins\V2\Converter;
+(new \TheHybit\Coins\Budget($plugin->config))->reset('coingecko');
+(new \TheHybit\Coins\Budget($plugin->config))->reset('persiantoolbox');
+$GLOBALS['thb_probe_background'] = true;
+$plugin->pipeline->warmTicker($plugin->coins->all());
+$plugin->pipeline->warm($plugin->coins->find(array_search('ethereum', $ids, true)), 'fx');
+$GLOBALS['thb_probe_background'] = false;
+$parseCases = [['1', 1.0], ['۲٫۵', 2.5], ['٣', 3.0], ['2,500', 2500.0], ['۱۲٬۵۰۰٫۷۵', 12500.75], ['.5', 0.5], ['abc', null], ['-1', null], ['', null], ['1.2.3', null]];
+ok(array_filter($parseCases, static fn($c) => Converter::parse($c[0]) !== $c[1]) === [], 'input: Persian, Arabic and Latin digits, «٫» or «.», thousands separators; anything else is refused');
+$conv = $plugin->converter()->forCoin($plugin->coins->find(array_search('ethereum', $ids, true)));
+$ethP = $conv['base']['price'];
+$btcP = Converter::usdPer($conv, 'bitcoin');
+ok(abs(Converter::convert($conv, 2, 'ethereum', 'usd') - 2 * $ethP) < 1e-9 && abs(Converter::convert($conv, 1, 'ethereum', 'bitcoin') - $ethP / $btcP) < 1e-12
+   && abs(Converter::convert($conv, 1, 'usd', 'toman') - $conv['toman']['rate']) < 1e-9,
+   'arithmetic: coin → USD, coin → coin (through USD), USD → toman, all from the cached rates');
+ok(Converter::fa(3245.6, 'usd') === '۳٬۲۴۵٫۶۰' && Converter::fa(269000000.4, 'toman') === '۲۶۹٬۰۰۰٬۰۰۰' && Converter::fa(0.000123, 'coin') === '۰٫۰۰۰۱۲۳',
+   'output in Persian digits with «٬» and «٫»: cents for dollars, whole tomans, enough decimals for small coin amounts');
+$texts = [];
+$missing = [];
+foreach ($ids as $id => $slug) {
+    $c = $plugin->converter()->forCoin($plugin->coins->find($id));
+    if ($c === null) { $missing[] = $slug; continue; }
+    $texts[$slug] = $c['text'];
+}
+ok($missing === [], 'every coin page with a price has the converter (' . count($texts) . ')');
+ok(count(array_unique($texts)) === count($texts) && min(array_map('mb_strlen', $texts)) > 200,
+   'and its explanatory text is its own on every page (' . count(array_unique($texts)) . ' distinct, written from the coin\'s name, category, price and which rates are live)');
+ok(str_contains($pages['ethereum'], 'id="convert"') && str_contains($pages['ethereum'], 'href="#convert" data-v2-tab="convert">مبدل</a>')
+   && str_contains($pages['ethereum'], '<label for="conv-amount">مقدار</label>') && str_contains($pages['ethereum'], 'aria-live="polite" data-v2-conv-out'),
+   'coin page: a «مبدل» tab and section; labelled fields; the result is announced');
+$GLOBALS['thb_current_post'] = array_search('ethereum', $ids, true);
+$ethHtml = v2_render(array_search('ethereum', $ids, true));
+unset($GLOBALS['thb_current_post']);
+ok(str_contains($ethHtml, '۱ اتریوم = ') && str_contains($ethHtml, ' دلار</output>'), 'the first paint already shows «۱ اتریوم = … دلار» (works without script)');
+$fxKey = 'thb_c_' . md5('fx|' . $plugin->cache->keyFor('fx'));
+$heldFx = get_transient($fxKey);
+delete_transient($fxKey);
+$noFx = $plugin->converter()->forCoin($plugin->coins->find(array_search('bitcoin', $ids, true)));
+ok($noFx['toman'] === null && Converter::usdPer($noFx, 'toman') === null && !str_contains((string) $noFx['text'], 'تومان'),
+   'with no cached toman rate there is no toman option and no toman figure anywhere — never an assumed rate');
+set_transient($fxKey, $heldFx, 3600);
+Probe::reset(keepCache: true);
+$_GET = [];
+$tool = v2_render_tool('convert');
+ok(Probe::count() === 0, 'the standalone page makes no provider request');
+ok(str_contains($tool, '<h1 class="list-head__title">مبدل قیمت ارز دیجیتال به دلار و تومان</h1>') && str_contains($tool, '۱ بیت‌کوین = ')
+   && substr_count($tool, '#convert">') >= 80, '/coins/convert/: Bitcoin → USD to start, and every coin\'s unit value with a link to its page');
+$GLOBALS['thb_query_vars'][\TheHybit\Coins\Tools::VAR] = 'convert';
+$tools = new \TheHybit\Coins\Tools();
+ok($tools->seoTitle('x') === 'مبدل قیمت ارز دیجیتال به دلار و تومان | های بیت' && $tools->canonical('x') === 'https://thehybit.com/coins/convert/'
+   && !isset($tools->coreRobots(['index' => true])['noindex']), 'its own title, description and canonical; indexable');
+$_GET = ['from' => 'ethereum', 'to' => 'toman', 'amount' => '۲'];
+ok(($tools->coreRobots(['index' => true])['noindex'] ?? false) && $tools->canonical('x') === 'https://thehybit.com/coins/convert/' && $tools->yoastRobots('index, follow') === 'noindex, follow',
+   'any ?from=&to=&amount= state is noindex, follow, with the canonical on /coins/convert/ — no thin pages');
+$toolQ = v2_render_tool('convert');
+ok(str_contains($toolQ, '۲ اتریوم = ') && str_contains($toolQ, ' تومان</output>'), 'and without script the server answers the submitted form (۲ اتریوم → تومان)');
+unset($GLOBALS['thb_query_vars'][\TheHybit\Coins\Tools::VAR]);
+$_GET = [];
+$tools->rules();
+ok(($GLOBALS['thb_rewrite']['^coins/convert/?$'] ?? '') === 'index.php?thb_tool=convert', 'the /coins/convert/ route is registered (flushed once per version from wp-admin)');
+if (getenv('THB_TOP20_DIR')) {
+    $dir = rtrim((string) getenv('THB_TOP20_DIR'), '/');
+    file_put_contents($dir . '/v2-convert.html', $tool);
+    file_put_contents($dir . '/conv-cases.json', wp_json_encode([
+        'parse' => $parseCases,
+        'fa' => [[3245.6, 'usd', Converter::fa(3245.6, 'usd')], [0.5, 'usd', Converter::fa(0.5, 'usd')], [269000000.4, 'toman', Converter::fa(269000000.4, 'toman')],
+                 [0.000123, 'coin', Converter::fa(0.000123, 'coin')], [1234.5678, 'coin', Converter::fa(1234.5678, 'coin')], [2.5, 'coin', Converter::fa(2.5, 'coin')]],
+        'eth' => $ethP, 'btc' => $btcP, 'toman' => $conv['toman']['rate'],
+    ], JSON_UNESCAPED_UNICODE));
+}
+
 if (getenv('THB_SCORES')) {
     file_put_contents((string) getenv('THB_SCORES'), json_encode($scores, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 }

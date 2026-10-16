@@ -77,6 +77,15 @@ function get_footer(...$a): void
         echo "<script>window.__THB_LIVE__ = " . wp_json_encode($live, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
         echo "<script type=\"module\" src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/live.js\"></script>\n";
     }
+    /* 2.10.0: the converter's rates and script, as Plugin::assetsConverter() enqueues them. */
+    $tool = \TheHybit\Coins\Tools::current();
+    if ($tool !== null || (empty($GLOBALS['thb_is_list']) && $coin)) {
+        $conv = $plugin->converter()->forCoin($tool !== null ? null : $coin);
+        if ($conv !== null) {
+            echo "<script>window.__THB_CONV__ = " . wp_json_encode(\TheHybit\Coins\V2\Converter::client($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
+            echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/converter.js\"></script>\n";
+        }
+    }
     if (!empty($GLOBALS['thb_is_list'])) {
         // 2.9.0: the list's instant search, as Plugin::assets() enqueues it.
         echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/list.js\"></script>\n";
@@ -157,6 +166,18 @@ function v2_warm_list(): void
         $plugin->listing->refresh($p);
     }
     $GLOBALS['thb_probe_background'] = false;
+}
+
+/** Render a /coins/<tool>/ page (2.10.0), as a visitor would get it. */
+function v2_render_tool(string $tool): string
+{
+    $GLOBALS['thb_query_vars'][\TheHybit\Coins\Tools::VAR] = $tool;
+    $template = (new \TheHybit\Coins\Tools())->template('');
+    ob_start();
+    require $template;
+    $html = (string) ob_get_clean();
+    unset($GLOBALS['thb_query_vars'][\TheHybit\Coins\Tools::VAR]);
+    return $html;
 }
 
 /** Render the /coins/ list, page $page, as a visitor would get it. */

@@ -25,8 +25,9 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=
 const server = createServer(async (req, res) => {
   try {
     const path = join(ROOT, normalize(decodeURIComponent(req.url.split('?')[0])));
+    const body = await readFile(path);
     res.writeHead(200, { 'Content-Type': TYPES[extname(path)] ?? 'application/octet-stream' });
-    res.end(await readFile(path));
+    res.end(body);
   } catch { res.writeHead(404).end(); }
 });
 await new Promise((r) => server.listen(8133, r));

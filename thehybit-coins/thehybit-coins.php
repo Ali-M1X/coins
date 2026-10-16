@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.9.0
+ * Version:     2.10.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.9.0');
+define('THB_COINS_VERSION', '2.10.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -55,6 +55,8 @@ require_once THB_COINS_DIR . 'includes/Diagnostics.php';
 require_once THB_COINS_DIR . 'includes/V2/Svg.php';
 require_once THB_COINS_DIR . 'includes/V2/Model.php';
 require_once THB_COINS_DIR . 'includes/V2/View.php';
+require_once THB_COINS_DIR . 'includes/V2/Converter.php';
+require_once THB_COINS_DIR . 'includes/Tools.php';
 require_once THB_COINS_DIR . 'includes/Collectors/Collector.php';
 require_once THB_COINS_DIR . 'includes/Collectors/CoinGecko.php';
 require_once THB_COINS_DIR . 'includes/Collectors/DefiLlama.php';
@@ -174,6 +176,7 @@ final class Plugin
         /* The coin list at /coins/ (the post type's archive). */
         $this->listing->register();
         (new Search($this->listing))->register();   // 2.9.0: the list's search index
+        (new Tools())->register();                  // 2.10.0: /coins/convert/
         (new Sitemap($this->cache, $this->coins))->register();
 
         (new Scheduler($this->config, $this->coins, $this->pipeline, $this->history, $this->listing))->register();
@@ -190,6 +193,12 @@ final class Plugin
            breakout) and adds its own table styles. A plain, server-rendered
            table with link pagination; the only script is the optional live
            price (2.4.0), for the rows a WebSocket feed carries. */
+        if (Tools::current() !== null) {
+            wp_enqueue_style('thb-v2', THB_COINS_URL . 'assets/v2/v2.css', [], THB_COINS_VERSION);
+            wp_enqueue_style('thb-list', THB_COINS_URL . 'assets/v2/list.css', ['thb-v2'], THB_COINS_VERSION);
+            $this->assetsConverter(null);
+            return;
+        }
         if (is_post_type_archive(CoinRepository::POST_TYPE)) {
             wp_enqueue_style('thb-v2', THB_COINS_URL . 'assets/v2/v2.css', [], THB_COINS_VERSION);
             wp_enqueue_style('thb-list', THB_COINS_URL . 'assets/v2/list.css', ['thb-v2'], THB_COINS_VERSION);
@@ -300,6 +309,25 @@ final class Plugin
      * and the data island, exactly as viewModel() is for the classic page.
      * Reads the cache only; it never makes a provider request.
      */
+    private ?V2\Converter $converter = null;
+
+    /** 2.10.0: the price converter, over the cache only. */
+    public function converter(): V2\Converter
+    {
+        return $this->converter ??= new V2\Converter($this->config, $this->cache, $this->coins);
+    }
+
+    /** The converter's script and its rates, for a coin page or /coins/convert/. */
+    private function assetsConverter(?Coin $coin): void
+    {
+        $conv = $this->converter()->forCoin($coin);
+        if ($conv === null) {
+            return;
+        }
+        wp_enqueue_script('thb-conv', THB_COINS_URL . 'assets/v2/converter.js', [], THB_COINS_VERSION, true);
+        wp_add_inline_script('thb-conv', 'window.__THB_CONV__ = ' . wp_json_encode(V2\Converter::client($conv), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';', 'before');
+    }
+
     public function v2(Coin $coin): array
     {
         return $this->v2Memo[$coin->slug] ??= (new V2\Model($this->config, $this->cache, $this->history))
@@ -325,6 +353,7 @@ final class Plugin
                 'before'
             );
             LiveFeed::enqueue($this->config, [$coin->coingeckoId]);
+            $this->assetsConverter($coin);
         }
     }
 }

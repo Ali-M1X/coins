@@ -566,7 +566,8 @@ function wp_is_post_autosave($p) { return false; }
 function get_post_type_archive_link(string $t) { return 'https://thehybit.com/coins/'; }
 /* The /coins/ list: a test sets $GLOBALS['thb_is_list'] and 'thb_paged'. */
 function is_post_type_archive($t = ''): bool { return !empty($GLOBALS['thb_is_list']); }
-function get_query_var(string $v, $default = '') { return $v === 'paged' ? ($GLOBALS['thb_paged'] ?? 0) : $default; }
+function get_query_var(string $v, $default = '') { return $v === 'paged' ? ($GLOBALS['thb_paged'] ?? 0) : ($GLOBALS['thb_query_vars'][$v] ?? $default); }
+if (!function_exists('add_rewrite_rule')) { function add_rewrite_rule(string $re, string $q, string $after = 'bottom'): void { $GLOBALS['thb_rewrite'][$re] = $q; } }
 function trailingslashit(string $s): string { return rtrim($s, '/\\') . '/'; }
 
 function get_term_by(string $field, $value, string $tax)

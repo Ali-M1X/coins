@@ -121,3 +121,9 @@ a.list-coin__name:hover { color: var(--v2-accent); }
 .list-results__empty a { color: var(--v2-accent); }
 .list-coin__name--plain { color: var(--v2-text); text-decoration: none; }
 .list-table--results .c-coin .list-coin__text { flex-wrap: wrap; }
+
+/* 2.10.0 — links to the tool pages. */
+.list-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.list-tools__link { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; text-decoration: none;
+  color: var(--v2-accent); border: 1px solid rgba(25, 227, 177, .4); background: rgba(25, 227, 177, .06); }
+.list-tools__link:hover, .list-tools__link:focus-visible { background: rgba(25, 227, 177, .16); }

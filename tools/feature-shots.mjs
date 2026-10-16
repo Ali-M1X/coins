@@ -18,8 +18,9 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=
 const server = createServer(async (req, res) => {
   try {
     const path = join(ROOT, normalize(decodeURIComponent(req.url.split('?')[0])));
+    const body = await readFile(path);
     res.writeHead(200, { 'Content-Type': TYPES[extname(path)] ?? 'application/octet-stream' });
-    res.end(await readFile(path));
+    res.end(body);
   } catch { res.writeHead(404).end(); }
 });
 await new Promise((r) => server.listen(8134, r));
@@ -30,7 +31,14 @@ for (const [label, width] of [['desktop', 1440], ['phone', 360]]) {
   await page.route('**/wp-json/thehybit/v1/coins-index', async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: await readFile(join(ROOT, 'coins-index.json'), 'utf8') }));
   await page.goto(`http://localhost:8134/${file}`, { waitUntil: 'load' });
   await page.addStyleTag({ content: '.v2-tabs { position: static !important; }' });
-  if (fill) { const [sel, text] = fill.split('='); await page.locator(sel).fill(text); await page.waitForTimeout(500); }
+  if (fill) {
+    for (const part of fill.split('&')) {
+      const [sel, text] = part.split('=');
+      const isSelect = await page.locator(sel).evaluate((e) => e.tagName === 'SELECT');
+      if (isSelect) await page.locator(sel).selectOption(text); else await page.locator(sel).fill(text);
+    }
+    await page.waitForTimeout(500);
+  }
   if (click) { await page.locator(click).first().click(); await page.waitForTimeout(400); }
   const target = selector ? page.locator(selector).first() : page;
   await target.screenshot({ path: `${prefix}-${label}.png`, ...(selector ? {} : { fullPage: true }) });

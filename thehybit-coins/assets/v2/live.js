@@ -403,6 +403,15 @@ export function boot(config, env = {}) {
         markStale(el);
       }
     }
+
+    /* 2.10.0: the same real tick, for the price converter on this page —
+       nothing new is fetched or computed here. */
+    const irtLive = irt && fi && fi.fresh(now) && !fi.rejected.has(c.map.irt.sym) ? irt.price / 10 : null;
+    if (t || irtLive != null) {
+      try {
+        document.dispatchEvent(new CustomEvent('thb:live', { detail: { id: c.id, usd: t ? t.price : null, toman: irtLive, at: now } }));
+      } catch (e) { /* an old browser without CustomEvent simply keeps the cached price */ }
+    }
   }
 
   /* Freshness watch: a feed that falls silent turns its figures stale. */

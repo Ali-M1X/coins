@@ -34,8 +34,10 @@ if (!$coin) {
 $v = $plugin->v2($coin);
 $parts = THB_COINS_DIR . 'templates/v2/partials/';
 
+$conv = $plugin->converter()->forCoin($coin);   // 2.10.0
 $nav = [
     'overview'   => 'نگاه کلی',
+    'convert'    => 'مبدل',
     'ecosystem'  => 'اکوسیستم',
     'flow'       => $v['flow']['showSankey'] ? 'جریان زنجیره' : 'شبکه',
     'story'      => 'داستان',
@@ -81,7 +83,7 @@ get_header();
 
     <nav class="v2-tabs" aria-label="بخش‌های صفحه">
       <ul class="v2-tabs__list">
-        <?php foreach ($nav as $id => $label) : if (!($v['sections'][$id]['show'] ?? true)) { continue; } ?>
+        <?php foreach ($nav as $id => $label) : if (!($v['sections'][$id]['show'] ?? true) || ($id === 'convert' && $conv === null)) { continue; } ?>
           <li><a class="v2-tabs__link" href="#<?= esc_attr($id) ?>" data-v2-tab="<?= esc_attr($id) ?>"><?= esc_html($label) ?></a></li>
         <?php endforeach; ?>
       </ul>
@@ -91,6 +93,13 @@ get_header();
     /* A section with nothing this coin has a source for is left out, tab
        and all (Model::sections()): no stablecoin page carries an empty
        "chain flow". */
+    /* 2.10.0: the converter, first after the overview — from the price the
+       page already shows, so it is never empty when the hero is not. */
+    if ($conv !== null) {
+        $standalone = false;
+        $state = ['from' => $conv['base']['id'], 'to' => 'usd', 'amount' => '1'];
+        require $parts . 'converter.php';
+    }
     foreach (['ecosystem', 'flow', 'story', 'dna', 'price-story', 'pulse', 'peers', 'supply'] as $section) {
         if ($v['sections'][$section]['show'] ?? true) {
             require $parts . $section . '.php';
