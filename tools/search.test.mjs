@@ -103,6 +103,18 @@ for (const width of [390, 360]) {
   await page.close();
 }
 
+/* 2.13.0: the list header's stat boxes — 4 across on desktop, 2 on a tablet
+   and a phone, nothing wider than the screen. */
+for (const [width, cols] of [[1440, 4], [820, 2], [360, 2]]) {
+  const { page } = await open(width);
+  const tops = await page.$$eval('.list-stats > li', (lis) => lis.map((li) => Math.round(li.getBoundingClientRect().top)));
+  const perRow = tops.filter((t) => t === tops[0]).length;
+  const sideways = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  const inside = await page.$$eval('.list-stats > li', (lis) => lis.every((li) => { const r = li.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth + 1; }));
+  ok(perRow === cols && !sideways && inside, `${width}px: ${tops.length} stat boxes, ${perRow} per row, inside the screen, no sideways scroll`);
+  await page.close();
+}
+
 await browser.close();
 server.close();
 console.log(failed ? `\n${failed} FAILED` : '\nAll search tests passed.');

@@ -39,7 +39,7 @@ $c = $v['coin'];
           <?php endforeach; ?>
         </ul>
       <?php else : ?>
-        <?= View::na($s['state'], $s['state'] === 'disabled' ? 'کلید Etherscan در تنظیمات افزونه وارد نشده است' : null) ?>
+        <?= View::na($s['state'], $s['state'] === 'disabled' ? null : null) ?>
       <?php endif; ?>
       <?php if ($s['missing'] !== []) : ?>
         <ul class="v2-dist__missing">

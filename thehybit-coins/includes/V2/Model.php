@@ -1741,7 +1741,8 @@ final class Model
     private function interestCard(): array
     {
         $d = (array) ($this->x['interest']['data'] ?? []);
-        foreach (['fa' => 'ویکی‌پدیای فارسی', 'en' => 'ویکی‌پدیای انگلیسی'] as $lang => $where) {
+        /* 2.13.0: no source name on the public page — what is counted, not who publishes it. */
+        foreach (['fa' => 'صفحه دانشنامه فارسی', 'en' => 'صفحه دانشنامه انگلیسی'] as $lang => $where) {
             if (!isset($d[$lang]['last7'])) {
                 continue;
             }
@@ -1756,7 +1757,7 @@ final class Model
             ];
         }
         return ['title' => 'روایت (علاقه عمومی)', 'value' => null, 'sub' => null,
-                'note' => self::stateNote($this->x['interest']['state'] ?? 'pending') . ' — بازدید ویکی‌پدیا (Wikimedia)'];
+                'note' => self::stateNote($this->x['interest']['state'] ?? 'pending')];
     }
 
     /** Staked share of supply: beaconcha.in's staked balance over Etherscan's supply. */

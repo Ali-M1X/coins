@@ -85,6 +85,9 @@ final class Pipeline
         'whales'       => 'blockchair',
         'ethlocations' => 'etherscan',
         'interest'     => 'wikimedia',
+        'irt'          => 'nobitex',
+        'fiat'         => 'frankfurter',
+        'fiatalt'      => 'erapi',
     ];
 
     /** @var Collector[] keyed by provider id */

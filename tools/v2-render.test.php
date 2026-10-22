@@ -217,7 +217,7 @@ foreach ([
     "0xA1b2\u{2026}5678"           => 'with shortened addresses, never names',
     '3.12%'                        => 'staking APR (beaconcha.in, network-wide)',
     'اتر در استیکینگ (امنیت شبکه)' => 'the hash-rate row becomes staked ETH on proof of stake',
-    'بازدید ویکی‌پدیای فارسی'      => 'public interest from Wikipedia page views',
+    'بازدید صفحه دانشنامه فارسی'   => 'public interest from encyclopedia page views (no source name shown)',
     'رپ‌شده به WETH'               => 'WETH share of supply (Etherscan)',
     'در پل‌های رسمی لایه ۲'        => 'L2 canonical bridge share (Etherscan)',
     'کیف پول بزرگ صرافی‌ها (حداقل)' => 'share of supply on exchanges (Etherscan labelled wallets, a floor)',

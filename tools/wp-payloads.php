@@ -112,7 +112,7 @@ function probe_payload(string $url): array
     if (str_contains($path, '/simple/price')) {
         $out = [];
         foreach (array_filter(explode(',', (string) ($q['ids'] ?? ''))) as $i => $id) {
-            $out[$id] = ['usd' => $id === 'bitcoin' ? 62012.5 : 3251.04 + $i, 'usd_24h_change' => 2.61 - $i, 'last_updated_at' => Clock::$now - 20];
+            $out[$id] = ['usd' => $id === 'bitcoin' ? 62012.5 : ($id === 'tether' ? 1.0004 : 3251.04 + $i), 'usd_24h_change' => 2.61 - $i, 'last_updated_at' => Clock::$now - 20];
         }
         $out['zero-coin'] = ['usd' => 0];
         return $out;
@@ -526,6 +526,22 @@ function probe_payload(string $url): array
             ];
         }
         return ['pairs' => $pairs];
+    }
+
+    /* ---- 2.13.0: converter currencies (documented shapes; not fetched live) ---- */
+    if (str_contains($url, 'api.nobitex.ir/market/stats')) {
+        return ['status' => 'ok', 'stats' => ['usdt-rls' => [
+            'isClosed' => false, 'bestSell' => '1052000', 'bestBuy' => '1048000', 'latest' => '1050000',
+            'dayLow' => '1031000', 'dayHigh' => '1061000', 'dayOpen' => '1040000', 'dayClose' => '1050000', 'dayChange' => '0.96',
+            'volumeSrc' => '2100000.5', 'volumeDst' => '2205000525000',
+        ]]];
+    }
+    if (str_contains($url, 'api.frankfurter.dev/v1/latest')) {
+        return ['amount' => 1.0, 'base' => 'USD', 'date' => '2026-10-21', 'rates' => ['EUR' => 0.9212, 'GBP' => 0.7905]];
+    }
+    if (str_contains($url, 'open.er-api.com/v6/latest/USD')) {
+        return ['result' => 'success', 'base_code' => 'USD', 'time_last_update_unix' => 1792540800,
+            'rates' => ['USD' => 1, 'EUR' => 0.9208, 'GBP' => 0.7911, 'IRR' => 42112.5]];
     }
 
     /* ---- FX ---- */

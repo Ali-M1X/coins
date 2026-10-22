@@ -61,6 +61,11 @@ return [
         'onchain'    => 45 * MINUTE_IN_SECONDS,
         'l2'         => 3 * HOUR_IN_SECONDS,
         'fx'         => 15 * MINUTE_IN_SECONDS,  // USD -> IRR
+        /* 2.13.0, the converter's currencies. The USDT/toman market moves all
+           day; EUR and GBP are reference rates published once a working day. */
+        'irt'        => 10 * MINUTE_IN_SECONDS,   // Nobitex USDT/RLS: 6 an hour
+        'fiat'       => 6 * HOUR_IN_SECONDS,      // ECB via Frankfurter: 4 a day
+        'fiatalt'    => 12 * HOUR_IN_SECONDS,     // open.er-api fallback: 2 a day
         'news'       => 6 * HOUR_IN_SECONDS,     // also invalidated on save_post
 
         /* Group A. Each is the rate at which the underlying figure actually
@@ -272,6 +277,12 @@ return [
         'whales'       => ['provider' => 'blockchair',  'scope' => 'chain', 'priority' => 3, 'render' => 'cache'],
         'ethlocations' => ['provider' => 'etherscan',   'scope' => 'chain', 'priority' => 4, 'render' => 'cache'],
         'interest'     => ['provider' => 'wikimedia',   'scope' => 'coin',  'priority' => 4, 'render' => 'cache'],
+
+        /* 2.13.0: the converter's toman, EUR and GBP. Site-wide (one request
+           serves every page) and cache-only, so a render costs what it did. */
+        'irt'          => ['provider' => 'nobitex',     'scope' => 'site',  'priority' => 3, 'render' => 'cache'],
+        'fiat'         => ['provider' => 'frankfurter', 'scope' => 'site',  'priority' => 4, 'render' => 'cache'],
+        'fiatalt'      => ['provider' => 'erapi',       'scope' => 'site',  'priority' => 4, 'render' => 'cache'],
     ],
 
     /* ------------------------------------------------------------------
@@ -554,6 +565,44 @@ return [
                probe reports this host's real behaviour for it. */
             'budget'   => ['per_minute' => 4, 'per_hour' => 60, 'per_day' => 600],
             'datasets' => ['fx'],
+        ],
+
+        /* 2.13.0 — the converter's currencies. NOT VERIFIED LIVE: none of
+           these hosts is reachable from the build sandbox; each has a Provider
+           Probe entry. Budgets are a few times the scheduled rate, so a
+           cooldown or retry never runs short. */
+        'nobitex' => [
+            'label'    => 'Nobitex',
+            'enabled'  => true,
+            'base'     => 'https://api.nobitex.ir',
+            'timeout'  => 8,
+            'headers'  => [],
+            'min_interval' => 2,
+            'budget'   => ['per_minute' => 2, 'per_hour' => 20, 'per_day' => 300],
+            'cooldown' => 10 * MINUTE_IN_SECONDS,
+            'datasets' => ['irt'],
+        ],
+        'frankfurter' => [
+            'label'    => 'Frankfurter (ECB)',
+            'enabled'  => true,
+            'base'     => 'https://api.frankfurter.dev/v1',
+            'timeout'  => 8,
+            'headers'  => [],
+            'min_interval' => 2,
+            'budget'   => ['per_minute' => 1, 'per_hour' => 4, 'per_day' => 24],
+            'cooldown' => 30 * MINUTE_IN_SECONDS,
+            'datasets' => ['fiat'],
+        ],
+        'erapi' => [
+            'label'    => 'ExchangeRate-API (open)',
+            'enabled'  => true,
+            'base'     => 'https://open.er-api.com',
+            'timeout'  => 8,
+            'headers'  => [],
+            'min_interval' => 2,
+            'budget'   => ['per_minute' => 1, 'per_hour' => 2, 'per_day' => 12],
+            'cooldown' => HOUR_IN_SECONDS,
+            'datasets' => ['fiatalt'],
         ],
 
         /* ==================================================================

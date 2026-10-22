@@ -134,7 +134,7 @@ final class Compare
             $row('ارزش با کل عرضه (FDV)', static fn($d) => $big($d['v']['hero']['fdv'] ?? null)),
         ]];
         $groups[] = ['title' => 'دیفای', 'rows' => [
-            $row('ارزش قفل‌شده (TVL) زنجیره', static fn($d) => $big($d['m']['defi']['tvl'] ?? null), 'فقط برای بلاکچین‌هایی که DefiLlama برای آن‌ها ارزش قفل‌شده ثبت می‌کند.'),
+            $row('ارزش قفل‌شده (TVL) زنجیره', static fn($d) => $big($d['m']['defi']['tvl'] ?? null), 'فقط برای بلاکچین‌هایی که ارزش قفل‌شده برایشان ثبت می‌شود.'),
         ]];
 
         $scoreRows = [$row('امتیاز تحلیلی', static fn($d) => isset($d['v']['dna']['score'])

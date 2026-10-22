@@ -37,9 +37,15 @@ $catUrl = static function (?string $key) use ($base, $q): string {
     $args = array_filter(['cat' => $key, 'q' => $q !== '' ? $q : null]);
     return $args === [] ? $base : add_query_arg(array_map('rawurlencode', $args), $base);
 };
-$from = ($L['page'] - 1) * $L['perPage'] + 1;
-$to = $from + $L['perPage'] - 1;
+/* 2.13.0: the subtitle counts what the cache actually holds — the real total
+   and the positions of the first and last rows shown — never page × 100. */
+$T = $plugin->listing->stats();
+$shown = array_values(array_filter(array_column($L['rows'], 'position')));
+$from = $shown !== [] ? min($shown) : null;
+$to = $shown !== [] ? max($shown) : null;
 $market = $L['market7d'];
+$fa = static fn(float $n, int $d = 0): string => View::n(Format::num($n, $d));
+$pct = static fn(?float $v, int $d = 1): string => View::n(Format::pct($v, true, $d));
 $liveConfig = $plugin->config;
 
 get_header();
@@ -72,28 +78,72 @@ get_header();
         <p class="list-head__sub">ارزهایی که در <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> صفحه دارند و در این دسته‌اند، به ترتیب ارزش بازار.</p>
       <?php else : ?>
         <h1 class="list-head__title">قیمت ارزهای دیجیتال<?= $L['page'] > 1 ? ' — صفحه ' . View::n((string) $L['page']) : ' امروز' ?></h1>
-        <p class="list-head__sub">ارزهای رتبه <?= View::n(Format::num((float) $from, 0)) ?> تا <?= View::n(Format::num((float) $to, 0)) ?> بر اساس ارزش بازار، به دلار.</p>
+        <?php if ($T['total'] > 0 && $from !== null) : ?>
+          <p class="list-head__sub" data-list-sub><?= $fa((float) $T['total']) ?> ارز به ترتیب ارزش بازار، به دلار؛ نمایش رتبه <?= $fa((float) $from) ?> تا <?= $fa((float) $to) ?></p>
+        <?php endif; ?>
       <?php endif; ?>
-      <ul class="list-stats">
-        <li class="list-stat">
-          <span class="list-stat__label">بازار در ۷ روز اخیر</span>
-          <?php if ($market !== null) : ?>
-            <span class="list-stat__value v2-delta--<?= View::dir($market) ?>"><?= View::n(Format::pct($market, true, 1)) ?></span>
-            <span class="list-stat__note">میانگین وزنی ۱۰۰ ارز بزرگ (وزن: ارزش بازار)</span>
-          <?php else : ?>
-            <?= View::na('pending') ?>
-          <?php endif; ?>
-        </li>
-        <li class="list-stat">
-          <span class="list-stat__label">آخرین به‌روزرسانی</span>
-          <?php if ($L['fetchedAt']) : ?>
-            <span class="list-stat__value"><?= View::n(Format::tehranTime($L['fetchedAt'])) ?></span>
-            <span class="list-stat__note">به وقت تهران · CoinGecko<?= $L['page'] === 1 ? ' · هر ۵ دقیقه' : ' · هر ۳۰ دقیقه' ?></span>
-          <?php else : ?>
-            <?= View::na('pending') ?>
-          <?php endif; ?>
-        </li>
-      </ul>
+      <?php
+      /* 2.13.0: compact figures, all from entries the scheduler already
+         keeps. A box whose data is missing is not drawn at all. */
+      $boxes = [];
+      if ($T['cap']) {
+          $boxes[] = ['label' => 'ارزش کل بازار', 'value' => View::n(Format::usdCompact($T['cap']['usd'])),
+                      'delta' => $T['cap']['change'], 'note' => $T['cap']['change'] !== null ? '۲۴ ساعت' : null];
+      }
+      if ($T['volume'] !== null) {
+          $boxes[] = ['label' => 'حجم معاملات ۲۴ ساعته', 'value' => View::n(Format::usdCompact($T['volume']))];
+      }
+      if ($T['shares'] !== []) {
+          $names = ['BTC' => 'بیت‌کوین', 'ETH' => 'اتریوم', 'stable' => 'استیبل‌کوین‌ها'];
+          $lines = [];
+          foreach ($T['shares'] as $k => $v) {
+              $lines[] = '<span class="list-stat__row"><span>' . esc_html($names[$k]) . '</span>' . View::n(Format::pct($v, false, 1)) . '</span>';
+          }
+          $boxes[] = ['label' => 'سهم از کل بازار', 'rows' => $lines];
+      }
+      if ($T['fng']) {
+          $boxes[] = ['label' => 'شاخص ترس و طمع', 'value' => $fa((float) $T['fng']['value']) . ' <span class="list-stat__tag">' . esc_html($T['fng']['label']) . '</span>',
+                      'meter' => $T['fng']['value']];
+      }
+      foreach (['gainer' => 'بیشترین رشد ۲۴ ساعته', 'loser' => 'بیشترین افت ۲۴ ساعته'] as $k => $label) {
+          if ($T[$k]) {
+              $m = $T[$k];
+              $boxes[] = ['label' => $label, 'href' => $m['url'], 'delta' => $m['change'], 'deltaBig' => true,
+                          'coin' => ($m['logo'] ? '<img class="list-stat__logo" src="' . esc_url($m['logo']) . '" alt="" width="22" height="22" loading="lazy" decoding="async">' : '')
+                                    . '<span class="list-stat__coin">' . esc_html($m['name']) . '</span> <bdi class="list-stat__sym" dir="ltr">' . esc_html($m['symbol']) . '</bdi>'];
+          }
+      }
+      if ($market !== null) {
+          $boxes[] = ['label' => 'بازار در ۷ روز اخیر', 'delta' => $market, 'deltaBig' => true, 'note' => 'میانگین وزنی ۱۰۰ ارز بزرگ'];
+      }
+      if ($T['catBest'] && $T['catWorst']) {
+          $lines = [];
+          foreach (['catBest' => 'قوی‌ترین', 'catWorst' => 'ضعیف‌ترین'] as $k => $tag) {
+              $c = $T[$k];
+              $lines[] = '<span class="list-stat__row"><a href="' . esc_url($catUrl($c['key'])) . '">' . esc_html($tag . ': ' . $c['fa']) . '</a><span class="v2-delta--' . View::dir($c['change']) . '">' . $pct($c['change']) . '</span></span>';
+          }
+          $boxes[] = ['label' => 'دسته‌ها در ۲۴ ساعت', 'rows' => $lines];
+      }
+      ?>
+      <?php if ($boxes !== []) : ?>
+        <ul class="list-stats" aria-label="نمای کلی بازار">
+          <?php foreach ($boxes as $bx) : ?>
+            <li class="list-stat<?= isset($bx['href']) ? ' list-stat--link' : '' ?>">
+              <?php if (isset($bx['href'])) : ?><a class="list-stat__hit" href="<?= esc_url($bx['href']) ?>"><?php endif; ?>
+              <span class="list-stat__label"><?= esc_html($bx['label']) ?></span>
+              <?php if (isset($bx['coin'])) : ?><span class="list-stat__who"><?= $bx['coin'] ?></span><?php endif; ?>
+              <?php if (isset($bx['value'])) : ?><span class="list-stat__value"><?= $bx['value'] ?></span><?php endif; ?>
+              <?php if (isset($bx['rows'])) : ?><span class="list-stat__rows"><?= implode('', $bx['rows']) ?></span><?php endif; ?>
+              <?php if (isset($bx['delta']) && $bx['delta'] !== null) : ?>
+                <span class="<?= !empty($bx['deltaBig']) ? 'list-stat__value ' : 'list-stat__delta ' ?>v2-delta--<?= View::dir($bx['delta']) ?>"><?= $pct($bx['delta'], !empty($bx['deltaBig']) ? 1 : 2) ?><?= !empty($bx['note']) && empty($bx['deltaBig']) ? ' <span class="list-stat__note">' . esc_html($bx['note']) . '</span>' : '' ?></span>
+              <?php endif; ?>
+              <?php if (!empty($bx['deltaBig']) && !empty($bx['note'])) : ?><span class="list-stat__note"><?= esc_html($bx['note']) ?></span><?php endif; ?>
+              <?php if (isset($bx['meter'])) : ?><span class="list-stat__meter" aria-hidden="true"><i style="inset-inline-start: <?= (int) $bx['meter'] ?>%"></i></span><?php endif; ?>
+              <?php if (isset($bx['href'])) : ?></a><?php endif; ?>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
     </header>
 
     <?php /* 2.8.0: filter by asset category — plain links, so every view
@@ -117,7 +167,7 @@ get_header();
         <?php if ($cat !== null) : ?><input type="hidden" name="cat" value="<?= esc_attr($cat) ?>"><?php endif; ?>
         <button class="list-search__go" type="submit">جستجو</button>
       </div>
-      <p class="list-search__hint" id="list-q-hint">در همه <?= View::n(Format::num((float) ($L['perPage'] * $plugin->listing->pages()), 0)) ?> ارز بزرگ فهرست، با نام فارسی، انگلیسی یا نماد<?= $cat !== null ? ' — در همین دسته' : '' ?>.</p>
+      <p class="list-search__hint" id="list-q-hint">در همه <?= View::n(Format::num((float) ($T['total'] ?: $L['perPage'] * $plugin->listing->pages()), 0)) ?> ارز فهرست، با نام فارسی، انگلیسی یا نماد<?= $cat !== null ? ' — در همین دسته' : '' ?>.</p>
     </form>
     <div class="v2-card list-results" id="list-results" data-list-results hidden>
       <p class="list-results__status" role="status" aria-live="polite" data-list-status></p>
@@ -156,7 +206,7 @@ get_header();
       <?php if ($S && $L['rows'] === []) : ?>
         <p class="list-results__empty">هیچ ارزی با «<?= esc_html($S['query']) ?>» در نام یا نماد پیدا نشد<?= $L['category'] ? ' (در این دسته)' : '' ?>. املای دیگری را امتحان کنید، یا <a href="<?= esc_url($base) ?>">همه ارزها</a> را ببینید.</p>
       <?php elseif ($L['rows'] === []) : ?>
-        <?= View::na('pending', 'فهرست ارزها چند دقیقه پس از نصب از CoinGecko دریافت می‌شود.') ?>
+        <?= View::na('pending', 'فهرست ارزها چند دقیقه پس از نصب در دسترس می‌شود.') ?>
       <?php else : ?>
         <table class="list-table">
           <caption class="screen-reader-text">قیمت، تغییرات، ارزش بازار و حجم معاملات ارزهای دیجیتال رتبه <?= esc_html((string) $from) ?> تا <?= esc_html((string) $to) ?></caption>
@@ -259,7 +309,7 @@ get_header();
     <section class="v2-card list-about" aria-labelledby="list-about-title">
       <h2 class="list-card__title" id="list-about-title">ستون «در برابر بازار» چیست؟</h2>
       <p>تغییر ۷ روزه هر ارز منهای تغییر ۷ روزه کل بازار. «بازار» یعنی ۱۰۰ ارز بزرگ، هر کدام به اندازه ارزش بازارش. عدد مثبت یعنی این ارز در هفته گذشته از بازار جلو زده و عدد منفی یعنی عقب مانده؛ مستقل از اینکه کل بازار بالا رفته یا پایین آمده. این عدد از همان داده‌های جدول محاسبه می‌شود و پیش‌بینی یا توصیه خرید نیست.</p>
-      <p class="v2-muted">داده‌ها از CoinGecko دریافت و در سرور <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> ذخیره می‌شوند. ارزهایی که نامشان پیوند دارد، صفحه کامل تحلیل در <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> دارند.</p>
+      <p class="v2-muted">ارزهایی که نامشان پیوند دارد، صفحه کامل تحلیل در <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> دارند.</p>
     </section>
 
   </div>

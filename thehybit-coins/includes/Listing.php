@@ -336,6 +336,92 @@ final class Listing
         return $out;
     }
 
+    /**
+     * The list header's figures (2.13.0) — cache reads only, each null when
+     * the data behind it is missing, so the template draws no empty box.
+     *
+     * @return array{total:int, cap:?array, volume:?float, shares:array, fng:?array,
+     *               gainer:?array, loser:?array, market7d:?float, catBest:?array, catWorst:?array}
+     */
+    public function stats(): array
+    {
+        $peek = fn(string $ds): ?array => is_array($d = $this->cache->peek($ds, $this->cache->keyFor($ds))['data'] ?? null) ? $d : null;
+        $g = $peek('global') ?? [];
+        $num = static fn($v): ?float => is_numeric($v) && (float) $v > 0 ? (float) $v : null;
+        $cap = $num($g['totalMarketCap'] ?? null);
+
+        $shares = [];
+        foreach (['BTC' => 'btcDominance', 'ETH' => 'ethDominance'] as $sym => $k) {
+            if (($v = $num($g[$k] ?? null)) !== null) { $shares[$sym] = $v; }
+        }
+        $stable = $num(($peek('stablecoins') ?? [])['totalUsd'] ?? null);
+        if ($stable !== null && $cap !== null && $stable < $cap) {
+            $shares['stable'] = $stable / $cap * 100;
+        }
+
+        $s = $peek('sentiment');
+        $fng = $s !== null && isset($s['value']) && is_numeric($s['value'])
+            ? ['value' => (int) $s['value'], 'label' => (string) ($s['labelFa'] ?? ''), 'change' => isset($s['change']) && is_numeric($s['change']) ? (int) $s['change'] : null]
+            : null;
+
+        /* Movers and categories: coins with a page here, so every name links
+           somewhere. Pegged assets (stablecoins, gold tokens) are left out of
+           both — a peg's ±0.1% says nothing about the market's mood. */
+        $rows = $this->allRows();
+        $total = count(array_filter($rows, static fn($r) => $r['position'] !== null));
+        $pegged = static fn($r) => in_array($r['category']['key'] ?? null, ['stablecoin', 'gold'], true);
+        $mine = array_values(array_filter($rows, static fn($r) => $r['url'] !== null && isset($r['change24h']) && is_numeric($r['change24h']) && !$pegged($r)));
+        usort($mine, static fn($a, $b) => $b['change24h'] <=> $a['change24h']);
+        $mover = static fn(?array $r) => $r === null ? null : [
+            'name' => (string) ($r['nameFa'] ?? $r['name']), 'symbol' => strtoupper((string) $r['symbol']),
+            'logo' => $r['logo'] ?? null, 'url' => (string) $r['url'], 'change' => (float) $r['change24h'],
+        ];
+        $byCat = [];
+        foreach ($mine as $r) {
+            $k = $r['category']['key'] ?? null;
+            if ($k !== null) {
+                $byCat[$k][] = (float) $r['change24h'];
+            }
+        }
+        $cats = [];
+        foreach ($byCat as $k => $v) {
+            if (count($v) >= 3) {
+                $cats[$k] = ['key' => $k, 'fa' => (string) (Categories::all()[$k]['fa'] ?? $k), 'change' => array_sum($v) / count($v), 'n' => count($v)];
+            }
+        }
+        uasort($cats, static fn($a, $b) => $b['change'] <=> $a['change']);
+
+        return [
+            'total'    => $total,
+            'cap'      => $cap !== null ? ['usd' => $cap, 'change' => isset($g['marketCapChange24h']) && is_numeric($g['marketCapChange24h']) ? (float) $g['marketCapChange24h'] : null] : null,
+            'volume'   => $num($g['totalVolume24h'] ?? null),
+            'shares'   => $shares,
+            'fng'      => $fng,
+            'gainer'   => count($mine) >= 2 ? $mover($mine[0]) : null,
+            'loser'    => count($mine) >= 2 ? $mover($mine[count($mine) - 1]) : null,
+            'market7d' => $this->market7d(),
+            'catBest'  => count($cats) >= 2 ? reset($cats) : null,
+            'catWorst' => count($cats) >= 2 ? end($cats) : null,
+        ];
+    }
+
+    /**
+     * Logo URL by CoinGecko id, for every coin the list cache or our pages
+     * hold (2.13.0, the converter's dropdown). Cache reads only.
+     *
+     * @return array<string, string>
+     */
+    public function logos(): array
+    {
+        $out = [];
+        foreach ($this->allRows() as $r) {
+            if (!empty($r['logo'])) {
+                $out[$r['id']] = (string) $r['logo'];
+            }
+        }
+        return $out;
+    }
+
     /** The ?cat= filter of the list, when it names a known category (2.8.0). */
     public static function currentCategory(): ?string
     {

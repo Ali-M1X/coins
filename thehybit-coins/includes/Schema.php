@@ -139,15 +139,17 @@ final class Schema
         }
         $providers[] = 'CoinGecko';
 
+        /* 2.13.0: the v2 design names no data provider anywhere public,
+           structured data included. Classic keeps its wording, byte for byte. */
+        $description = Design::isV2()
+            ? sprintf('قیمت، ارزش بازار، حجم معاملات و شاخص‌های تحلیلی %s.', $coin->name)
+            : sprintf('قیمت، ارزش بازار، حجم معاملات و شاخص‌های تحلیلی %s، گردآوری‌شده از %s.', $coin->name, implode('، ', array_unique($providers)));
+
         return [
             '@type'       => 'Dataset',
             '@id'         => $url . '#dataset',
             'name'        => sprintf('داده‌های بازار و تحلیل %s', $coin->name),
-            'description' => sprintf(
-                'قیمت، ارزش بازار، حجم معاملات و شاخص‌های تحلیلی %s، گردآوری‌شده از %s.',
-                $coin->name,
-                implode('، ', array_unique($providers))
-            ),
+            'description' => $description,
             'license'     => home_url('/terms/'),
             'creator'     => ['@type' => 'Organization', 'name' => Seo::BRAND_SUFFIX, 'url' => home_url('/')],
             'dateModified'=> $model['meta']['generatedAt'] ?? gmdate('c'),

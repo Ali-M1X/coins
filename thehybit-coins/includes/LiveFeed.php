@@ -91,8 +91,9 @@ final class LiveFeed
         $feeds = [];
         foreach (self::feeds($config) as $name => $f) {
             if (isset($used[$name])) {
+                /* 2.13.0: no provider label in the page — the browser needs
+                   only where to connect. */
                 $feeds[$name] = [
-                    'label' => (string) ($f['label'] ?? $name),
                     'url'   => (string) $f['url'],
                     'stale' => (int) ($f['stale'] ?? 30) * 1000,
                 ];

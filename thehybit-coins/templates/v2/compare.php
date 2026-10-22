@@ -102,7 +102,7 @@ get_header();
             </tbody>
           <?php endforeach; ?>
         </table>
-        <p class="v2-muted cmp__foot">داده‌ها همان داده‌های ذخیره‌شده صفحه هر ارز است (CoinGecko، DefiLlama و منابع دیگر هر صفحه) و هنگام باز شدن این صفحه درخواستی به آن‌ها فرستاده نمی‌شود. این مقایسه توصیه خرید یا فروش نیست.</p>
+        <p class="v2-muted cmp__foot">داده‌ها همان داده‌های صفحه هر ارز است. این مقایسه توصیه خرید یا فروش نیست.</p>
         <p class="cmp__share"><span>نشانی این مقایسه:</span> <a href="<?= esc_url(Compare::url($slugs)) ?>"><bdi dir="ltr"><?= esc_html(rawurldecode(Compare::url($slugs))) ?></bdi></a></p>
       </section>
     <?php elseif (count($slugs) === 1) : ?>

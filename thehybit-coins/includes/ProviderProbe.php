@@ -442,6 +442,43 @@ final class ProviderProbe
                 'needsKey' => false,
                 'expects'  => ['data.0.value', 'data.0.value_classification'],
             ],
+
+            /* ---------------- 2.13.0: the converter's currencies ----------------
+               NOT VERIFIED LIVE when written: the build sandbox could not reach
+               any of these hosts. Run the probe and read the sample bodies. */
+            [
+                'provider' => 'nobitex',
+                'label'    => 'USDT/RLS market — toman (in use — converter, irt)',
+                'url'      => 'https://api.nobitex.ir/market/stats',
+                'query'    => ['srcCurrency' => 'usdt', 'dstCurrency' => 'rls'],
+                'needsKey' => false,
+                'expects'  => ['status', 'stats.usdt-rls.latest', 'stats.usdt-rls.bestSell', 'stats.usdt-rls.bestBuy'],
+                'note'     => 'prices are strings in RIAL; the collector divides by 10 and by Tether\'s cached USD price',
+            ],
+            [
+                'provider' => 'persiantoolbox',
+                'label'    => 'USD rate — toman fallback (in use — fx)',
+                'url'      => 'https://api.persiantoolbox.com/v1/market/currency',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['data.0.symbol', 'data.0.price'],
+            ],
+            [
+                'provider' => 'frankfurter',
+                'label'    => 'USD → EUR, GBP, ECB reference (in use — converter, fiat)',
+                'url'      => 'https://api.frankfurter.dev/v1/latest',
+                'query'    => ['base' => 'USD', 'symbols' => 'EUR,GBP'],
+                'needsKey' => false,
+                'expects'  => ['base', 'date', 'rates.EUR', 'rates.GBP'],
+            ],
+            [
+                'provider' => 'erapi',
+                'label'    => 'USD → EUR, GBP fallback (in use — converter, fiatalt)',
+                'url'      => 'https://open.er-api.com/v6/latest/USD',
+                'query'    => [],
+                'needsKey' => false,
+                'expects'  => ['result', 'base_code', 'time_last_update_unix', 'rates.EUR', 'rates.GBP'],
+            ],
         ];
     }
 

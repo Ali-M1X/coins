@@ -4,8 +4,8 @@
  *
  * The same converter block as every coin page, starting from Bitcoin to USD
  * (or the visitor's ?from=&to=&amount=), followed by a table of what one unit
- * of every coin we price is worth — all from the cache, with the time of each
- * rate. One indexable page; any parameterised state is noindex with its
+ * of every coin we price is worth — all from the cache. 2.13.0: no
+ * explanatory text. One indexable page; any parameterised state is noindex with its
  * canonical here (includes/Tools.php).
  *
  * Child themes can override this file at thehybit/v2/convert.php.
@@ -52,8 +52,10 @@ get_header();
     </nav>
 
     <header class="list-head">
-      <h1 class="list-head__title">مبدل قیمت ارز دیجیتال به دلار و تومان</h1>
-      <p class="list-head__sub">بیت‌کوین، اتریوم، تتر و <?= View::n((string) max(0, count($conv['coins'] ?? []) - 3)) ?> ارز دیگر را به دلار، تومان یا به یکدیگر تبدیل کنید.</p>
+      <h1 class="list-head__title">مبدل قیمت ارز دیجیتال به دلار<?= !empty($conv['fiat']['toman']) ? ' و تومان' : '' ?></h1>
+      <?php if ($conv !== null) : ?>
+        <p class="list-head__sub"><?= View::n((string) count($conv['coins'])) ?> ارز دیجیتال و <?= View::n((string) count($conv['fiat'])) ?> ارز رایج</p>
+      <?php endif; ?>
     </header>
 
     <?php if ($conv === null) : ?>
@@ -80,14 +82,6 @@ get_header();
         </table>
       </section>
 
-      <section class="v2-card list-about" aria-labelledby="conv-how-title">
-        <h2 class="list-card__title" id="conv-how-title">این مبدل چطور حساب می‌کند؟</h2>
-        <p>قیمت هر ارز همان قیمتی است که <?= esc_html(\TheHybit\Coins\V2\Model::brand()) ?> هر دقیقه از CoinGecko دریافت و ذخیره می‌کند؛ برای ارزهایی که در صرافی‌ها قیمت زنده دارند، تا وقتی صفحه باز است همان قیمت زنده به کار می‌رود. تبدیل دو ارز به یکدیگر از قیمت دلاری هر دو حساب می‌شود.</p>
-        <?php if ($conv['toman']) : ?>
-          <p>مبلغ تومانی حاصل ضرب قیمت دلاری در نرخ دلار <?= esc_html($conv['toman']['source']) ?> است (آخرین به‌روزرسانی <?= esc_html((string) $conv['tomanUpdated']) ?> به وقت تهران)؛ قیمت خرید و فروش در صرافی‌های ایرانی ممکن است با آن فرق داشته باشد.</p>
-        <?php endif; ?>
-        <p class="v2-muted">کارمزد معامله، اختلاف قیمت خرید و فروش و کارمزد انتقال در این محاسبه نیست. این ابزار برای آگاهی است و توصیه خرید یا فروش نیست.</p>
-      </section>
     <?php endif; ?>
 
   </div>

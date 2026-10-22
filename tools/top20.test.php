@@ -580,7 +580,9 @@ use TheHybit\Coins\V2\Converter;
 (new \TheHybit\Coins\Budget($plugin->config))->reset('persiantoolbox');
 $GLOBALS['thb_probe_background'] = true;
 $plugin->pipeline->warmTicker($plugin->coins->all());
-$plugin->pipeline->warm($plugin->coins->find(array_search('ethereum', $ids, true)), 'fx');
+foreach (['fx', 'irt', 'fiat', 'fiatalt'] as $ds) {   // 2.13.0: toman, EUR and GBP
+    $plugin->pipeline->warm($plugin->coins->find(array_search('ethereum', $ids, true)), $ds);
+}
 $GLOBALS['thb_probe_background'] = false;
 $parseCases = [['1', 1.0], ['۲٫۵', 2.5], ['٣', 3.0], ['2,500', 2500.0], ['۱۲٬۵۰۰٫۷۵', 12500.75], ['.5', 0.5], ['abc', null], ['-1', null], ['', null], ['1.2.3', null]];
 ok(array_filter($parseCases, static fn($c) => Converter::parse($c[0]) !== $c[1]) === [], 'input: Persian, Arabic and Latin digits, «٫» or «.», thousands separators; anything else is refused');
@@ -592,16 +594,59 @@ ok(abs(Converter::convert($conv, 2, 'ethereum', 'usd') - 2 * $ethP) < 1e-9 && ab
    'arithmetic: coin → USD, coin → coin (through USD), USD → toman, all from the cached rates');
 ok(Converter::fa(3245.6, 'usd') === '۳٬۲۴۵٫۶۰' && Converter::fa(269000000.4, 'toman') === '۲۶۹٬۰۰۰٬۰۰۰' && Converter::fa(0.000123, 'coin') === '۰٫۰۰۰۱۲۳',
    'output in Persian digits with «٬» and «٫»: cents for dollars, whole tomans, enough decimals for small coin amounts');
-$texts = [];
 $missing = [];
+$have = 0;
 foreach ($ids as $id => $slug) {
     $c = $plugin->converter()->forCoin($plugin->coins->find($id));
     if ($c === null) { $missing[] = $slug; continue; }
-    $texts[$slug] = $c['text'];
+    $have++;
 }
-ok($missing === [], 'every coin page with a price has the converter (' . count($texts) . ')');
-ok(count(array_unique($texts)) === count($texts) && min(array_map('mb_strlen', $texts)) > 200,
-   'and its explanatory text is its own on every page (' . count(array_unique($texts)) . ' distinct, written from the coin\'s name, category, price and which rates are live)');
+ok($missing === [], 'every coin page with a price has the converter (' . $have . ')');
+
+/* 2.13.0: the currency list, and which source each rate comes from. */
+$tetherP = Converter::usdPer($conv, 'tether');
+ok(array_keys($conv['fiat']) === ['usd', 'toman', 'eur', 'gbp'], 'fiat units offered: toman, USD, EUR and GBP, each with a real rate (' . implode(', ', array_keys($conv['fiat'])) . ')');
+ok(abs($conv['fiat']['toman'] - 105000 / $tetherP) < 1e-6,
+   'toman per dollar = the USDT/toman market (105,000) ÷ Tether\'s own cached USD price — no 1 USDT = 1 USD assumption');
+ok($conv['fiat']['eur'] === 0.9212 && $conv['fiat']['gbp'] === 0.7905 && abs(Converter::convert($conv, 1, 'usd', 'eur') - 0.9212) < 1e-12
+   && abs(Converter::convert($conv, 1, 'eur', 'gbp') - 0.7905 / 0.9212) < 1e-12, 'EUR and GBP from the ECB reference rates; EUR → GBP through USD');
+ok(Converter::fa(1234.5, 'eur') === '۱٬۲۳۴٫۵۰' && Converter::sentence($conv, 2, 'usd', 'gbp') === '۲ دلار = ۱٫۵۸ پوند', 'euros and pounds in cents, named «یورو» and «پوند»');
+$GLOBALS['thb_current_post'] = array_search('ethereum', $ids, true);
+$ethConv = v2_render(array_search('ethereum', $ids, true));
+unset($GLOBALS['thb_current_post']);
+preg_match('#<select class="v2-conv__select" id="conv-to".*?</select>#su', $ethConv, $selTo);
+preg_match_all('#<optgroup label="([^"]+)"#u', $selTo[0] ?? '', $groups);
+preg_match('#<optgroup label="ارز رایج">(.*?)</optgroup>#su', $selTo[0] ?? '', $fiatGroup);
+preg_match_all('#<option value="([a-z]+)"#', $fiatGroup[1] ?? '', $fiatOpts);
+ok($groups[1] === ['ارز دیجیتال', 'ارز رایج'] && $fiatOpts[1] === ['toman', 'usd', 'eur', 'gbp']
+   && substr_count($selTo[0] ?? '', 'data-logo="https://') >= 2,
+   'the From/To lists: «ارز دیجیتال» (with logos) and «ارز رایج» (toman, USD, EUR, GBP), as a native select the script enhances');
+ok(str_contains($ethConv, 'data-v2-pick-btn') && str_contains($ethConv, 'aria-haspopup="listbox"'), 'each list has its (hidden until script) searchable trigger');
+$noExplain = ['v2-conv__meta', 'v2-conv__text', 'v2-conv__hint', 'v2-conv__nofx', 'قیمت‌ها از آخرین به‌روزرسانی', 'در دسترس نیست', 'حاصل ضرب', 'کارمزد'];
+preg_match('#<section class="v2-section v2-conv".*?</section>#su', $ethConv, $convSec);
+ok(array_filter($noExplain, static fn($t) => str_contains($convSec[0] ?? 'x', $t)) === [], 'no explanatory text in the converter: controls, result and the data table only');
+
+/* A rate missing at runtime: that option is simply not there. */
+$tKey = static fn(string $ds) => 'thb_c_' . md5($ds . '|' . $plugin->cache->keyFor($ds));
+$held = [];
+foreach (['fiat', 'fiatalt', 'irt', 'fx'] as $ds) { $held[$ds] = get_transient($tKey($ds)); }
+delete_transient($tKey('fiat'));
+$c1 = $plugin->converter()->forCoin($plugin->coins->find(array_search('ethereum', $ids, true)));
+ok($c1['fiat']['eur'] === 0.9208, 'with no ECB entry, EUR and GBP come from the fallback source');
+delete_transient($tKey('fiatalt'));
+delete_transient($tKey('irt'));
+$c2 = $plugin->converter()->forCoin($plugin->coins->find(array_search('ethereum', $ids, true)));
+ok(array_keys($c2['fiat']) === ['usd', 'toman'] && abs($c2['fiat']['toman'] - 83000) < 1e-9 && Converter::usdPer($c2, 'eur') === null,
+   'with neither EUR/GBP source, those options are gone; with no toman market, toman falls back to the cached USD rate');
+$GLOBALS['thb_current_post'] = array_search('ethereum', $ids, true);
+delete_transient($tKey('fx'));
+$ethNoRates = v2_render(array_search('ethereum', $ids, true));
+unset($GLOBALS['thb_current_post']);
+preg_match('#<section class="v2-section v2-conv".*?</section>#su', $ethNoRates, $convSec2);
+ok(!preg_match('#<option value="(toman|eur|gbp)"#', $convSec2[0] ?? '') && str_contains($convSec2[0] ?? '', '<option value="usd"')
+   && !str_contains($convSec2[0] ?? '', 'تومان') && !str_contains($convSec2[0] ?? '', 'در دسترس نیست'),
+   'with no rates at all: only USD and the coins are offered — no toman/EUR/GBP option, no note, no figure');
+foreach ($held as $ds => $v) { if ($v !== false) { set_transient($tKey($ds), $v, 3600); } }
 ok(str_contains($pages['ethereum'], 'id="convert"') && str_contains($pages['ethereum'], 'href="#convert" data-v2-tab="convert">مبدل</a>')
    && str_contains($pages['ethereum'], '<label for="conv-amount">مقدار</label>') && str_contains($pages['ethereum'], 'aria-live="polite" data-v2-conv-out'),
    'coin page: a «مبدل» tab and section; labelled fields; the result is announced');
@@ -609,13 +654,6 @@ $GLOBALS['thb_current_post'] = array_search('ethereum', $ids, true);
 $ethHtml = v2_render(array_search('ethereum', $ids, true));
 unset($GLOBALS['thb_current_post']);
 ok(str_contains($ethHtml, '۱ اتریوم = ') && str_contains($ethHtml, ' دلار</output>'), 'the first paint already shows «۱ اتریوم = … دلار» (works without script)');
-$fxKey = 'thb_c_' . md5('fx|' . $plugin->cache->keyFor('fx'));
-$heldFx = get_transient($fxKey);
-delete_transient($fxKey);
-$noFx = $plugin->converter()->forCoin($plugin->coins->find(array_search('bitcoin', $ids, true)));
-ok($noFx['toman'] === null && Converter::usdPer($noFx, 'toman') === null && !str_contains((string) $noFx['text'], 'تومان'),
-   'with no cached toman rate there is no toman option and no toman figure anywhere — never an assumed rate');
-set_transient($fxKey, $heldFx, 3600);
 Probe::reset(keepCache: true);
 $_GET = [];
 $tool = v2_render_tool('convert');
@@ -712,6 +750,87 @@ if (getenv('THB_STATUS_MD')) {
 if (getenv('THB_TOP20_DIR')) {
     foreach (['solana', 'tether', 'dogecoin', 'xrp', 'tron', 'ethereum', 'aave', 'zcash', 'near', 'dai', 'worldcoin', 'stacks', 'pax-gold', 'usdc', 'bittensor'] as $slug) {
         file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . "/v2-{$slug}.html", $pages[$slug]);
+    }
+}
+
+section('list header and public wording (2.13.0)');
+(new \TheHybit\Coins\Budget($plugin->config))->reset('coingecko');
+$GLOBALS['thb_probe_background'] = true;
+foreach (['global', 'sentiment', 'stablecoins'] as $ds) {
+    $plugin->pipeline->warm($plugin->coins->find(array_search('ethereum', $ids, true)), $ds);
+}
+$GLOBALS['thb_probe_background'] = false;
+$_GET = [];
+Probe::reset(keepCache: true);
+$lh = v2_render_list(1);
+ok(Probe::count() === 0, 'the list header reads the cache only — no provider request');
+$T = $plugin->listing->stats();
+$positioned = count(array_filter($plugin->listing->allRows(), static fn($r) => $r['position'] !== null));
+$pos1 = array_column($plugin->listing->view(1)['rows'], 'position');
+$faN = static fn(int $n) => \TheHybit\Coins\V2\View::n(\TheHybit\Coins\Format::num((float) $n, 0));
+ok($T['total'] === $positioned && $T['total'] > 0, 'the total is the number of coins the list cache actually holds (' . $T['total'] . '), not pages × 100');
+ok(str_contains($lh, '<p class="list-head__sub" data-list-sub>' . $faN($T['total']) . ' ارز به ترتیب ارزش بازار، به دلار؛ نمایش رتبه ' . $faN(min($pos1)) . ' تا ' . $faN(max($pos1)) . '</p>')
+   && !str_contains($lh, 'ارزهای رتبه ۱ تا ۱۰۰'),
+   'subtitle: the real total and the range shown on this page (' . min($pos1) . '–' . max($pos1) . ')');
+$lh2 = v2_render_list(2);
+$pos2 = array_column($plugin->listing->view(2)['rows'], 'position');
+ok(str_contains($lh2, 'نمایش رتبه ' . $faN(min($pos2)) . ' تا ' . $faN(max($pos2)) . '</p>'), 'page 2 shows its own range (' . min($pos2) . '–' . max($pos2) . ')');
+ok(!str_contains($lh, 'آخرین به‌روزرسانی') && !str_contains($lh, 'به وقت تهران'), 'the «آخرین به‌روزرسانی» box is gone');
+preg_match_all('#<span class="list-stat__label">([^<]+)</span>#u', $lh, $boxLabels);
+$wantBoxes = ['ارزش کل بازار', 'حجم معاملات ۲۴ ساعته', 'سهم از کل بازار', 'شاخص ترس و طمع', 'بیشترین رشد ۲۴ ساعته', 'بیشترین افت ۲۴ ساعته', 'بازار در ۷ روز اخیر', 'دسته‌ها در ۲۴ ساعت'];
+ok($boxLabels[1] === $wantBoxes, 'stat boxes from cached data: ' . implode(' · ', $boxLabels[1]));
+ok(str_contains($lh, 'href="' . $T['gainer']['url'] . '"') && str_contains($lh, '<span>استیبل‌کوین‌ها</span>'), 'the top gainer links to its page; the stablecoin share is shown');
+$sKey = static fn(string $ds) => 'thb_c_' . md5($ds . '|' . $plugin->cache->keyFor($ds));
+$heldS = [];
+foreach (['sentiment', 'stablecoins', 'global'] as $ds) { $heldS[$ds] = get_transient($sKey($ds)); delete_transient($sKey($ds)); }
+$lhNo = v2_render_list(1);
+preg_match_all('#<span class="list-stat__label">([^<]+)</span>#u', $lhNo, $boxNo);
+ok($boxNo[1] === ['بیشترین رشد ۲۴ ساعته', 'بیشترین افت ۲۴ ساعته', 'بازار در ۷ روز اخیر', 'دسته‌ها در ۲۴ ساعت'] && !str_contains($lhNo, 'v2-na'),
+   'with no market-wide entries, those boxes are not drawn — no empty or "unavailable" box');
+foreach ($heldS as $ds => $v) { if ($v !== false) { set_transient($sKey($ds), $v, 3600); } }
+$lh = v2_render_list(1);
+
+/* No data provider's name on any public page: visible text, title/alt/aria
+   attributes and structured data. Ignored: where the browser must connect
+   (script URLs, src/href), and exchange and protocol names that are content
+   (Binance and Kraken as exchanges, Lido as a protocol). */
+$providerNames = '#coingecko|defi ?llama|nobitex|نوبیتکس|persiantoolbox|persian ?toolbox|etherscan|beaconcha|blockchair|growthepie|alternative\.me|coin ?metrics|wikimedia|wikipedia|ویکی‌?پدیا|dexscreener|l2beat|frankfurter|er-api|exchangerate|هر [۰-۹]+ دقیقه#iu';
+$publicText = static function (string $html): string {
+    $ld = '';
+    preg_match_all('#<script type="application/ld\+json">(.*?)</script>#s', $html, $m);
+    foreach ($m[1] as $j) { $ld .= ' ' . $j; }
+    $h = preg_replace('#<script\b.*?</script>#s', ' ', $html);
+    $h = preg_replace('#\s(src|href|srcset|data-logo|data-index|action)="[^"]*"#', ' ', $h);
+    return $h . $ld;
+};
+$_GET = ['thb_design' => 'v2'];
+$GLOBALS['thb_current_post'] = array_search('ethereum', $ids, true);
+ob_start();
+(new \TheHybit\Coins\Schema($plugin->coins, $plugin->pipeline))->output();
+$ldV2 = (string) ob_get_clean();
+$_GET = [];
+ob_start();
+(new \TheHybit\Coins\Schema($plugin->coins, $plugin->pipeline))->output();
+$ldClassic = (string) ob_get_clean();
+unset($GLOBALS['thb_current_post']);
+$publicPages = $pages + ['list' => $lh, 'list-2' => $lh2, 'convert' => v2_render_tool('convert'), 'ld+json (v2)' => '<script type="application/ld+json">' . strip_tags($ldV2) . '</script>'];
+$_GET = ['c' => 'bitcoin,ethereum,solana'];
+$publicPages['compare'] = v2_render_tool('compare');
+$_GET = [];
+$named = [];
+foreach ($publicPages as $k => $html) {
+    if (preg_match_all($providerNames, $publicText($html), $hit)) { $named[$k] = array_unique($hit[0]); }
+}
+ok($named === [], 'no data-provider name and no "every N minutes" on ' . count($publicPages) . ' public pages (every coin, list, converter, comparison, JSON-LD)'
+   . ($named ? ': ' . json_encode(array_slice($named, 0, 4, true), JSON_UNESCAPED_UNICODE) : ''));
+ok(str_contains($ldClassic, 'CoinGecko'), 'the classic page keeps its structured data exactly as before');
+if (getenv('THB_TOP20_DIR')) {
+    file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . '/v2-list.html', $lh);
+    /* The coin pages again, now that the list cache (logos) and every rate are warm. */
+    foreach (['ethereum', 'tron'] as $slug) {
+        $GLOBALS['thb_current_post'] = array_search($slug, $ids, true);
+        file_put_contents(rtrim((string) getenv('THB_TOP20_DIR'), '/') . "/v2-{$slug}.html", v2_render(array_search($slug, $ids, true)));
+        unset($GLOBALS['thb_current_post']);
     }
 }
 
