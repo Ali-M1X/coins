@@ -1246,6 +1246,69 @@ ok($config['providers']['blockchair']['budget']['per_hour'] <= 15 && $config['tt
    && str_contains((string) file_get_contents($base . 'includes/Collectors/Collector.php'), 'blockCooldown('),
    'Blockchair asked less often (network and whales hourly, ≤ 15 an hour), and the collector uses the doubling pause');
 
+
+section('2.15.0 — emergency list slot, CoinGecko plan caps');
+Clock::reset();
+$b15 = new Budget($config);
+$b15->reset('coingecko');
+set_transient('thb_budget_coingecko_per_day', ['since' => Clock::$now, 'count' => 4000], 2 * 86400);
+Budget::$tier = 0;
+ok(str_contains((string) $b15->refuse('coingecko'), 'per_day budget spent (4000/4000)'), 'daily counter at 4000/4000: even the list (tier 0) is refused normally');
+Budget::$emergency = true;
+ok($b15->refuse('coingecko') === null, 'the emergency slot lets an empty list through past our own daily cap');
+$sent = 0;
+for ($i = 0; $i < 10; $i++) {
+    if ($b15->refuse('coingecko') === null) { $b15->record('coingecko'); $sent++; }
+    Clock::advance(61);
+}
+ok($sent === 6 && $b15->emergencyUsed('coingecko') === 6 && str_contains((string) $b15->refuse('coingecko'), 'emergency slot spent (6/6'),
+   'hard limit: 6 emergency requests a day, then refused (' . $sent . ' sent)');
+ok(count($b15->emergencyLog('coingecko')) === 6, 'every use is logged for the diagnostics screen');
+$b15->startCooldown('coingecko', 60);
+ok(str_contains((string) $b15->refuse('coingecko'), 'cooling down'), 'it never bypasses a provider cooldown');
+Clock::advance(86400);
+$b15->reset('coingecko');
+set_transient('thb_budget_coingecko_per_day', ['since' => Clock::$now, 'count' => 4000], 2 * 86400);
+foreach (range(1, 4) as $_) { $b15->record('coingecko'); }
+ok(str_contains((string) $b15->refuse('coingecko'), 'per_minute'), 'nor the per-minute limit (a 429 is never earned on purpose)');
+Budget::$emergency = false;
+Budget::$tier = null;
+$b15->reset('coingecko');
+
+/* Caps from Settings. */
+update_option(Settings::OPTION, []);
+$cfgK = Settings::apply(require $base . 'config/providers.php');
+ok(Settings::coingeckoPlan() === 'keyless' && $cfgK['providers']['coingecko']['budget']['per_day'] === 4000
+   && !isset($cfgK['providers']['coingecko']['budget']['per_month']) && $cfgK['providers']['coingecko']['budget']['per_hour'] === 160
+   && !isset($cfgK['providers']['coingecko']['headers']['x-cg-demo-api-key']),
+   'no key: keyless public API — our own 4,000/day governor, no monthly quota (the plan publishes none)');
+update_option(Settings::OPTION, ['coingecko_key' => 'CG-abcdefghijklmnop']);
+$cfgD = Settings::apply(require $base . 'config/providers.php');
+ok(Settings::coingeckoPlan() === 'demo' && $cfgD['providers']['coingecko']['budget']['per_month'] === 10000
+   && $cfgD['providers']['coingecko']['budget']['per_day'] === 333 && $cfgD['providers']['coingecko']['headers']['x-cg-demo-api-key'] === 'CG-abcdefghijklmnop',
+   'Demo key: sent in its header; the plan\'s 10,000 a month, 333 a day by default');
+ok(str_contains(Settings::mask('CG-abcdefghijklmnop'), '…') || Settings::mask('CG-abcdefghijklmnop') !== 'CG-abcdefghijklmnop', 'and masked on the settings screen like every key');
+update_option(Settings::OPTION, ['coingecko_daily_cap' => 1200, 'coingecko_monthly_cap' => 30000]);
+$cfgC = Settings::apply(require $base . 'config/providers.php');
+ok($cfgC['providers']['coingecko']['budget']['per_day'] === 1200 && $cfgC['providers']['coingecko']['budget']['per_month'] === 30000
+   && $cfgC['providers']['coingecko']['budget']['per_hour'] === 75, 'custom caps from Settings: 1,200 a day, 30,000 a month; the hourly cap follows (75)');
+update_option(Settings::OPTION, []);
+
+/* Monthly projection warning. */
+$bD = new Budget($cfgD);
+$bD->reset('coingecko');
+Clock::reset();
+for ($i = 0; $i < 50; $i++) { $bD->record('coingecko'); }
+$prD = $bD->projection('coingecko');
+$diagD = new \TheHybit\Coins\Diagnostics(new CoinRepository(), pipeline($cfgD), $cfgD);
+ob_start();
+(fn() => $this->budgetTable())->call($diagD);
+$htmlD = (string) ob_get_clean();
+ok($prD['perMonth'] === 36000 && $prD['monthShare'] > 1 && str_contains($htmlD, 'above the plan limit of 10000') && str_contains($htmlD, 'data-thb-budget-warning'),
+   'monthly projection (' . $prD['perMonth'] . ') above the Demo plan\'s 10,000: admin-only warning');
+ok(str_contains($htmlD, 'اضطراری لیست: 0 / 6 امروز'), 'the budget table shows the emergency slot (0 / 6 today, not used)');
+$bD->reset('coingecko');
+
 update_option(Settings::OPTION, []);
 
 

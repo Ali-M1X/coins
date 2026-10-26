@@ -540,6 +540,16 @@ return [
                ticker, so the rest of the scheduler's CoinGecko work can never
                crowd it out: everything else gets three a minute. */
             'reserve_per_minute' => 1,
+            /* 2.15.0: requests a /coins/ list chunk with NOTHING cached may make
+               past our own hourly and daily caps (never past a cooldown, the
+               minute, or a monthly plan quota). Two fill the 500 coins; six a
+               day allow three attempts. See Budget::$emergency. */
+            'emergency_per_day' => 6,
+            /* 2.15.0: an optional Demo key goes in this header (Settings). */
+            'auth'      => ['in' => 'header', 'name' => 'x-cg-demo-api-key'],
+            /* 2.15.0: 250 coins with 7-day sparklines is a ~1 MB response; the
+               8-second default is too short for it on a shared host. */
+            'timeouts'  => ['listing' => 20],
             /* After a 429, stop calling this provider entirely for a while.
                Hammering a rate-limited endpoint cannot succeed and only extends
                the limit; the cache serves its last good data meanwhile. A

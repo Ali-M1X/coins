@@ -466,7 +466,7 @@ final class CoinGecko extends Collector
             'page'                    => (string) max(1, $page),
             'sparkline'               => 'true',
             'price_change_percentage' => '24h,7d',
-        ]);
+        ], 'listing');   // 2.15.0: its own, longer timeout
         if (!is_array($rows) || !array_is_list($rows)) {
             throw new \RuntimeException('coins/markets page ' . $page . ': not a list');
         }

@@ -53,6 +53,7 @@ final class Budget
         'per_minute' => MINUTE_IN_SECONDS,
         'per_hour'   => HOUR_IN_SECONDS,
         'per_day'    => DAY_IN_SECONDS,
+        'per_month'  => 30 * DAY_IN_SECONDS,   // 2.15.0: a provider plan's monthly quota
     ];
 
     public function __construct(private array $config) {}
@@ -64,6 +65,56 @@ final class Budget
      * See config/providers.php `budget_tiers`.
      */
     public static ?int $tier = null;
+
+    /**
+     * 2.15.0 — THE EMERGENCY SLOT. Set only around a refresh of a /coins/ list
+     * chunk that has NOTHING cached (or the admin's «تازه‌سازی فوری لیست»).
+     * Such a request may go past our own hourly and daily caps — an empty list
+     * must never wait for a day counter to roll over — but never past a
+     * cooldown, the per-minute limit, a monthly plan quota, or its own hard
+     * limit (`emergency_per_day`, 6 by default). Every use is logged for the
+     * diagnostics screen.
+     */
+    public static bool $emergency = false;
+
+    /** Emergency requests allowed per day, and how many are left. */
+    public function emergencyLimit(string $provider): int
+    {
+        return max(0, (int) ($this->settings($provider)['emergency_per_day'] ?? 6));
+    }
+
+    public function emergencyUsed(string $provider): int
+    {
+        $e = get_transient(self::PREFIX . $provider . '_emergency');
+        if (!is_array($e) || (time() - (int) ($e['since'] ?? 0)) >= DAY_IN_SECONDS) {
+            return 0;
+        }
+        return (int) ($e['count'] ?? 0);
+    }
+
+    /** @return array<int, array{at:int, why:string}> the last uses, newest last (kept a week) */
+    public function emergencyLog(string $provider): array
+    {
+        $e = get_transient(self::PREFIX . $provider . '_emergency_log');
+        return is_array($e) ? $e : [];
+    }
+
+    private function recordEmergency(string $provider): void
+    {
+        $key = self::PREFIX . $provider . '_emergency';
+        $e = get_transient($key);
+        if (!is_array($e) || (time() - (int) ($e['since'] ?? 0)) >= DAY_IN_SECONDS) {
+            $e = ['since' => time(), 'count' => 0];
+        }
+        $e['count']++;
+        set_transient($key, $e, 2 * DAY_IN_SECONDS);
+        $log = $this->emergencyLog($provider);
+        $log[] = ['at' => time(), 'why' => self::$emergencyWhy];
+        set_transient(self::PREFIX . $provider . '_emergency_log', array_slice($log, -20), 7 * DAY_IN_SECONDS);
+    }
+
+    /** Why the current emergency request is being made, for the log. */
+    public static string $emergencyWhy = 'empty list';
 
     /** Run $fn with requests tiered $tier, restoring the previous tier after. */
     public static function as(int $tier, callable $fn): mixed
@@ -90,7 +141,7 @@ final class Budget
         $floor = (float) ($this->config['budget_tiers']['floor'][min(3, $tier)] ?? 0);
         $left = ($limits['per_day'] - $this->used($provider, 'per_day')) / $limits['per_day'];
         return $left <= $floor
-            ? sprintf('daily budget low (%d%% left): kept for higher-priority work (tier %d stops at %d%%)', (int) floor($left * 100), $tier, (int) round($floor * 100))
+            ? sprintf('daily budget low (%d%% left): kept for higher-priority work (tier %d stops at %d%%)', (int) max(0, floor($left * 100)), $tier, (int) round($floor * 100))
             : null;
     }
 
@@ -109,6 +160,20 @@ final class Budget
             $entry = get_transient($this->cooldownKey($provider));
             $status = is_array($entry) ? (int) ($entry['status'] ?? 429) : 429;
             return sprintf('cooling down for %ds after a %d', $cooling, $status);
+        }
+
+        /* 2.15.0: the emergency slot skips the hourly and daily caps (ours)
+           and the tiers — never the minute, the month, or its own limit. */
+        if (self::$emergency) {
+            if ($this->emergencyUsed($provider) >= $this->emergencyLimit($provider)) {
+                return sprintf('emergency slot spent (%d/%d today)', $this->emergencyUsed($provider), $this->emergencyLimit($provider));
+            }
+            foreach ($this->limits($provider) as $window => $max) {
+                if (in_array($window, ['per_minute', 'per_month'], true) && $this->used($provider, $window) >= $max) {
+                    return sprintf('%s budget spent (%d/%d)', $window, $this->used($provider, $window), $max);
+                }
+            }
+            return null;
         }
 
         /* 2.14.0: priority. The live ticker (`reserved`) is tier 1. */
@@ -169,6 +234,9 @@ final class Budget
     public function record(string $provider, bool $reserved = false): void
     {
         $this->recordHistory($provider);
+        if (self::$emergency) {
+            $this->recordEmergency($provider);
+        }
         foreach (array_keys($this->limits($provider)) as $window) {
             $seconds = self::WINDOWS[$window];
             $key = $this->counterKey($provider, $window);
@@ -322,6 +390,8 @@ final class Budget
         }
         delete_transient($this->cooldownKey($provider));
         delete_transient(self::PREFIX . $provider . '_hist');
+        delete_transient(self::PREFIX . $provider . '_emergency');
+        delete_transient(self::PREFIX . $provider . '_emergency_log');
         delete_transient(self::PREFIX . $provider . '_strikes');
     }
 
@@ -362,8 +432,11 @@ final class Budget
         $perHour = $count / ($window / HOUR_IN_SECONDS);
         $limit = $this->limits($provider)['per_day'] ?? null;
         $perDay = (int) round($perHour * 24);
+        $monthLimit = $this->limits($provider)['per_month'] ?? null;
         return ['perHour' => round($perHour, 1), 'perDay' => $perDay, 'hours' => round($window / HOUR_IN_SECONDS, 1),
-                'limit' => $limit, 'share' => $limit ? $perDay / $limit : null];
+                'limit' => $limit, 'share' => $limit ? $perDay / $limit : null,
+                'perMonth' => $perDay * 30, 'monthLimit' => $monthLimit,
+                'monthShare' => $monthLimit ? $perDay * 30 / $monthLimit : null];
     }
 
     /* ------------------------------------------------------------------

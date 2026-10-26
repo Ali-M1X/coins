@@ -131,6 +131,71 @@ final class Listing
         return is_array($legacy) && is_array($legacy['data']['rows'] ?? null) ? $legacy : null;
     }
 
+    /**
+     * 2.15.0: does this chunk have NOTHING to show — never fetched, or expired
+     * past its maximum stale age, and no older per-page entry either? Only
+     * then may the scheduler use the emergency slot for it.
+     */
+    public function chunkEmpty(int $chunk): bool
+    {
+        if ($this->chunkEntry($chunk) !== null) {
+            return false;
+        }
+        /* Older per-page entries (2.13.0 and before) for the pages that START
+           in this chunk still count as something to show. */
+        $size = $this->fetchSize();
+        $per = $this->perPage();
+        for ($p = 1; $p <= $this->pages(); $p++) {
+            if (intdiv(($p - 1) * $per, $size) + 1 !== $chunk) {
+                continue;
+            }
+            $legacy = $this->cache->peek(self::DATASET, 'page:' . $p);
+            if (is_array($legacy) && is_array($legacy['data']['rows'] ?? null)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 2.15.0: refresh one chunk now — through the normal budget when it allows,
+     * otherwise through the emergency slot (`$emergency` says when that is
+     * allowed). Returns what happened, for the scheduler and the admin button.
+     *
+     * @return array{chunk:int, ok:bool, rows:int, emergency:bool, error:?string}
+     */
+    public function refreshWithReserve(int $chunk, bool $emergency, string $why = 'empty list'): array
+    {
+        $budget = new Budget($this->config);
+        $out = ['chunk' => $chunk, 'ok' => false, 'rows' => 0, 'emergency' => false, 'error' => null];
+        $tier = Budget::$tier;
+        Budget::$tier = 0;
+        try {
+            $refusal = $budget->refuse('coingecko');
+            if ($refusal !== null && $emergency) {
+                Budget::$emergency = true;
+                Budget::$emergencyWhy = $why;
+                $out['emergency'] = true;
+                $refusal = $budget->refuse('coingecko') === null ? null : $budget->refuse('coingecko');
+            }
+            if ($refusal !== null) {
+                $out['error'] = $refusal;
+                return $out;
+            }
+            $out['rows'] = $this->refresh($chunk);
+            $out['ok'] = $out['rows'] > 0;
+            if (!$out['ok']) {
+                $out['error'] = 'no rows in the response';
+            }
+        } catch (\Throwable $e) {
+            $out['error'] = $e->getMessage();
+        } finally {
+            Budget::$emergency = false;
+            Budget::$tier = $tier;
+        }
+        return $out;
+    }
+
     private function chunkTtl(int $chunk): int
     {
         return $this->ttl($chunk === 1 ? 1 : 2);

@@ -886,5 +886,72 @@ $gone = v2_render_list(1);
 ok(!str_contains($gone, '<table class="list-table"'), 'past its maximum stale age (48 h + TTL) the list is no longer shown');
 v2_warm_list();
 
+section('empty list with the daily budget spent (2.15.0)');
+$cfg15 = $plugin->config;
+foreach (array_keys($cfg15['providers']) as $p) { (new Budget($cfg15))->reset($p); }
+$wipeList = static function () use ($plugin): void {
+    for ($c = 1; $c <= 6; $c++) {
+        $plugin->cache->forget(\TheHybit\Coins\Listing::DATASET, 'chunk:' . $c);
+        $plugin->cache->forget(\TheHybit\Coins\Listing::DATASET, 'page:' . $c);
+        delete_transient('thb_list_retry_' . $c);
+        delete_transient('thb_list_fails_' . $c);
+    }
+};
+$wipeList();
+set_transient('thb_budget_coingecko_per_day', ['since' => Clock::$now, 'count' => 4000], 2 * 86400);
+$b15 = new Budget($cfg15);
+ok($plugin->listing->entry(1) === null && $b15->used('coingecko', 'per_day') === 4000, 'start: an empty /coins/ list and the daily counter at 4000/4000 (the production state)');
+$sched15 = new \TheHybit\Coins\Scheduler($cfg15, $plugin->coins, $plugin->pipeline, $plugin->history, $plugin->listing);
+Probe::reset(keepCache: true);
+$GLOBALS['thb_probe_background'] = true;
+for ($t = 0; $t < 5; $t++) { $sched15->tick(); Clock::advance(55); }
+$GLOBALS['thb_probe_background'] = false;
+$cg15 = array_values(array_filter(Probe::$calls, static fn($c) => $c['host'] === 'api.coingecko.com'));
+$list15 = v2_render_list(1);
+$list15p5 = v2_render_list(5);
+ok(count($cg15) === 2 && $b15->emergencyUsed('coingecko') === 2 && count(array_filter($cg15, static fn($c) => str_contains($c['url'], 'order=market_cap_desc'))) === 2,
+   'five scheduler ticks: exactly 2 CoinGecko requests, both list chunks, through the emergency slot (2 of 6) — nothing else past the cap');
+ok(str_contains($list15, '<table class="list-table"') && substr_count($list15, 'class="c-rank"') >= 99 && str_contains($list15p5, '<table class="list-table"'),
+   'and the list is filled: page 1 and page 5 (ranks 401–500) both show their rows');
+Probe::reset(keepCache: true);
+$GLOBALS['thb_probe_background'] = true;
+Clock::advance(3 * 3600);
+for ($t = 0; $t < 5; $t++) { $sched15->tick(); Clock::advance(55); }
+$GLOBALS['thb_probe_background'] = false;
+ok(Probe::count('api.coingecko.com') === 0 && $b15->emergencyUsed('coingecko') === 2,
+   'once the list holds data, the emergency slot is not used again: the overdue list waits for the normal budget (served from cache meanwhile)');
+
+/* The admin button: success, and a provider error shown with its HTTP status. */
+$wipeList();
+$diag15 = new \TheHybit\Coins\Diagnostics($plugin->coins, $plugin->pipeline, $cfg15);
+$GLOBALS['thb_probe_background'] = true;
+Clock::advance(120);
+$res15 = $diag15->refreshList();
+ok(count($res15['chunks']) === 2 && $res15['chunks'][0]['ok'] && $res15['chunks'][1]['ok'] && $res15['chunks'][0]['http'] === 200
+   && $res15['chunks'][0]['emergency'] && $b15->emergencyUsed('coingecko') === 4,
+   '«تازه‌سازی فوری لیست»: 2 requests, both rows saved, HTTP 200, through the emergency slot (now 4 of 6)');
+$GLOBALS['thb_probe_fail_hosts']['api.coingecko.com'] = 401;
+$GLOBALS['thb_probe_fail_bodies']['api.coingecko.com'] = '{"status":{"error_code":10002,"error_message":"API Key Missing"}}';
+Clock::advance(120);
+$bad15 = $diag15->refreshList();
+unset($GLOBALS['thb_probe_fail_hosts']['api.coingecko.com'], $GLOBALS['thb_probe_fail_bodies']['api.coingecko.com']);
+ok(!$bad15['chunks'][0]['ok'] && $bad15['chunks'][0]['http'] === 401 && str_contains((string) $bad15['chunks'][0]['error'], 'HTTP 401')
+   && str_contains((string) $bad15['chunks'][0]['body'], 'API Key Missing'),
+   'a provider refusal is reported with its exact HTTP status and message (401 «API Key Missing»)');
+Clock::advance(120);
+$spent15 = $diag15->refreshList();
+ok(!$spent15['chunks'][0]['ok'] && $spent15['chunks'][0]['http'] === null && str_contains((string) $spent15['chunks'][0]['error'], 'emergency slot spent (6/6'),
+   'the button shares the hard limit: after 6 emergency requests today it sends nothing and says why');
+$_GET['listed'] = '1';
+set_transient(\TheHybit\Coins\Diagnostics::LIST_RESULT, $bad15, 3600);
+ob_start();
+(fn() => $this->listResult())->call($diag15);
+$shown15 = (string) ob_get_clean();
+unset($_GET['listed']);
+ok(str_contains($shown15, 'HTTP 401') && str_contains($shown15, 'API Key Missing') && str_contains($shown15, 'notice-error'), 'the diagnostics screen shows it');
+$GLOBALS['thb_probe_background'] = false;
+foreach (array_keys($cfg15['providers']) as $p) { (new Budget($cfg15))->reset($p); }
+v2_warm_list();
+
 echo $failed ? "\n{$failed} FAILED\n" : "\nAll top-20 tests passed.\n";
 exit($failed ? 1 : 0);

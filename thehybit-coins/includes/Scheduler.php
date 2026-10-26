@@ -468,14 +468,14 @@ final class Scheduler
          * five minutes, the others every thirty: ~20 requests an hour. */
         Budget::$tier = 0;   // the list: top priority, may use the reserved last 5%
         if ($this->listing !== null && ($page = $this->listing->due()) !== null) {
-            if (($refusal = $this->budget->refuse('coingecko')) !== null) {
-                $progress['skipped'][] = 'listing chunk ' . $page . ': ' . $refusal;
+            /* 2.15.0: a chunk with NOTHING to show may use the emergency slot
+               when our own daily (or hourly) cap is spent — an empty list must
+               never wait for the day counter. Hard limit: emergency_per_day. */
+            $r = $this->listing->refreshWithReserve($page, $this->listing->chunkEmpty($page));
+            if ($r['ok']) {
+                $progress['listing'] = ['chunk' => $page, 'rows' => $r['rows']] + ($r['emergency'] ? ['emergency' => true] : []);
             } else {
-                try {
-                    $progress['listing'] = ['chunk' => $page, 'rows' => $this->listing->refresh($page)];
-                } catch (\Throwable $e) {
-                    $progress['skipped'][] = 'listing chunk ' . $page . ': ' . $e->getMessage();
-                }
+                $progress['skipped'][] = 'listing chunk ' . $page . ($r['emergency'] ? ' (emergency)' : '') . ': ' . $r['error'];
             }
         }
         Budget::$tier = 3;   // everything below: history and slow data

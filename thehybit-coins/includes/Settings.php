@@ -50,6 +50,20 @@ final class Settings
     public static function keys(): array
     {
         return [
+            /* 2.15.0. Optional: without it the plugin uses CoinGecko's keyless
+               public API, which has NO published daily or monthly quota — only
+               an IP-shared per-minute limit (about 10–30 a minute per
+               CoinGecko's docs; 5 measured from this server). A free Demo key
+               raises the minute limit but brings a 10,000-calls-a-month quota,
+               which the plugin's normal schedule (~1,100 a day) would exceed. */
+            'coingecko_key' => [
+                'label'    => 'CoinGecko (Demo)',
+                'provider' => 'coingecko',
+                'url'      => 'https://www.coingecko.com/en/developers/dashboard',
+                'free'     => 'Demo: 10,000 calls/month · keyless public: no quota, ~10–30 calls/minute (IP-shared)',
+                'required' => false,
+                'note'     => 'اختیاری. بدون کلید از API عمومی بی‌کلید استفاده می‌شود که سقف ماهانه ندارد. کلید Demo سقف ۱۰٬۰۰۰ درخواست در ماه دارد و با برنامه فعلی افزونه (حدود ۱٬۱۰۰ در روز) کافی نیست — پیش از واردکردن، سقف ماهانه را پایین تنظیم کنید.',
+            ],
             'etherscan_key' => [
                 'label'    => 'Etherscan',
                 'provider' => 'etherscan',
@@ -160,6 +174,49 @@ final class Settings
             }
         }
 
+        return self::applyCaps($config);
+    }
+
+    /** 2.15.0: CoinGecko's plan, as this site uses it: 'keyless' or 'demo'. */
+    public static function coingeckoPlan(): string
+    {
+        return self::hasKey('coingecko_key') ? 'demo' : 'keyless';
+    }
+
+    /** The plan's own published monthly quota, or null when it has none. */
+    public static function planMonthly(string $plan): ?int
+    {
+        return $plan === 'demo' ? 10000 : null;
+    }
+
+    /**
+     * 2.15.0 — the CoinGecko daily and monthly caps from Settings. Empty
+     * fields keep the defaults: daily 4,000 (our own governor; the keyless API
+     * publishes no daily quota) and, with a Demo key, the plan's 10,000 a
+     * month with a daily cap of a thirtieth of it. The hourly cap never allows
+     * more than the day can hold.
+     */
+    public static function applyCaps(array $config): array
+    {
+        if (!isset($config['providers']['coingecko'])) {
+            return $config;
+        }
+        $b = (array) ($config['providers']['coingecko']['budget'] ?? []);
+        $plan = self::coingeckoPlan();
+        $month = (int) self::get('coingecko_monthly_cap', 0) ?: (int) self::planMonthly($plan);
+        $day = (int) self::get('coingecko_daily_cap', 0);
+        if ($day <= 0) {
+            $day = $month > 0 ? min((int) ($b['per_day'] ?? 4000), intdiv($month, 30)) : (int) ($b['per_day'] ?? 4000);
+        }
+        $b['per_day'] = max(10, $day);
+        if ($month > 0) {
+            $b['per_month'] = $month;
+        } else {
+            unset($b['per_month']);
+        }
+        $b['per_hour'] = max(4, min((int) ($b['per_hour'] ?? 160), (int) ceil($b['per_day'] / 24 * 1.5)));
+        $config['providers']['coingecko']['budget'] = $b;
+        $config['providers']['coingecko']['plan'] = $plan;
         return $config;
     }
 
@@ -211,6 +268,18 @@ final class Settings
                here. Sanitising to that set stops a pasted URL or a stray quote
                becoming part of a request. */
             $stored[$setting] = preg_replace('/[^A-Za-z0-9_\-]/', '', $submitted) ?? '';
+        }
+
+        /* ---- 2.15.0: CoinGecko caps (empty = default) ---- */
+        foreach (['coingecko_daily_cap', 'coingecko_monthly_cap'] as $cap) {
+            if (isset($_POST[$cap])) {
+                $n = (int) preg_replace('/\D/', '', (string) wp_unslash($_POST[$cap]));
+                if ($n > 0) {
+                    $stored[$cap] = min(10_000_000, $n);
+                } else {
+                    unset($stored[$cap]);
+                }
+            }
         }
 
         /* ---- display options ---- */
@@ -356,6 +425,26 @@ final class Settings
             echo '</td></tr>';
         }
 
+        echo '</tbody></table>';
+
+        /* ---- 2.15.0: CoinGecko caps ---- */
+        $plan = self::coingeckoPlan();
+        echo '<h2>سقف درخواست CoinGecko</h2>';
+        printf('<p class="description">طرح فعلی: <strong>%s</strong>. %s</p>',
+            $plan === 'demo' ? 'Demo (با کلید)' : 'API عمومی بی‌کلید',
+            $plan === 'demo'
+                ? 'سقف طرح: ۱۰٬۰۰۰ درخواست در ماه.'
+                : 'این طرح سقف روزانه یا ماهانه منتشرشده ندارد؛ فقط محدودیت در دقیقه (مشترک بر اساس IP). سقف روزانه زیر، محدودیت خود افزونه است.');
+        echo '<table class="form-table" role="presentation"><tbody>';
+        foreach ([
+            'coingecko_daily_cap'   => ['سقف روزانه', $plan === 'demo' ? '333' : '4000', 'خالی = پیش‌فرض. درخواست‌های اضطراری فهرست ارزها (حداکثر ۶ در روز) از این سقف مستثنا هستند.'],
+            'coingecko_monthly_cap' => ['سقف ماهانه', $plan === 'demo' ? '10000' : 'بدون سقف', 'خالی = سقف طرح (Demo: ۱۰٬۰۰۰؛ بی‌کلید: بدون سقف). اگر پیش‌بینی ماهانه از آن بیشتر شود، در صفحه تشخیص هشدار داده می‌شود.'],
+        ] as $cap => [$label, $placeholder, $help]) {
+            printf('<tr><th scope="row"><label for="%1$s">%2$s</label></th><td>'
+                . '<input type="number" min="0" step="1" dir="ltr" class="small-text" style="width:9em" id="%1$s" name="%1$s" value="%3$s" placeholder="%4$s">'
+                . '<p class="description">%5$s</p></td></tr>',
+                esc_attr($cap), esc_html($label), esc_attr((string) self::get($cap, '')), esc_attr($placeholder), esc_html($help));
+        }
         echo '</tbody></table>';
         submit_button('ذخیره تنظیمات');
         echo '</form></div>';

@@ -49,6 +49,7 @@ final class Diagnostics
         add_action('admin_post_thb_diag_seed', [$this, 'handleSeed']);
         add_action('admin_post_thb_diag_probe', [$this, 'handleProbe']);
         add_action('admin_post_thb_diag_burst', [$this, 'handleBurst']);
+        add_action('admin_post_thb_diag_list', [$this, 'handleListRefresh']);
     }
 
     public function menu(): void
@@ -132,6 +133,73 @@ final class Diagnostics
         exit;
     }
 
+    /**
+     * 2.15.0 — «تازه‌سازی فوری لیست»: fetch the 500-coin list now, two
+     * requests. Through the normal budget when it allows; otherwise through
+     * the emergency slot, under the same hard daily limit. Every outbound call
+     * is captured so the screen can show the provider's exact answer and HTTP
+     * status. Admin only (manage_options + nonce).
+     */
+    public function handleListRefresh(): void
+    {
+        $this->authorize('thb_diag_list');
+        set_transient(self::LIST_RESULT, $this->refreshList(), HOUR_IN_SECONDS);
+        wp_safe_redirect(add_query_arg(['page' => self::SLUG, 'listed' => '1'], admin_url('tools.php')));
+        exit;
+    }
+
+    public const LIST_RESULT = 'thb_diag_list_result';
+
+    /** @return array{at:int, chunks:array<int, array>} */
+    public function refreshList(): array
+    {
+        $listing = Plugin::instance()->listing;
+        $calls = [];
+        $capture = static function (array $call) use (&$calls): void {
+            if ($call['provider'] === 'coingecko') {
+                $calls[] = ['url' => (string) $call['url'], 'code' => (int) $call['code'], 'error' => $call['error'],
+                            'body' => mb_substr(trim(wp_strip_all_tags((string) $call['body'])), 0, 300)];
+            }
+        };
+        add_action('thb_coins_http', $capture);
+        $chunks = [];
+        try {
+            for ($c = 1; $c <= $listing->chunks(); $c++) {
+                $before = count($calls);
+                delete_transient('thb_list_retry_' . $c);   // an admin asking now overrides the failure backoff
+                $r = $listing->refreshWithReserve($c, true, 'admin: تازه‌سازی فوری لیست');
+                $call = $calls[$before] ?? null;
+                $r['http'] = $call['code'] ?? null;
+                $r['url'] = $call['url'] ?? null;
+                $r['body'] = $r['ok'] ? null : ($call['body'] ?? null);
+                $chunks[] = $r;
+            }
+        } finally {
+            remove_action('thb_coins_http', $capture);
+        }
+        return ['at' => time(), 'chunks' => $chunks];
+    }
+
+    private function listResult(): void
+    {
+        $res = get_transient(self::LIST_RESULT);
+        if (!is_array($res) || empty($_GET['listed'])) {
+            return;
+        }
+        $allOk = !in_array(false, array_column($res['chunks'], 'ok'), true);
+        printf('<div class="notice %s inline"><p><strong>تازه‌سازی فوری لیست — %s</strong></p><ul>',
+            $allOk ? 'notice-success' : 'notice-error', $allOk ? 'انجام شد' : 'ناموفق');
+        foreach ($res['chunks'] as $r) {
+            printf('<li dir="ltr">chunk %d (ranks %d–%d): %s%s%s%s</li>',
+                (int) $r['chunk'], ((int) $r['chunk'] - 1) * 250 + 1, (int) $r['chunk'] * 250,
+                $r['ok'] ? esc_html($r['rows'] . ' rows saved') : esc_html('FAILED — ' . (string) $r['error']),
+                $r['http'] !== null ? esc_html(' · HTTP ' . $r['http']) : esc_html(' · no request sent'),
+                $r['emergency'] ? esc_html(' · emergency slot') : '',
+                !empty($r['body']) ? '<br><code>' . esc_html((string) $r['body']) . '</code>' : '');
+        }
+        echo '</ul></div>';
+    }
+
     /** Capability + nonce, and the only request input read: a known coin slug. */
     private function authorize(string $action): string
     {
@@ -186,6 +254,7 @@ final class Diagnostics
         $this->cronTable();
         $this->keysTable();
         $this->errorsTable();
+        $this->listResult();
         $this->budgetTable();
         $this->datasetTable($coin);
         $this->sourcesTable($coin);
@@ -526,6 +595,16 @@ final class Diagnostics
                 $warnings[] = sprintf('%s: %d of %d a day (%d%%), from the last %s h',
                     $provider, $proj['perDay'], $proj['limit'], (int) round(100 * $proj['share']), $proj['hours']);
             }
+            if ($proj['monthLimit'] && $proj['monthShare'] > 1.0) {
+                $projCell .= sprintf(' · month %d / %d', $proj['perMonth'], $proj['monthLimit']);
+                $warnings[] = sprintf('%s: projected %d a month, above the plan limit of %d', $provider, $proj['perMonth'], $proj['monthLimit']);
+            }
+            if (($elimit = $budget->emergencyLimit($provider)) > 0 && isset($snap['limits']['per_day'])) {
+                $log = $budget->emergencyLog($provider);
+                $last = end($log);
+                $cooldownCell .= sprintf('<br>اضطراری لیست: %d / %d امروز%s', $budget->emergencyUsed($provider), $elimit,
+                    $last ? ' — آخرین: ' . esc_html(gmdate('Y-m-d H:i', (int) $last['at'])) . ' UTC (' . esc_html((string) $last['why']) . ')' : ' — استفاده نشده');
+            }
             if (($strikes = $budget->strikes($provider)) > 0) {
                 $cooldownCell .= sprintf(' — %d block(s) in a row, pause doubles', $strikes);
             }
@@ -547,7 +626,7 @@ final class Diagnostics
         $this->close();
 
         if ($warnings !== []) {
-            echo '<div class="notice notice-warning inline" data-thb-budget-warning><p><strong>مصرف پیش‌بینی‌شده بیش از ۸۰٪ بودجه روزانه است.</strong> '
+            echo '<div class="notice notice-warning inline" data-thb-budget-warning><p><strong>مصرف پیش‌بینی‌شده بیش از ۸۰٪ بودجه روزانه یا بیش از سقف ماهانه طرح است.</strong> '
                . 'با این آهنگ، بودجه پیش از پایان روز تمام می‌شود و داده‌های کم‌اهمیت‌تر زودتر متوقف می‌شوند.</p><ul>';
             foreach ($warnings as $w) {
                 echo '<li dir="ltr">' . esc_html($w) . '</li>';
@@ -1109,6 +1188,16 @@ final class Diagnostics
     private function actions(Coin $coin): void
     {
         echo '<h2>اقدامات</h2>';
+
+        printf(
+            '<form method="post" action="%s" style="display:inline-block;margin-left:8px">%s'
+            . '<input type="hidden" name="action" value="thb_diag_list">'
+            . '<input type="hidden" name="coin" value="%s">'
+            . '<button class="button button-primary">تازه‌سازی فوری لیست</button></form>',
+            esc_url(admin_url('admin-post.php')),
+            wp_nonce_field('thb_diag_list', '_wpnonce', true, false),
+            esc_attr($coin->slug)
+        );
 
         printf(
             '<form method="post" action="%s" style="display:inline-block;margin-left:8px">%s'
