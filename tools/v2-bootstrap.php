@@ -163,12 +163,12 @@ function v2_render(int $postId): string
     return $html;
 }
 
-/** Fill the /coins/ list cache: one CoinGecko request per page, as the scheduler would. */
+/** Fill the /coins/ list cache: one CoinGecko request per 250-coin chunk (2.14.0), as the scheduler would. */
 function v2_warm_list(): void
 {
     $plugin = \TheHybit\Coins\Plugin::instance();
     $GLOBALS['thb_probe_background'] = true;
-    for ($p = 1; $p <= $plugin->listing->pages(); $p++) {
+    for ($p = 1; $p <= $plugin->listing->chunks(); $p++) {
         (new \TheHybit\Coins\Budget($plugin->config))->reset('coingecko');
         $plugin->listing->refresh($p);
     }

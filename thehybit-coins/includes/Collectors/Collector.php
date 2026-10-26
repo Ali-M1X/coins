@@ -170,8 +170,7 @@ abstract class Collector
            minute later is what extends such a ban, so the provider is paused
            for its configured `block_cooldown` instead of the 429 default. */
         if (in_array($code, (array) ($settings['block_statuses'] ?? []), true)) {
-            $seconds = $this->budget()->startCooldown($this->id(), 0, $code,
-                max(MINUTE_IN_SECONDS, (int) ($settings['block_cooldown'] ?? HOUR_IN_SECONDS)));
+            $seconds = $this->budget()->blockCooldown($this->id(), $code);   // 2.14.0: doubles on each block in a row
             error_log(sprintf('[thb] %s returned %d (IP blocked or quota spent) — pausing calls for %ds', $this->id(), $code, $seconds));
             throw new \RuntimeException(sprintf('%s: HTTP %d — blocked by the provider, paused %d min', $this->id(), $code, intdiv($seconds, 60))
                 . $this->excerpt($body));
@@ -180,6 +179,7 @@ abstract class Collector
             throw new \RuntimeException($this->id() . ": HTTP {$code}" . $this->excerpt($body));
         }
 
+        $this->budget()->clearStrikes($this->id());   // a success ends any run of IP blocks
         $decoded = json_decode($body, true);
         return is_array($decoded) ? $decoded : null;
     }

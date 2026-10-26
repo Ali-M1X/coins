@@ -1,0 +1,39 @@
+    65.0/h  https://api.coingecko.com/api/v3/simple/price
+    31.0/h  https://api.coingecko.com/api/v3/coins/markets
+     5.4/h  https://api.coingecko.com/api/v3/global
+     0.2/h  https://api.coingecko.com/api/v3/coins/{id}
+
+=== current TTLs — requests per hour (steady state, hours 3–8) ===
+  host                           84 coins   84 coins
+  api.alternative.me                  1.0        1.0
+  api.blockchair.com                 29.5       29.5
+  api.coingecko.com                 101.6      101.6
+  api.dexscreener.com               240.9      240.9
+  api.etherscan.io                   13.8       13.8
+  api.frankfurter.dev                 0.2        0.2
+  api.github.com                     13.0       13.0
+  api.growthepie.com                  0.5        0.5
+  api.llama.fi                      242.6      242.6
+  api.nobitex.ir                      5.9        5.9
+  api.persiantoolbox.com              3.8        3.8
+  beaconcha.in                        3.9        3.9
+  coins.llama.fi                      3.5        3.5
+  open.er-api.com                     0.1        0.1
+  stablecoins.llama.fi                1.0        1.0
+  wikimedia.org                       9.3        9.3
+  yields.llama.fi                     0.2        0.2
+    of which live ticker             65.0       65.0
+    of which /coins/ list             7.4        7.4
+  CoinGecko busiest 60 s                4          4
+  CoinGecko 429s (8 h)                  0          0
+  CoinGecko per day (x24)            2438       2438
+
+  Freshness at the end (worst coin, age ÷ TTL; ≤ 1 is on time):
+  chart.24h                           0.4        0.4
+  chart.7d                            0.1        0.1
+  chart.30d                           0.0        0.0
+  chart.90d                           0.0        0.0
+  chart.1y                            0.0        0.0
+  metadata                            0.5        0.5
+  historical                          0.5        0.5
+  structure                           0.5        0.5

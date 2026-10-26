@@ -33,7 +33,10 @@ return [
            receiving 429s, so its datasets are deliberately conservative. Two
            coins do not need faster polling than this, and every value below is
            still at or above the rate at which the underlying figure moves. */
-        'market'     => 5 * MINUTE_IN_SECONDS,   // price, market cap, 24h change/volume
+        /* 2.14.0: 5→10 min. One batched request now carries all 84 coins
+           (batch_size 250), and the live ticker below keeps prices current in
+           between; market cap and volume do not need five-minute polling. */
+        'market'     => 10 * MINUTE_IN_SECONDS,  // price, market cap, 24h change/volume
 
         /* The LIVE PRICE: price and 24h change for every coin in ONE
            /simple/price request, refreshed on every scheduler tick.
@@ -50,7 +53,12 @@ return [
 
            Cost: one request per tick whatever the coin count — about 65 an
            hour. See docs/LIVE-PRICE.md for the budget arithmetic. */
-        'ticker'     => 50,
+        /* 2.14.0: every second tick (about 30 an hour) instead of every tick
+           (65 an hour). The ticker alone was 1,560 requests a day — 39% of
+           CoinGecko's daily allowance, and 64% of what the scheduler spent.
+           Visitors' browsers still get exchange prices live over WebSocket;
+           the server price is the fallback, and two minutes is plenty for it. */
+        'ticker'     => 110,
         'chart'      => 10 * MINUTE_IN_SECONDS,  // fallback only; see the `chart` block
         'metadata'   => DAY_IN_SECONDS,          // name, links, launch date, contracts
         'historical' => DAY_IN_SECONDS,          // ATH/ATL and other near-static records
@@ -79,7 +87,7 @@ return [
            rides their /coins/{id} request. Top venue and market count are
            daily-resolution facts; asking hourly would buy nothing and would
            turn a free dataset into a paid one. */
-        'global'      => 10 * MINUTE_IN_SECONDS,
+        'global'      => 30 * MINUTE_IN_SECONDS,   // 2.14.0: 10→30 min (list header boxes, market context)
         'sentiment'   => HOUR_IN_SECONDS,        // the index is computed once a day
         'chains'      => 30 * MINUTE_IN_SECONDS,
         'stablecoins' => HOUR_IN_SECONDS,
@@ -100,7 +108,10 @@ return [
            stats every 15 min + whale transfers every 20 = 7 an hour a chain,
            35 in all — under the 40/h budget and well under Blockchair's
            keyless ~1,440/day, which has IP-blocked this server once. */
-        'network'     => 20 * MINUTE_IN_SECONDS,   // 2.6.0: 15→20, six Blockchair chains within 40/h
+        /* 2.14.0: 20→60 min. Blockchair answered HTTP 430 (IP blocked) at
+           about 30 requests an hour; six chains hourly plus whales hourly is
+           12 an hour, well under the keyless allowance. */
+        'network'     => HOUR_IN_SECONDS,
         'staking'     => 30 * MINUTE_IN_SECONDS,
         'supply'      => HOUR_IN_SECONDS,
         'development' => 6 * HOUR_IN_SECONDS,
@@ -112,7 +123,7 @@ return [
            Peers move with the market but feed a comparison, not a ticker;
            protocol fees are daily totals; the multi-year price history is
            weekly points, so asking more than daily cannot change it. */
-        'peers'       => 30 * MINUTE_IN_SECONDS,
+        'peers'       => 2 * HOUR_IN_SECONDS,      // 2.14.0: 30 min → 2 h (a comparison, not a ticker)
         'protocols'   => HOUR_IN_SECONDS,
         'longchart'   => DAY_IN_SECONDS,
 
@@ -129,7 +140,7 @@ return [
         'listing'      => 2 * HOUR_IN_SECONDS,
         'activity'     => 6 * HOUR_IN_SECONDS,
         'stakingyield' => 6 * HOUR_IN_SECONDS,
-        'whales'       => 30 * MINUTE_IN_SECONDS,   // 2.6.0: 20→30, same reason
+        'whales'       => HOUR_IN_SECONDS,          // 2.14.0: 30→60 min, Blockchair 430
         'ethlocations' => HOUR_IN_SECONDS,
         'interest'     => 12 * HOUR_IN_SECONDS,
     ],
@@ -142,7 +153,71 @@ return [
      * collector retries in the background; only past this does the section
      * fall back to its empty state.
      * ---------------------------------------------------------------- */
-    'stale_grace' => 6 * HOUR_IN_SECONDS,
+    'stale_grace' => 6 * HOUR_IN_SECONDS,   // fallback only; see max_stale
+
+    /* ------------------------------------------------------------------
+     * 2.14.0 — MAXIMUM STALE AGE, per dataset.
+     *
+     * How long past its TTL a cached value may still be SHOWN when refreshes
+     * keep failing (budget spent, provider cooling down, an outage). The cache
+     * entry lives exactly TTL + this long, then disappears, and the section
+     * with it. Before 2.14.0 this was one six-hour grace for everything: a day
+     * of exhausted CoinGecko budget emptied the /coins/ list and the price
+     * tables after six hours.
+     *
+     * Chosen so that a full day of exhausted budget (the daily window is 24h)
+     * never empties a page, while nothing is shown long after it stopped
+     * meaning anything. The public page says nothing about age; the admin
+     * diagnostics screen shows each entry's real fetch time.
+     * ---------------------------------------------------------------- */
+    'max_stale' => [
+        'default'     => 3 * DAY_IN_SECONDS,
+        'ticker'      => 36 * HOUR_IN_SECONDS,   // prices: outlast one spent daily budget, no more
+        'market'      => 36 * HOUR_IN_SECONDS,
+        'listing'     => 48 * HOUR_IN_SECONDS,   // the /coins/ list must never go empty
+        'chart.24h'   => 36 * HOUR_IN_SECONDS,
+        'chart.7d'    => 3 * DAY_IN_SECONDS,
+        'chart.30d'   => 7 * DAY_IN_SECONDS,
+        'chart.90d'   => 14 * DAY_IN_SECONDS,
+        'chart.1y'    => 30 * DAY_IN_SECONDS,
+        'longchart'   => 30 * DAY_IN_SECONDS,
+        'metadata'    => 30 * DAY_IN_SECONDS,    // names, links, launch date
+        'historical'  => 30 * DAY_IN_SECONDS,    // ATH/ATL records
+        'structure'   => 7 * DAY_IN_SECONDS,
+        'categories'  => 7 * DAY_IN_SECONDS,
+        'global'      => 36 * HOUR_IN_SECONDS,
+        'peers'       => 36 * HOUR_IN_SECONDS,
+        'dex'         => 36 * HOUR_IN_SECONDS,
+        'gas'         => 6 * HOUR_IN_SECONDS,    // a gas price from yesterday is misleading
+        'irt'         => 36 * HOUR_IN_SECONDS,
+        'fx'          => 36 * HOUR_IN_SECONDS,
+        'fiat'        => 7 * DAY_IN_SECONDS,
+        'fiatalt'     => 7 * DAY_IN_SECONDS,
+        'whales'      => 2 * DAY_IN_SECONDS,
+        'network'     => 3 * DAY_IN_SECONDS,
+    ],
+
+    /* ------------------------------------------------------------------
+     * 2.14.0 — PRIORITY WHEN THE DAILY BUDGET RUNS LOW.
+     *
+     * Every request carries a tier. While a provider's daily allowance is
+     * healthy every tier may spend it; as it runs down, the lower tiers stop
+     * first, so what is left goes to what matters most:
+     *
+     *   0  the /coins/ list prices
+     *   1  the top coins' prices (the live ticker; the batch for the top 20)
+     *   2  the other coin pages' prices, and anything a page render asks for
+     *   3  history and slow data (charts, metadata, categories, global, …)
+     *
+     * `floor` is the share of the daily budget below which a tier stops.
+     * Tier 0 has none: it may use the last 5% that nothing else can touch,
+     * which is the safety margin that keeps the list from ever going empty.
+     * ---------------------------------------------------------------- */
+    'budget_tiers' => [
+        'top'   => 20,                                  // coins in tier 1 (config/coins.php order)
+        'floor' => [1 => 0.05, 2 => 0.15, 3 => 0.30],   // share of per_day that must remain
+        'default' => 2,                                 // a request with no tier (page renders)
+    ],
 
     /* ------------------------------------------------------------------
      * How long a FAILURE is remembered.
@@ -366,7 +441,7 @@ return [
          * fine for price — the batch covers every coin — and it is the thing to
          * revisit when the hundred coins are actually onboarded. */
         'max_candidates'   => 400,  // cache entries inspected while choosing work
-        'batch_size'       => 50,   // coins per batched market call (CoinGecko's cap)
+        'batch_size'       => 250,  // coins per batched market call (CoinGecko's per_page cap). 2.14.0: 50→250 — one request for all 84 coins
 
         /* How long a tick's lock outlives the process holding it.
 
@@ -456,7 +531,11 @@ return [
                one — it is an observation that could change, which is exactly
                why it lives in config. Four leaves headroom under the five we
                saw succeed. */
-            'budget'    => ['per_minute' => 4, 'per_hour' => 200, 'per_day' => 4000],
+            /* 2.14.0: per_hour 200 → 160. 200 an hour allowed 4,800 a day
+               against a daily allowance of 4,000, so nothing stopped the day
+               being spent by mid-afternoon and the rest of it running dry.
+               160 × 24 = 3,840: the hourly cap now paces the day by itself. */
+            'budget'    => ['per_minute' => 4, 'per_hour' => 160, 'per_day' => 4000],
             /* One of the four per-minute calls is held for the live price
                ticker, so the rest of the scheduler's CoinGecko work can never
                crowd it out: everything else gets three a minute. */
@@ -716,14 +795,19 @@ return [
                KEYLESS deliberately: it covers both Ethereum and Bitcoin from one
                endpoint shape, which Etherscan cannot, and a key only raises a
                ceiling we are nowhere near. */
-            'budget'   => ['per_minute' => 2, 'per_hour' => 40, 'per_day' => 1200],
+            /* 2.14.0: 40/h → 15/h and 1,200/day → 300. Production got HTTP
+               430 at ~30 an hour; the schedule now asks ~12 an hour. */
+            'budget'   => ['per_minute' => 1, 'per_hour' => 15, 'per_day' => 300],
             'cooldown' => 5 * MINUTE_IN_SECONDS,
             'auth'     => ['in' => 'query', 'name' => 'key'],
             /* Blockchair's own codes: 430/434 "your IP is (temporarily)
                blacklisted", 402 "daily limit spent". Not a 429: retrying in
                five minutes extends the ban, so these pause it for an hour. */
             'block_statuses' => [402, 430, 434],
+            /* 2.14.0: the FIRST block pauses an hour; each further block in a
+               row doubles it (2 h, 4 h, … up to a day). A success resets it. */
             'block_cooldown' => HOUR_IN_SECONDS,
+            'block_backoff_max' => DAY_IN_SECONDS,
             /* 2.3.0: Litecoin, Dogecoin and Bitcoin Cash — UTXO chains with the
                same /stats and transaction shapes as Bitcoin, in satoshi-style
                units. Other chains Blockchair indexes return different shapes
@@ -931,9 +1015,13 @@ return [
      * ---------------------------------------------------------------- */
     'listing' => [
         'enabled'   => true,
-        'per_page'  => 100,
+        'per_page'  => 100,   // rows per DISPLAYED page (/coins/page/N/)
         'pages'     => 5,
-        'ttl_first' => 10 * MINUTE_IN_SECONDS,
+        /* 2.14.0: fetched 250 at a time (CoinGecko's per_page maximum), so
+           the 500 coins are TWO requests, not five. Ranks 1–250 every 15
+           minutes, 251–500 every 2 hours: 4.5 requests an hour (was ~7.5). */
+        'fetch_size' => 250,
+        'ttl_first' => 15 * MINUTE_IN_SECONDS,
         'ttl_rest'  => 2 * HOUR_IN_SECONDS,
     ],
 

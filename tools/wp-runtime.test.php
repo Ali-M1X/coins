@@ -155,7 +155,10 @@ ok($missCalls === 1, 'a provider with nothing to give is called ONCE, not once p
 
 Clock::advance($cache->missTtl() + 1);
 $cache->remember('defi', 'none', $miss);
-ok($missCalls === 2, 'and is retried once the short miss TTL lapses — recovery is picked up quickly');
+ok($missCalls === 1, '2.14.0: a request that FAILED is not retried after the one-minute miss window — it backs off');
+Clock::advance(\TheHybit\Coins\Cache::backoff(1));
+$cache->remember('defi', 'none', $miss);
+ok($missCalls === 2, 'and is retried once its backoff (' . (\TheHybit\Coins\Cache::backoff(1) / 60) . ' min) lapses');
 
 /* The merge callback: a partial refresh must not delete what it did not return. */
 $merged = $cache->remember(
@@ -863,6 +866,27 @@ $GLOBALS['thb_probe_background'] = false;
 $GLOBALS['thb_probe_dex_symbol'] = 'WETH';
 pipeline($config)->viewModel(ethereum(['dexSymbols' => 'WETH']));
 ok(Probe::count() === 7, 'a cold Ethereum render STILL makes exactly 7 requests (got ' . Probe::count() . ')');
+/* 2.14.0: a page view does not race the scheduler. */
+Probe::reset(keepCache: true);
+Clock::advance((new Cache($config))->ttl('market') + 60);
+$c214 = new Cache($config);
+$heldDays = [];
+foreach ($config['chart']['windows'] as $period => $w) {
+    if (is_array($c214->peek('chart.' . $period, $c214->keyFor('chart.' . $period, ethereum()))['data'] ?? null)) { $heldDays[] = 'days=' . $w['days']; }
+}
+pipeline($config)->viewModel(ethereum(['dexSymbols' => 'WETH']));
+/* Only windows that hold NOTHING yet may be fetched by this view. */
+$justPast = count(array_filter(Probe::$calls, static function ($c) use ($heldDays) {
+    if ($c['host'] !== 'api.coingecko.com') { return false; }
+    if (!str_contains($c['url'], 'market_chart')) { return true; }
+    foreach ($heldDays as $d) { if (preg_match('#[?&]' . $d . '(&|$)#', $c['url'])) { return true; } }
+    return false;
+}));
+Probe::reset(keepCache: true);
+Clock::advance(DAY_IN_SECONDS * 2);
+pipeline($config)->viewModel(ethereum(['dexSymbols' => 'WETH']));
+ok($justPast === 0 && Probe::count('api.coingecko.com') > 0,
+   '2.14.0: a view just past the price TTL sends no CoinGecko request (the scheduler owns the refresh); only a value a full TTL overdue is fetched by a view (' . Probe::count('api.coingecko.com') . ')');
 foreach (['etherscan.io', 'blockchair.com', 'beaconcha.in', 'api.github.com'] as $host) {
     ok(Probe::count($host) === 0, "and none of them goes to {$host} — the scheduler owns Group B");
 }
@@ -1127,6 +1151,100 @@ try { (new C\Etherscan($keyedR))->fetch($eth, 'gas'); } catch (\Throwable $e) { 
 ok(str_contains($esMsg, 'Invalid API Key') && !str_contains($esMsg, 'ETHERSCANKEY1234567890ABCDEF'),
    'a key echoed back in the body is scrubbed before it is stored: ' . $esMsg);
 unset($GLOBALS['thb_probe_fail_hosts'], $GLOBALS['thb_probe_fail_bodies']);
+
+
+section('2.14.0 — stale-while-error, backoff, priority, projection, IP-block backoff');
+Clock::reset();
+foreach (array_keys($config['providers']) as $p) { (new Budget($config))->reset($p); }
+$c14 = new Cache($config);
+$n14 = 0;
+$c14->remember('market', 'swe', static function () use (&$n14) { $n14++; return ['v' => 1]; });
+Clock::advance($c14->ttl('market') + 1);
+$r = $c14->remember('market', 'swe', static function () use (&$n14) { $n14++; throw new RuntimeException('HTTP 500'); });
+ok($r['data']['v'] === 1 && $r['stale'] === true && $n14 === 2, 'stale-while-error: a failed refresh serves the last good value');
+$r = $c14->remember('market', 'swe', static function () use (&$n14) { $n14++; return ['v' => 9]; });
+ok($n14 === 2 && $r['data']['v'] === 1, 'and the failed item is NOT retried on the next call — it backs off (' . (Cache::backoff(1) / 60) . ' min)');
+Clock::advance(Cache::backoff(1));
+$c14->remember('market', 'swe', static function () use (&$n14) { $n14++; throw new RuntimeException('HTTP 500'); });
+ok($n14 === 3 && Cache::backoff(2) === 2 * Cache::backoff(1) && Cache::backoff(20) === Cache::BACKOFF_MAX,
+   'after the backoff it tries again; each further failure doubles the wait, up to ' . (Cache::BACKOFF_MAX / 3600) . ' h');
+Clock::advance(30 * 3600);
+$e14 = $c14->peek('market', 'swe');
+ok(is_array($e14) && $e14['data']['v'] === 1, 'a price is still shown 30 h later (the old 6-hour grace would have emptied it)');
+Clock::advance($c14->maxStale('market'));
+ok($c14->peek('market', 'swe') === null, 'and is gone past its maximum stale age (' . ($c14->maxStale('market') / 3600) . ' h) — the section then disappears');
+ok($c14->maxStale('listing') === 48 * 3600 && $c14->maxStale('chart.1y') === 30 * 86400 && $c14->maxStale('gas') === 6 * 3600,
+   'maximum stale age per dataset: list 48 h, 1-year chart 30 days, gas 6 h');
+$n15 = 0;
+$c14->remember('market', 'ref', static function () use (&$n15) { $n15++; return ['v' => 1]; });
+Clock::advance($c14->ttl('market') + 1);
+$c14->remember('market', 'ref', static function () use (&$n15) { $n15++; throw new RuntimeException('budget', Budget::REFUSED); });
+$c14->remember('market', 'ref', static function () use (&$n15) { $n15++; return ['v' => 2]; });
+ok($n15 === 3, 'our own budget refusal made no request, so it sets no backoff');
+
+/* Priority tiers under a low daily budget. */
+$b14 = new Budget($config);
+$b14->reset('coingecko');
+$setDay = static function (int $used) { set_transient('thb_budget_coingecko_per_day', ['since' => Clock::$now, 'count' => $used], 2 * 86400); };
+$allowed = static function () use ($b14): array {
+    $out = [];
+    foreach ([0, 1, 2, 3] as $t) { Budget::$tier = $t; $out[$t] = $b14->refuse('coingecko') === null; }
+    Budget::$tier = null;
+    return $out;
+};
+$setDay(1000);
+ok($allowed() === [true, true, true, true], 'plenty left (75%): every tier may spend');
+$setDay(3000);
+ok($allowed() === [true, true, true, false], '25% left: history and slow data (tier 3) stop');
+$setDay(3500);
+ok($allowed() === [true, true, false, false], '12.5% left: the other coin pages (tier 2) stop too');
+$setDay(3850);
+ok($allowed() === [true, false, false, false], '3.75% left: only the /coins/ list (tier 0) — the reserved last 5%');
+$setDay(4000);
+ok($allowed() === [false, false, false, false], 'spent: nothing');
+$setDay(3850);
+ok($b14->refuse('coingecko', reserved: true) !== null && str_contains((string) $b14->refuse('coingecko'), 'kept for higher-priority work'),
+   'the live ticker counts as tier 1; a page render (no tier) as tier ' . $config['budget_tiers']['default']);
+$b14->reset('coingecko');
+
+/* Projected daily use. */
+Clock::reset();
+$b14->reset('coingecko');
+for ($h = 0; $h < 2; $h++) {
+    for ($i = 0; $i < 25; $i++) { $b14->record('coingecko'); }
+    Clock::advance(3600);
+}
+$pr = $b14->projection('coingecko');
+ok($pr['perDay'] === 600 && abs($pr['share'] - 0.15) < 1e-9, 'projection: 25 an hour for 2 hours → ' . $pr['perDay'] . ' a day, ' . round(100 * $pr['share']) . '% of 4,000');
+for ($i = 0; $i < 300; $i++) { $b14->record('coingecko'); }
+$pr = $b14->projection('coingecko');
+$diag = new \TheHybit\Coins\Diagnostics(new CoinRepository(), pipeline($config), $config);
+ob_start();
+(fn() => $this->budgetTable())->call($diag);
+$html14 = (string) ob_get_clean();
+ok($pr['share'] > 0.8 && str_contains($html14, 'مصرف روزانه پیش‌بینی‌شده') && str_contains($html14, 'data-thb-budget-warning') && str_contains($html14, 'coingecko: ' . $pr['perDay']),
+   'over 80% projected (' . round(100 * $pr['share']) . '%): the diagnostics budget table shows the column and an admin-only warning');
+$b14->reset('coingecko');
+ob_start();
+(fn() => $this->budgetTable())->call($diag);
+ok(!str_contains((string) ob_get_clean(), 'data-thb-budget-warning'), 'under 80%: no warning');
+
+/* Blockchair: honour the block, double the pause on each block in a row. */
+$b14->reset('blockchair');
+$p1 = $b14->blockCooldown('blockchair', 430);
+$p2 = $b14->blockCooldown('blockchair', 430);
+$p3 = $b14->blockCooldown('blockchair', 430);
+ok([$p1, $p2, $p3] === [3600, 7200, 14400] && str_contains((string) $b14->refuse('blockchair'), 'after a 430'),
+   'Blockchair 430: paused 1 h, then 2 h, then 4 h on repeat blocks; nothing is sent meanwhile');
+foreach (range(1, 8) as $_) { $pmax = $b14->blockCooldown('blockchair', 430); }
+ok($pmax === 86400, 'capped at a day');
+$b14->clearStrikes('blockchair');
+$b14->reset('blockchair');
+ok($b14->blockCooldown('blockchair', 430) === 3600, 'a success resets the run');
+$b14->reset('blockchair');
+ok($config['providers']['blockchair']['budget']['per_hour'] <= 15 && $config['ttl']['network'] >= 3600 && $config['ttl']['whales'] >= 3600
+   && str_contains((string) file_get_contents($base . 'includes/Collectors/Collector.php'), 'blockCooldown('),
+   'Blockchair asked less often (network and whales hourly, ≤ 15 an hour), and the collector uses the doubling pause');
 
 update_option(Settings::OPTION, []);
 

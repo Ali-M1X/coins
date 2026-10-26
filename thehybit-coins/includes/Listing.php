@@ -4,18 +4,17 @@
  *
  * WHERE THE DATA COMES FROM
  *
- * CoinGecko's /coins/markets, ordered by market cap, `per_page` coins per
- * request. One request fills one page of the list, whatever the page size, so
- * the list costs requests per PAGE, never per coin:
+ * CoinGecko's /coins/markets, ordered by market cap. 2.14.0: fetched in
+ * CHUNKS of 250 (the endpoint's per_page maximum), independent of the 100
+ * rows a displayed page shows, so the 500 coins are two requests:
  *
- *   page 1 (coins 1–100)    refreshed every  5 min   12 requests/hour
- *   pages 2–5 (101–500)     refreshed every 30 min    8 requests/hour
- *                                                     20 requests/hour, ~480/day
+ *   chunk 1 (ranks 1–250)    every 15 min    4 requests/hour
+ *   chunk 2 (ranks 251–500)  every  2 h      0.5 requests/hour
+ *                                            ~108 requests/day (was ~180)
  *
- * against our CoinGecko budget of 200/hour and 4,000/day, of which the rest of
- * the plugin uses about 100/hour. The scheduler refreshes at most ONE page per
- * tick, after the live price and through the same budget, so it can never
- * crowd the ticker out or burst past the per-minute limit.
+ * The scheduler refreshes at most ONE chunk per tick, at the highest budget
+ * tier (the list is what must never go empty). A displayed page is assembled
+ * from whichever chunk(s) hold its ranks.
  *
  * A page render reads the cache only, like every other v2 page: a visitor
  * never triggers a provider request. A page the scheduler has not filled yet
@@ -67,6 +66,18 @@ final class Listing
         return max(1, (int) ($this->settings()['pages'] ?? 5));
     }
 
+    /** Coins per request (2.14.0): CoinGecko's maximum, 250. */
+    public function fetchSize(): int
+    {
+        return max($this->perPage(), min(250, (int) ($this->settings()['fetch_size'] ?? $this->perPage())));
+    }
+
+    /** Requests that cover the whole list: 2 for 500 coins at 250 each. */
+    public function chunks(): int
+    {
+        return (int) ceil($this->pages() * $this->perPage() / $this->fetchSize());
+    }
+
     private function ttl(int $page): int
     {
         return $page === 1
@@ -74,77 +85,144 @@ final class Listing
             : (int) ($this->settings()['ttl_rest'] ?? 30 * MINUTE_IN_SECONDS);
     }
 
-    private static function key(int $page): string
+    private static function key(int $chunk): string
     {
-        return 'page:' . $page;
+        return 'chunk:' . $chunk;
     }
 
-    public function entry(int $page): ?array
+    /** One fetched chunk's cache entry, or null. */
+    public function chunkEntry(int $chunk): ?array
     {
-        $e = $this->cache->peek(self::DATASET, self::key($page));
+        $e = $this->cache->peek(self::DATASET, self::key($chunk));
         return is_array($e) && is_array($e['data']['rows'] ?? null) ? $e : null;
     }
 
-    /** Age over TTL: ≥ 1 is due. A page never fetched is infinitely overdue. */
-    public function overdue(int $page): float
+    /**
+     * One DISPLAYED page (100 rows), assembled from the chunk(s) holding its
+     * ranks. fetchedAt is the older of them. Entries cached by 2.13.0 and
+     * earlier, one per displayed page, are still read until they expire, so
+     * an update never empties the list while the new chunks are fetched.
+     */
+    public function entry(int $page): ?array
     {
-        $e = $this->entry($page);
+        $per = $this->perPage();
+        $size = $this->fetchSize();
+        $lo = ($page - 1) * $per + 1;
+        $hi = $page * $per;
+        $rows = [];
+        $at = null;
+        for ($c = intdiv($lo - 1, $size) + 1; $c <= intdiv($hi - 1, $size) + 1; $c++) {
+            $e = $this->chunkEntry($c);
+            if ($e === null) {
+                continue;
+            }
+            foreach ($e['data']['rows'] as $i => $r) {
+                $pos = (int) ($r['pos'] ?? (($c - 1) * $size + $i + 1));
+                if ($pos >= $lo && $pos <= $hi) {
+                    $rows[] = ['pos' => $pos] + $r;
+                }
+            }
+            $at = $at === null ? (int) $e['fetchedAt'] : min($at, (int) $e['fetchedAt']);
+        }
+        if ($rows !== []) {
+            return ['data' => ['rows' => $rows], 'fetchedAt' => $at];
+        }
+        $legacy = $this->cache->peek(self::DATASET, 'page:' . $page);
+        return is_array($legacy) && is_array($legacy['data']['rows'] ?? null) ? $legacy : null;
+    }
+
+    private function chunkTtl(int $chunk): int
+    {
+        return $this->ttl($chunk === 1 ? 1 : 2);
+    }
+
+    /** Age over TTL: ≥ 1 is due. Never fetched: infinitely overdue. Backing off after a failure: not due. */
+    public function chunkOverdue(int $chunk): float
+    {
+        if ((int) get_transient('thb_list_retry_' . $chunk) > time()) {
+            return 0.0;
+        }
+        $e = $this->chunkEntry($chunk);
         if ($e === null) {
             return INF;
         }
-        return (time() - (int) ($e['fetchedAt'] ?? 0)) / max(1, $this->ttl($page));
+        return (time() - (int) ($e['fetchedAt'] ?? 0)) / max(1, $this->chunkTtl($chunk));
+    }
+
+    /** A displayed page's staleness, from the chunk holding its first rank. */
+    public function overdue(int $page): float
+    {
+        $chunk = intdiv(($page - 1) * $this->perPage(), $this->fetchSize()) + 1;
+        $e = $this->chunkEntry($chunk);
+        return $e === null ? ($this->entry($page) === null ? INF : 0.0)
+            : (time() - (int) ($e['fetchedAt'] ?? 0)) / max(1, $this->chunkTtl($chunk));
     }
 
     /**
-     * The page the scheduler should refresh now, or null. Page 1 first — it is
-     * the page most visitors open and the one the market figure is computed
-     * from — then whichever other page is most overdue.
+     * The chunk the scheduler should refresh now, or null. Chunk 1 first (the
+     * page most visitors open, and the market figure), then the rest.
      */
     public function due(): ?int
     {
         if (($this->settings()['enabled'] ?? true) === false) {
             return null;
         }
-        if ($this->overdue(1) >= 1.0) {
-            return 1;
-        }
         $best = null;
         $worst = 1.0;
-        for ($p = 2; $p <= $this->pages(); $p++) {
-            $o = $this->overdue($p);
+        for ($c = 1; $c <= $this->chunks(); $c++) {
+            $o = $this->chunkOverdue($c);
+            if ($c === 1 && $o >= 1.0) {
+                return 1;
+            }
             if ($o >= $worst) {
-                [$best, $worst] = [$p, $o];
+                [$best, $worst] = [$c, $o];
             }
         }
         return $best;
     }
 
     /**
-     * Fetch one page from CoinGecko and cache it. One request. Failures are
-     * recorded for the diagnostics screen and leave the last good copy in place.
+     * Fetch one CHUNK (250 coins) and cache it. One request. A failure keeps
+     * the last good copy and waits (5 min, 10, 20 … up to 6 h) before the
+     * next attempt; our own budget refusal made no request and does not.
      *
      * @return int rows written
      */
-    public function refresh(int $page): int
+    public function refresh(int $chunk): int
     {
         $collector = $this->pipeline->collector('coingecko');
         if (!$collector instanceof CoinGecko || !$collector->isEnabled()) {
             return 0;
         }
+        $size = $this->fetchSize();
         try {
-            $rows = $collector->listing($page, $this->perPage());
+            $rows = $collector->listing($chunk, $size);
         } catch (\Throwable $e) {
-            Cache::noteError(self::DATASET, 'page ' . $page . ': ' . $e->getMessage(),
-                $e->getCode() === Budget::REFUSED);
+            $refused = $e->getCode() === Budget::REFUSED;
+            Cache::noteError(self::DATASET, 'chunk ' . $chunk . ': ' . $e->getMessage(), $refused);
+            if (!$refused) {
+                $this->backoff($chunk);
+            }
             throw $e;
         }
         if ($rows === []) {
-            Cache::noteError(self::DATASET, 'page ' . $page . ': CoinGecko returned no rows');
+            Cache::noteError(self::DATASET, 'chunk ' . $chunk . ': CoinGecko returned no rows');
+            $this->backoff($chunk);
             return 0;
         }
-        $this->cache->put(self::DATASET, self::key($page), ['rows' => $rows]);
+        $this->cache->put(self::DATASET, self::key($chunk), ['rows' => $rows]);
+        delete_transient('thb_list_retry_' . $chunk);
+        delete_transient('thb_list_fails_' . $chunk);
         Cache::clearError(self::DATASET);
         return count($rows);
+    }
+
+    private function backoff(int $chunk): void
+    {
+        $fails = (int) get_transient('thb_list_fails_' . $chunk) + 1;
+        set_transient('thb_list_fails_' . $chunk, $fails, DAY_IN_SECONDS);
+        $wait = Cache::backoff($fails);
+        set_transient('thb_list_retry_' . $chunk, time() + $wait, $wait);
     }
 
     /**
@@ -223,7 +301,7 @@ final class Listing
         $market = $this->market7d();
         $ours = $this->ours();
         $row = fn(array $r, int $position) => $r + [
-            'position' => $position,
+            'position' => (int) ($r['pos'] ?? $position),
             'url'      => $ours[$r['id']]['url'] ?? null,
             'nameFa'   => $ours[$r['id']]['name'] ?? null,
             'logo'     => $ours[$r['id']]['logo'] ?? $r['image'],
@@ -304,7 +382,7 @@ final class Listing
                 }
                 $seen[$r['id']] = true;
                 $out[] = $r + [
-                    'position'  => ($p - 1) * $this->perPage() + $i + 1,
+                    'position'  => (int) ($r['pos'] ?? (($p - 1) * $this->perPage() + $i + 1)),
                     'page'      => $p,
                     'url'       => $ours[$r['id']]['url'] ?? null,
                     'nameFa'    => $ours[$r['id']]['name'] ?? null,

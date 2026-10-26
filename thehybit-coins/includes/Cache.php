@@ -63,6 +63,40 @@ final class Cache
     }
 
     /**
+     * 2.14.0: how long past its TTL a value may still be shown (config
+     * `max_stale`). The entry is stored for exactly TTL + this, so past it
+     * the value is gone and its section with it.
+     */
+    public function maxStale(string $dataset): int
+    {
+        $map = (array) ($this->config['max_stale'] ?? []);
+        if (isset($map[$dataset])) {
+            return (int) $map[$dataset];
+        }
+        return (int) ($map['default'] ?? $this->config['stale_grace'] ?? 6 * HOUR_IN_SECONDS);
+    }
+
+    /** Seconds a value fetched now is kept: its TTL, then its maximum stale age. */
+    public function lifetime(string $dataset): int
+    {
+        return $this->ttl($dataset) + $this->maxStale($dataset);
+    }
+
+    /**
+     * 2.14.0: after a refresh that FAILED (a request was made and it did not
+     * succeed), the next attempt waits — 5 min, 10, 20, … up to 6 h — instead
+     * of being retried on the very next tick. Our own budget refusals made no
+     * request and do not count.
+     */
+    public const BACKOFF_BASE = 5 * MINUTE_IN_SECONDS;
+    public const BACKOFF_MAX  = 6 * HOUR_IN_SECONDS;
+
+    public static function backoff(int $failures): int
+    {
+        return (int) min(self::BACKOFF_MAX, self::BACKOFF_BASE * (2 ** max(0, min(10, $failures - 1))));
+    }
+
+    /**
      * Look at a cached entry WITHOUT fetching on a miss.
      *
      * The chart scheduler needs to know how stale each window is before it
@@ -120,11 +154,14 @@ final class Cache
             // before this existed: a provider returning null cost five
             // identical HTTP calls per page, warm cache or not, forever.
             if (!empty($entry['miss'])) {
-                if ($age < $this->missTtl()) {
+                if ($age < $this->missTtl() || (int) ($entry['retryAt'] ?? 0) > $now) {
                     return ['data' => null, 'fetchedAt' => 0, 'stale' => true, 'source' => 'unavailable'];
                 }
             } elseif ($age < $ttl) {
                 return $entry + ['stale' => false];
+            } elseif ((int) ($entry['retryAt'] ?? 0) > $now) {
+                // Backing off after a failed refresh: serve the last good value.
+                return ['stale' => true, 'source' => 'stale'] + $entry;
             }
         }
 
@@ -149,8 +186,8 @@ final class Cache
                 'source'    => 'live',
             ];
 
-            // Stored for TTL + grace so the stale copy outlives its freshness.
-            set_transient($name, $entry, $ttl + (int) $this->config['stale_grace']);
+            // Stored for TTL + the dataset's maximum stale age (2.14.0).
+            set_transient($name, $entry, $this->lifetime($dataset));
             self::clearError($dataset);
             return $entry;
 
@@ -158,7 +195,20 @@ final class Cache
             error_log('[thb] refresh failed for ' . $dataset . '/' . $key . ': ' . $e->getMessage());
             self::noteError($dataset, $e->getMessage(), $e->getCode() === Budget::REFUSED);
 
+            $refused = $e->getCode() === Budget::REFUSED;
+
             if ($previous !== null) {
+                /* STALE-WHILE-ERROR. The last good value stays, untouched and
+                   with its original fetch time; it simply keeps its original
+                   expiry (TTL + max_stale). A real failure also sets a backoff
+                   so the next attempt is not on the very next tick. */
+                if (!$refused) {
+                    $fails = (int) ($entry['fails'] ?? 0) + 1;
+                    $keep = (int) $entry['fetchedAt'] + $this->lifetime($dataset) - $now;
+                    if ($keep > 0) {
+                        set_transient($name, ['fails' => $fails, 'retryAt' => $now + self::backoff($fails)] + $entry, $keep);
+                    }
+                }
                 $entry['stale'] = true;
                 $entry['source'] = 'stale';
                 return $entry;
@@ -167,7 +217,9 @@ final class Cache
             // Nothing cached and nothing fetched. Record the miss so the next
             // four pipeline runs in this same request do not each retry it, then
             // render empty — which every section already handles.
-            set_transient($name, ['data' => null, 'fetchedAt' => $now, 'miss' => true], $this->missTtl());
+            $fails = $refused ? (int) ($entry['fails'] ?? 0) : (int) ($entry['fails'] ?? 0) + 1;
+            $hold = $refused ? $this->missTtl() : max($this->missTtl(), self::backoff($fails));
+            set_transient($name, ['data' => null, 'fetchedAt' => $now, 'miss' => true, 'fails' => $fails, 'retryAt' => $now + $hold], $hold);
 
             return ['data' => null, 'fetchedAt' => 0, 'stale' => true, 'source' => 'unavailable'];
         }
@@ -232,7 +284,7 @@ final class Cache
         set_transient(
             self::PREFIX . md5($dataset . '|' . $key),
             ['data' => $data, 'fetchedAt' => time(), 'stale' => false, 'source' => 'live'],
-            $this->ttl($dataset) + (int) $this->config['stale_grace']
+            $this->lifetime($dataset)
         );
     }
 

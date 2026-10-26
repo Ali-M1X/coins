@@ -465,13 +465,17 @@ final class Diagnostics
      * "how much budget is left" is not a curiosity here; it is the number that
      * decides whether the next tick does anything at all.
      */
+    /** 2.14.0: warn above this share of the daily budget, projected. */
+    public const PROJECTION_WARN = 0.8;
+
     private function budgetTable(): void
     {
         $budget = new Budget($this->config);
 
         $this->open('بودجه درخواست ارائه‌دهندگان', [
-            'ارائه‌دهنده', 'وضعیت', 'در دقیقه', 'در ساعت', 'در روز', 'باقی‌مانده', 'خنک‌سازی',
+            'ارائه‌دهنده', 'وضعیت', 'در دقیقه', 'در ساعت', 'در روز', 'مصرف روزانه پیش‌بینی‌شده', 'باقی‌مانده', 'خنک‌سازی',
         ]);
+        $warnings = [];
 
         foreach (array_keys((array) $this->config['providers']) as $provider) {
             $snap = $budget->snapshot($provider);
@@ -479,7 +483,7 @@ final class Diagnostics
             if ($snap['unlimited']) {
                 printf(
                     '<tr><th scope="row"><code>%s</code></th><td>—</td>'
-                    . '<td colspan="4"><em>بودجه‌ای تنظیم نشده است</em></td><td>—</td></tr>',
+                    . '<td colspan="5"><em>بودجه‌ای تنظیم نشده است</em></td><td>—</td></tr>',
                     esc_html($provider)
                 );
                 continue;
@@ -512,20 +516,44 @@ final class Diagnostics
                     ? sprintf('آخرین %d: %s', (int) ($detail['status'] ?? 429), esc_html(gmdate('H:i:s', (int) $detail['startedAt'])))
                     : '—');
 
+            /* 2.14.0: projected daily use at the pace of the last 24 hours. */
+            $proj = $budget->projection($provider);
+            $projCell = $proj['limit']
+                ? sprintf('%d / %d (%d%%)', $proj['perDay'], $proj['limit'], (int) round(100 * (float) $proj['share']))
+                : sprintf('%d', $proj['perDay']);
+            if ($proj['limit'] && $proj['share'] > self::PROJECTION_WARN) {
+                $projCell = '⚠️ ' . $projCell;
+                $warnings[] = sprintf('%s: %d of %d a day (%d%%), from the last %s h',
+                    $provider, $proj['perDay'], $proj['limit'], (int) round(100 * $proj['share']), $proj['hours']);
+            }
+            if (($strikes = $budget->strikes($provider)) > 0) {
+                $cooldownCell .= sprintf(' — %d block(s) in a row, pause doubles', $strikes);
+            }
+
             printf(
                 '<tr><th scope="row"><code>%s</code></th><td>%s</td>'
-                . '<td dir="ltr">%s</td><td dir="ltr">%s</td><td dir="ltr">%s</td>'
+                . '<td dir="ltr">%s</td><td dir="ltr">%s</td><td dir="ltr">%s</td><td dir="ltr">%s</td>'
                 . '<td dir="ltr">%d</td><td dir="ltr">%s</td></tr>',
                 esc_html($provider),
                 $status,
                 esc_html($cell($snap, 'per_minute')),
                 esc_html($cell($snap, 'per_hour')),
                 esc_html($cell($snap, 'per_day')),
+                esc_html($projCell),
                 (int) $snap['remaining'],
                 $cooldownCell
             );
         }
         $this->close();
+
+        if ($warnings !== []) {
+            echo '<div class="notice notice-warning inline" data-thb-budget-warning><p><strong>مصرف پیش‌بینی‌شده بیش از ۸۰٪ بودجه روزانه است.</strong> '
+               . 'با این آهنگ، بودجه پیش از پایان روز تمام می‌شود و داده‌های کم‌اهمیت‌تر زودتر متوقف می‌شوند.</p><ul>';
+            foreach ($warnings as $w) {
+                echo '<li dir="ltr">' . esc_html($w) . '</li>';
+            }
+            echo '</ul></div>';
+        }
 
         echo '<p class="description">بودجه CoinGecko از اندازه‌گیری واقعی همین سرور آمده است: '
            . 'پنج درخواست پیاپی موفق، ششمی 429 با Retry-After برابر 60 ثانیه. '

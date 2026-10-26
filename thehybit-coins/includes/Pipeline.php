@@ -473,6 +473,22 @@ final class Pipeline
             ];
         }
 
+        /* 2.14.0 — A PAGE VIEW DOES NOT RACE THE SCHEDULER. A value up to
+           one TTL past due is served as it is: the scheduler refreshes it on
+           its own cadence (the batch every 10 minutes covers every coin's
+           price at once). Before, every view landing just after a TTL spent
+           its own request on one coin — crawlers walking 84 pages did that
+           all day. A page with nothing cached still fetches, as before. */
+        if ($renderPass) {
+            $held = $this->cache->peek($dataset, $this->cache->keyFor($dataset, $coin));
+            if (is_array($held) && is_array($held['data'] ?? null)
+                && time() - (int) ($held['fetchedAt'] ?? 0) < 2 * $this->cache->ttl($dataset)) {
+                $age = time() - (int) $held['fetchedAt'];
+                return ['data' => $held['data'], 'fetchedAt' => (int) $held['fetchedAt'],
+                        'stale' => $age >= $this->cache->ttl($dataset), 'source' => 'cache'];
+            }
+        }
+
         $result = $this->cache->remember(
             $dataset,
             $this->cache->keyFor($dataset, $coin),
@@ -551,7 +567,9 @@ final class Pipeline
 
             $state[$period] = [
                 'data'     => $has ? $entry['data'] : null,
-                'stale'    => $age >= $ttl,
+                /* 2.14.0: a page view refreshes a window only once it is a full
+                   TTL past due — until then the batch and the scheduler own it. */
+                'stale'    => $has ? $age >= 2 * $ttl : true,
                 // Overdue by how many multiples of its own TTL — so a window is
                 // compared against its own cadence, not against a faster one.
                 'priority' => $has ? $age / max(1, $ttl) : PHP_INT_MAX,
@@ -588,11 +606,12 @@ final class Pipeline
 
             $budget--;
             $dataset = Cache::CHART_PREFIX . $period;
-            $result = $this->cache->remember(
+            /* 2.14.0: chart history is the lowest tier (3), on a page render too. */
+            $result = Budget::as(Budget::$tier ?? 3, fn() => $this->cache->remember(
                 $dataset,
                 $this->cache->keyFor($dataset, $coin),
                 static fn() => $collector->fetch($coin, $dataset)
-            );
+            ));
 
             if (is_array($result['data'] ?? null)) {
                 $state[$period]['data'] = $result['data'];

@@ -66,7 +66,7 @@ function simulate(array $config, int $n, array $seeds): array
     $interval = Scheduler::interval($config);
     $ticks = (int) floor(3600 / $interval);
     $hours = (int) (getenv('THB_HOURS') ?: 8);
-    $window = 6;
+    $window = (int) (getenv('THB_WINDOW') ?: 6);
     $start = 0;
     for ($h = 0; $h < $hours; $h++) {
         if ($h === $hours - $window) {
@@ -152,9 +152,11 @@ if (getenv('THB_TTL_PROPOSAL')) {
 }
 foreach ($variants as $label => $config) {
     /* THB_SIZES=20,50 compares the 2.5 site with the 2.6 one; default 2,20. */
-    [$na, $nb] = array_map('intval', explode(',', getenv('THB_SIZES') ?: '2,20'));
-    $r2 = simulate($config, $na, $seeds);
+    [$na, $nb] = array_map('intval', explode(',', getenv('THB_SIZES') ?: '2,20')) + [1 => 0];
+    if ($nb === 0) { $nb = $na; }
+    $r2 = $na === $nb ? null : simulate($config, $na, $seeds);
     $r20 = simulate($config, $nb, $seeds);
+    $r2 ??= $r20;
     printf("\n=== %s — requests per hour (steady state, hours 3–8) ===\n", $label);
     printf("  %-28s %10s %10s\n", 'host', $na . ' coins', $nb . ' coins');
     foreach (array_unique(array_merge(array_keys($r2['byHost']), array_keys($r20['byHost']))) as $host) {

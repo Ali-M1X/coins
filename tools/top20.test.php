@@ -834,5 +834,57 @@ if (getenv('THB_TOP20_DIR')) {
     }
 }
 
+section('budget priority and never-empty pages (2.14.0)');
+use TheHybit\Coins\Budget;
+$cfg14 = $plugin->config;
+foreach (array_keys($cfg14['providers']) as $p) { (new Budget($cfg14))->reset($p); }
+v2_warm_list();
+$sched14 = new \TheHybit\Coins\Scheduler($cfg14, $plugin->coins, $plugin->pipeline, $plugin->history, $plugin->listing);
+$tickWith = static function (int $usedToday) use ($cfg14, $sched14, $plugin): array {
+    foreach (array_keys($cfg14['providers']) as $p) { (new Budget($cfg14))->reset($p); }
+    set_transient('thb_budget_coingecko_per_day', ['since' => Clock::$now, 'count' => $usedToday], 2 * 86400);
+    foreach ([1, 2] as $c) { $plugin->cache->forget(\TheHybit\Coins\Listing::DATASET, 'chunk:' . $c); delete_transient('thb_list_retry_' . $c); }
+    foreach ($plugin->coins->all() as $coin) { $plugin->cache->forget('market', $plugin->cache->keyFor('market', $coin)); }
+    $plugin->cache->forget('ticker', $plugin->cache->keyFor('ticker'));
+    $plugin->cache->forget('global', $plugin->cache->keyFor('global'));
+    Probe::reset(keepCache: true);
+    $GLOBALS['thb_probe_background'] = true;
+    $sched14->tick();
+    $GLOBALS['thb_probe_background'] = false;
+    $cg = array_values(array_filter(Probe::$calls, static fn($c) => $c['host'] === 'api.coingecko.com'));
+    $batch = array_values(array_filter($cg, static fn($c) => str_contains($c['url'], '/coins/markets') && str_contains($c['url'], 'ids=')));
+    parse_str((string) parse_url($batch[0]['url'] ?? '', PHP_URL_QUERY), $q);
+    return [
+        'list'   => count(array_filter($cg, static fn($c) => str_contains($c['url'], 'order=market_cap_desc') && !str_contains($c['url'], 'ids='))),
+        'ticker' => count(array_filter($cg, static fn($c) => str_contains($c['url'], '/simple/price'))),
+        'batchIds' => isset($q['ids']) ? count(explode(',', $q['ids'])) : 0,
+        'slow'   => count(array_filter($cg, static fn($c) => str_contains($c['url'], 'market_chart') || str_contains($c['url'], '/global') || preg_match('#/coins/(?!markets)[a-z0-9-]+(\?|$)#', $c['url']))),
+    ];
+};
+Clock::advance(3600);
+$healthy = $tickWith(0);
+ok($healthy['list'] === 1 && $healthy['ticker'] === 1 && $healthy['batchIds'] === count($ids),
+   "healthy budget: one tick refreshes the list chunk, the ticker and ONE batched request for all {$healthy['batchIds']} coins");
+$low = $tickWith(3500);
+ok($low['list'] === 1 && $low['ticker'] === 1 && $low['batchIds'] === 20 && $low['slow'] === 0,
+   '12.5% of the day left: list first, then the ticker and the top 20 coins only; no history or slow data');
+$lower = $tickWith(3850);
+ok($lower['list'] === 1 && $lower['ticker'] === 0 && $lower['batchIds'] === 0 && $lower['slow'] === 0,
+   '3.75% left: the reserved margin goes to the /coins/ list alone');
+foreach (array_keys($cfg14['providers']) as $p) { (new Budget($cfg14))->reset($p); }
+
+/* Never an empty list: the last good list is served for up to 48 h past its TTL. */
+v2_warm_list();
+Clock::advance(30 * 3600);
+Probe::reset(keepCache: true);
+$aged = v2_render_list(1);
+ok(Probe::count('order=market_cap_desc') === 0 && str_contains($aged, '<table class="list-table"') && substr_count($aged, 'class="c-rank"') >= 99,
+   'the /coins/ list 30 h after its last refresh (budget spent all day) still shows every row');
+ok(!preg_match('#قدیمی|به‌روز نشده|آخرین به‌روزرسانی|stale#ui', strip_tags((string) preg_replace('#<script\b.*?</script>#s', '', $aged))), 'with no "stale" or "last updated" wording on the page');
+Clock::advance(20 * 3600);
+$gone = v2_render_list(1);
+ok(!str_contains($gone, '<table class="list-table"'), 'past its maximum stale age (48 h + TTL) the list is no longer shown');
+v2_warm_list();
+
 echo $failed ? "\n{$failed} FAILED\n" : "\nAll top-20 tests passed.\n";
 exit($failed ? 1 : 0);

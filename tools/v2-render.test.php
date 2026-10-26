@@ -632,8 +632,8 @@ $sched = new Scheduler($cfgL, $plugin->coins, $plugin->pipeline, $plugin->histor
 $live = new LivePrice($cfgL, $plugin->coins, $plugin->cache);
 $ethL = $plugin->coins->find(10);
 
-ok($plugin->cache->ttl('ticker') < Scheduler::interval($cfgL),
-   'the ticker TTL (' . $plugin->cache->ttl('ticker') . 's) is shorter than the tick interval (' . Scheduler::interval($cfgL) . 's), so every tick refreshes it');
+ok($plugin->cache->ttl('ticker') <= 2 * Scheduler::interval($cfgL) && $plugin->cache->ttl('ticker') > Scheduler::interval($cfgL),
+   '2.14.0: the ticker TTL (' . $plugin->cache->ttl('ticker') . 's) spans two tick intervals (' . Scheduler::interval($cfgL) . 's): every second tick refreshes it, ~30 an hour');
 ok(!array_key_exists('ticker', (array) (new ReflectionClassConstant(TheHybit\Coins\Pipeline::class, 'DATASETS'))->getValue()),
    'the ticker is not part of a page render — renders still never wait on it');
 
@@ -650,12 +650,12 @@ $tick = $plugin->cache->peek('ticker', $plugin->cache->keyFor('ticker'));
 ok(isset($tick['data']['prices']['ethereum'], $tick['data']['prices']['bitcoin']) && !isset($tick['data']['prices']['zero-coin']),
    'both coins cached; a zero price is dropped, never shown as $0');
 
-Clock::advance(30);
+Clock::advance(55);
 $sched->tick();
-ok(Probe::count('/simple/price') === 1, 'a tick 30s later does not ask again — the minute has not passed');
-Clock::advance(25);
+ok(Probe::count('/simple/price') === 1, 'the next tick (55s later) does not ask again');
+Clock::advance(55);
 $sched->tick();
-ok(Probe::count('/simple/price') === 2, 'the next tick (55s after the first) refreshes it — once a minute');
+ok(Probe::count('/simple/price') === 2, 'the tick after that (110s after the first) refreshes it — every two minutes');
 $GLOBALS['thb_probe_background'] = false;
 
 /* The per-minute budget slides, and holds one call for the ticker. */
@@ -821,21 +821,21 @@ use TheHybit\Coins\Seo;
 
 $lst = $plugin->listing;
 foreach (array_keys($plugin->config['providers']) as $p) { (new TheHybit\Coins\Budget($plugin->config))->reset($p); }
-for ($p = 1; $p <= 6; $p++) { $plugin->cache->forget(Listing::DATASET, 'page:' . $p); }
+for ($p = 1; $p <= 6; $p++) { $plugin->cache->forget(Listing::DATASET, 'page:' . $p); $plugin->cache->forget(Listing::DATASET, 'chunk:' . $p); }
 Probe::reset(keepCache: true);
 $coldList = v2_render_list(1);
 ok(Probe::count() === 0, 'a cold list render makes no provider request (' . Probe::count() . ')');
 ok(str_contains($coldList, 'در حال دریافت داده') && !str_contains($coldList, '<table class="list-table"'),
    'and says the list is being fetched — no empty table, no zeros');
-ok($lst->due() === 1, 'the scheduler refreshes page 1 first');
+ok($lst->due() === 1, 'the scheduler refreshes the first chunk (ranks 1–250) first');
 
 Probe::reset(keepCache: true);
 v2_warm_list();
-ok(Probe::count('/coins/markets') === $lst->pages() && Probe::count() === $lst->pages(),
-   'filling all ' . $lst->pages() . ' pages costs ' . Probe::count() . ' requests — one per page of 100 coins, none per coin');
+ok(Probe::count('/coins/markets') === 2 && Probe::count() === 2 && $lst->chunks() === 2,
+   '2.14.0: filling all ' . $lst->pages() . ' displayed pages (500 coins) costs ' . Probe::count() . ' requests — 250 coins each, none per coin');
 $call1 = (string) Probe::$calls[0]['url'];
-ok(str_contains($call1, 'order=market_cap_desc') && str_contains($call1, 'per_page=100') && str_contains($call1, 'page=1')
-   && !str_contains($call1, 'ids='), 'each is /coins/markets ordered by market cap, 100 a page');
+ok(str_contains($call1, 'order=market_cap_desc') && str_contains($call1, 'per_page=250') && str_contains($call1, 'page=1')
+   && str_contains((string) Probe::$calls[1]['url'], 'page=2') && !str_contains($call1, 'ids='), 'each is /coins/markets ordered by market cap, 250 a request (the endpoint\'s maximum)');
 ok($lst->due() === null, 'and then nothing is due');
 
 Probe::reset(keepCache: true);
@@ -901,7 +901,7 @@ for ($minute = 0; $minute < 120; $minute++) {
 }
 $GLOBALS['thb_probe_background'] = false;
 $perHour = $listCalls / 2;
-ok($perHour >= 7 && $perHour <= 9, "the list costs {$perHour} CoinGecko requests an hour (page 1 every 10 min, pages 2–5 every 2 h: ~8 expected)");
+ok($perHour >= 4 && $perHour <= 5, "the list costs {$perHour} CoinGecko requests an hour (ranks 1–250 every 15 min, 251–500 every 2 h: ~4.5 expected; was ~8)");
 
 /* The scheduler: one list page a tick, through the budget, after the ticker. */
 $schedSrc = (string) file_get_contents(THB_COINS_DIR . 'includes/Scheduler.php');
@@ -1027,6 +1027,22 @@ ok($peerSentence === '' || (str_contains($peerSentence, 'به ازای هر ۱۰
 /* 17 — daily pulse: framed lines, no auto-written line, no heat box, a real 30-second summary. */
 ok(str_contains($html, 'v2-pulse__card') && !str_contains($html, 'به‌صورت خودکار از ترکیب داده‌ها') && !str_contains($html, 'حرارت اکوسیستم')
    && str_contains($html, 'فاصله تا بالاترین قیمت تاریخ'), 'pulse: lines in a card; the auto-written line and the heat box are gone; the 30-second box carries new facts');
+
+
+/* 2.14.0 — stale-while-error on the coin page: a day and a half with every
+   refresh failing (budget spent, providers cooling down) leaves every figure
+   in place, with no wording about its age. */
+Clock::advance(30 * 3600);
+foreach (array_keys($plugin->config['providers']) as $p) { (new TheHybit\Coins\Budget($plugin->config))->startCooldown($p, 0, 429, 3600); }
+Probe::reset(keepCache: true);
+$GLOBALS['thb_current_post'] = 10;
+$agedHtml = v2_render(10);
+unset($GLOBALS['thb_current_post']);
+$keptFigures = array_filter(['498,000', '2,000 ETH', '3.12%', 'بازدید صفحه دانشنامه فارسی'], static fn($f) => !str_contains($agedHtml, $f));
+ok($keptFigures === [] && Probe::count() === 0,
+   'Ethereum page 30 h later, every provider cooling down: whale, activity, staking and interest figures are all still shown (' . implode(', ', $keptFigures) . ')');
+ok(!preg_match('#قدیمی|به‌روز نشده#u', strip_tags((string) preg_replace('#<script\b.*?</script>#s', '', $agedHtml))), 'and nothing on the page says the figures are old');
+foreach (array_keys($plugin->config['providers']) as $p) { (new TheHybit\Coins\Budget($plugin->config))->reset($p); }
 
 if (getenv('THB_DUMP_HTML')) {
     file_put_contents((string) getenv('THB_DUMP_HTML'), $html);

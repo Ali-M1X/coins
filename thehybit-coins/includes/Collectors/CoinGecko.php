@@ -472,7 +472,8 @@ final class CoinGecko extends Collector
         }
 
         $out = [];
-        foreach ($rows as $r) {
+        $offset = (max(1, $page) - 1) * max(1, min(250, $perPage));
+        foreach ($rows as $idx => $r) {
             if (!is_array($r) || empty($r['id']) || !isset($r['current_price']) || !is_numeric($r['current_price'])) {
                 continue;   // a row without a price has nothing to list
             }
@@ -487,6 +488,7 @@ final class CoinGecko extends Collector
             }
 
             $out[] = [
+                'pos'       => $offset + (int) $idx + 1,   // 2.14.0: place in the market-cap order, for slicing chunks into pages
                 'id'        => (string) $r['id'],
                 'symbol'    => strtoupper((string) ($r['symbol'] ?? '')),
                 'name'      => (string) ($r['name'] ?? $r['id']),

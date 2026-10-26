@@ -1526,9 +1526,12 @@ final class Model
             return ['state' => !empty($entry['miss']) ? 'unavailable' : 'pending'] + $out;
         }
 
+        /* 2.14.0: a value past its TTL is still a real value — shown as
+           'ok' until it expires (TTL + max_stale). The age stays internal. */
         $age = time() - (int) ($entry['fetchedAt'] ?? 0);
         return [
-            'state'     => $age > $this->cache->ttl($dataset) ? 'stale' : 'ok',
+            'state'     => 'ok',
+            'aged'      => $age > $this->cache->ttl($dataset),
             'data'      => $entry['data'],
             'source'    => $label,
             'fetchedAt' => gmdate('c', (int) $entry['fetchedAt']),

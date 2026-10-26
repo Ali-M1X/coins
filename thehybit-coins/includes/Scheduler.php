@@ -364,6 +364,7 @@ final class Scheduler
             return $this->run();
         } finally {
             Cache::$missHold = null;
+            Budget::$tier = null;
             $this->lock->release($token);
         }
     }
@@ -419,6 +420,10 @@ final class Scheduler
          * and at one request a tick it cannot crowd anything out. The budget
          * refuses it like any other call, in which case the page keeps showing
          * the last price with its age. */
+        /* 2.14.0: every request below carries a priority tier (Budget::$tier),
+           so when the daily allowance runs low the least important work stops
+           first: list (0) → top-coin prices (1) → other coins (2) → slow data (3). */
+        Budget::$tier = 1;
         if ($this->overdue('ticker', (new Cache($this->config))->keyFor('ticker')) >= 1.0) {
             if (($refusal = $this->budget->refuse('coingecko', reserved: true)) !== null) {
                 $progress['skipped'][] = 'ticker: ' . $refusal;
@@ -429,11 +434,21 @@ final class Scheduler
 
         /* ---- 1. The batch, which serves every coin at once ---- */
         if ($this->batchDue($coins)) {
+            /* All coins at tier 2 while the budget is healthy — one request
+               for 84 coins at batch_size 250. When tier 2 is held back, the
+               top coins alone at tier 1. */
+            $batchCoins = $coins;
+            Budget::$tier = 2;
             if (($refusal = $this->budget->refuse('coingecko')) !== null) {
+                Budget::$tier = 1;
+                $batchCoins = array_slice($coins, 0, max(1, (int) ($this->config['budget_tiers']['top'] ?? 20)));
+                $refusal = $this->budget->refuse('coingecko') === null ? null : $refusal;
+            }
+            if ($refusal !== null) {
                 $progress['skipped'][] = 'market (batched): ' . $refusal;
             } else {
-                $size = (int) ($limits['batch_size'] ?? 50);
-                foreach (array_chunk($coins, max(1, $size)) as $chunk) {
+                $size = (int) ($limits['batch_size'] ?? 250);
+                foreach (array_chunk($batchCoins, max(1, $size)) as $chunk) {
                     if ($this->budget->refuse('coingecko') !== null) {
                         $progress['skipped'][] = 'market (batched): budget spent mid-batch';
                         break;
@@ -451,17 +466,19 @@ final class Scheduler
          * request a tick, through the same budget (never the ticker's reserve), so the list can neither
          * crowd the ticker out nor burst the per-minute limit. Page 1 every
          * five minutes, the others every thirty: ~20 requests an hour. */
+        Budget::$tier = 0;   // the list: top priority, may use the reserved last 5%
         if ($this->listing !== null && ($page = $this->listing->due()) !== null) {
             if (($refusal = $this->budget->refuse('coingecko')) !== null) {
-                $progress['skipped'][] = 'listing page ' . $page . ': ' . $refusal;
+                $progress['skipped'][] = 'listing chunk ' . $page . ': ' . $refusal;
             } else {
                 try {
-                    $progress['listing'] = ['page' => $page, 'rows' => $this->listing->refresh($page)];
+                    $progress['listing'] = ['chunk' => $page, 'rows' => $this->listing->refresh($page)];
                 } catch (\Throwable $e) {
-                    $progress['skipped'][] = 'listing page ' . $page . ': ' . $e->getMessage();
+                    $progress['skipped'][] = 'listing chunk ' . $page . ': ' . $e->getMessage();
                 }
             }
         }
+        Budget::$tier = 3;   // everything below: history and slow data
 
         /* ---- 2. Shared datasets, served from the front ----
          *
@@ -850,6 +867,12 @@ final class Scheduler
 
         if (!is_array($entry) || empty($entry['fetchedAt'])) {
             return INF;
+        }
+        /* 2.14.0: backing off after a failed request — not due until then,
+           however old the value is. A failed item is never retried on the
+           very next tick. */
+        if ((int) ($entry['retryAt'] ?? 0) > time()) {
+            return 0.0;
         }
         /* A remembered failure is retried, not treated as fresh data — but by
            the BACKGROUND scheduler only every 15 minutes (or the dataset's
