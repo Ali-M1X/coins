@@ -21,7 +21,7 @@ const screens = [
   [['5'], 'story', 'داستان و یادگیری'], [['6'], 'dna', 'DNA'], [['7'], 'price-story', 'قیمت به‌روایت'],
   [['8'], 'pulse', 'پالس روزانه'], [['9'], 'peers', 'مقایسه با همتایان'], [['10'], 'supply', 'تامین و ریسک'],
 ];
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const page = await browser.newPage({ viewport: { width: 2600, height: 800 } });
 let n = 0;
 for (const [refs, id, title] of screens) {

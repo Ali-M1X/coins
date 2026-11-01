@@ -45,6 +45,10 @@ function get_header(...$a): void
     echo "<meta name=\"robots\" content=\"noindex, follow\">\n";
     echo "<title>" . htmlspecialchars($title) . "</title>\n";
     echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/v2.css\">\n";
+    echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/blocks.css\">\n";   // 2.16.0
+    if (!empty($GLOBALS['thb_hub_page'])) {   // 2.16.0: the hub's own <head> output (schema)
+        echo $GLOBALS['thb_hub_head'] ?? '';
+    }
     if (!empty($GLOBALS['thb_is_list']) || \TheHybit\Coins\Tools::current() !== null) {
         echo "<link rel=\"stylesheet\" href=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/list.css\">\n";
     }
@@ -62,6 +66,16 @@ function get_header(...$a): void
 function get_footer(...$a): void
 {
     $plugin = \TheHybit\Coins\Plugin::instance();
+    /* 2.16.0: a pillar or article page — the blocks' live prices and script only. */
+    if (!empty($GLOBALS['thb_hub_page'])) {
+        $live = \TheHybit\Coins\LiveFeed::client($plugin->config, $plugin->blocks->liveIds());
+        if ($live !== null) {
+            echo "<script>window.__THB_LIVE__ = " . wp_json_encode($live, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";</script>\n";
+            echo "<script type=\"module\" src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/live.js\"></script>\n";
+        }
+        echo "<script src=\"" . ($GLOBALS['thb_asset_base'] ?? 'thehybit-coins/') . "assets/v2/blocks.js\"></script>\n</body>\n</html>";
+        return;
+    }
     $coin = $plugin->coins->find(get_the_ID());
     echo "\n<script>window.__THB_V2__ = "
        . wp_json_encode(\TheHybit\Coins\V2\Model::client($plugin->v2($coin)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)

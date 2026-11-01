@@ -48,3 +48,7 @@ v2-convert.html
 conv-cases.json
 v2-compare.html
 v2-compare-pick.html
+
+# The frozen classic snapshot IS committed (2.16.0: it was lost once to the rule above).
+!tools/golden/classic.html
+hub-*.html

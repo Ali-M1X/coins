@@ -76,7 +76,7 @@ await new Promise((r) => server.listen(PORT, r));
 let failed = 0;
 const ok = (cond, msg) => { if (!cond) failed++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); };
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const URL_ = `http://localhost:${PORT}/v2.html`;
 const SECTIONS = ['overview', 'ecosystem', 'flow', 'story', 'dna', 'price-story', 'pulse', 'peers', 'supply'];
 

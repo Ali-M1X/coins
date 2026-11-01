@@ -27,7 +27,7 @@ const server = createServer(async (req, res) => {
   } catch { res.writeHead(404).end(); }
 });
 await new Promise((r) => server.listen(8136, r));
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const open = async (file, width = 1440) => {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   const errors = [];

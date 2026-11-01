@@ -90,6 +90,10 @@ THB_TOP20_DIR="$PWD" \
   run "Top-20 coin pages — config, unique SEO/FAQ, sections by source" \
       php tools/top20.test.php
 
+THB_HUB_DIR="$PWD" \
+  run "Coin hub — pillars, articles, blocks, schema, sitemap (2.16.0)" \
+      php tools/hub.test.php
+
 if [ -f node_modules/playwright/package.json ]; then
   run "Browser — RTL, responsive, progressive enhancement" \
       node tools/dom.test.mjs
@@ -105,6 +109,8 @@ if [ -f node_modules/playwright/package.json ]; then
       node tools/compare.test.mjs
   run "Browser — price alerts (2.12.0)" \
       node tools/alerts.test.mjs
+  run "Browser — coin hub pages and blocks (2.16.0)" \
+      node tools/hub.test.mjs
 else
   echo
   echo "  SKIPPED: browser tests (run 'npm install playwright' first)"

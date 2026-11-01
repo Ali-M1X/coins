@@ -549,11 +549,95 @@ function get_field(string $field, $id = false)
 }
 
 function get_post_meta($id, $k = '', bool $single = false) { return ''; }
-function get_posts(array $a): array { return $GLOBALS['thb_coin_ids'] ?? []; }
+function get_posts(array $a): array
+{
+    /* 2.16.0: hub articles. Fixture posts live in $GLOBALS['thb_posts'] (id => object
+       with ->terms[taxonomy] = [slugs]); a 'post' query filters them by tax_query. */
+    if (($a['post_type'] ?? '') === 'post') {
+        $out = [];
+        foreach ($GLOBALS['thb_posts'] ?? [] as $p) {
+            if (($p->post_status ?? 'publish') !== ($a['post_status'] ?? 'publish') || in_array((int) $p->ID, (array) ($a['post__not_in'] ?? []), true)) {
+                continue;
+            }
+            foreach ((array) ($a['tax_query'] ?? []) as $k => $q) {
+                if ($k === 'relation' || !is_array($q)) { continue; }
+                $has = (array) ($p->terms[$q['taxonomy']] ?? []);
+                $op = $q['operator'] ?? 'IN';
+                if ($op === 'EXISTS' && $has === []) { continue 2; }
+                if ($op === 'NOT EXISTS' && $has !== []) { continue 2; }
+                if ($op === 'IN' && array_intersect($has, (array) $q['terms']) === []) { continue 2; }
+            }
+            $out[] = $p;
+        }
+        usort($out, static fn($x, $y) => strcmp((string) $y->post_date_gmt, (string) $x->post_date_gmt));
+        return array_slice($out, 0, (int) ($a['numberposts'] ?? 5) < 0 ? null : (int) ($a['numberposts'] ?? 5));
+    }
+    return $GLOBALS['thb_coin_ids'] ?? [];
+}
+if (!function_exists('get_post')) {
+    function get_post($id = null)
+    {
+        if ($id === null) { return $GLOBALS['thb_post'] ?? null; }
+        $id = is_object($id) ? (int) $id->ID : (int) $id;
+        return $GLOBALS['thb_posts'][$id] ?? null;
+    }
+}
+function get_queried_object() { return $GLOBALS['thb_post'] ?? null; }
+function wp_get_post_terms($id, string $tax, array $args = []): array { return (array) (($GLOBALS['thb_posts'][(int) $id] ?? null)->terms[$tax] ?? []); }
+function register_taxonomy(string $t, $types, array $args = []): void { $GLOBALS['thb_taxonomies'][$t] = $args; }
+function term_exists($term, string $tax = '') { return isset($GLOBALS['thb_terms'][$tax][$term]) ? ['term_id' => $GLOBALS['thb_terms'][$tax][$term]->term_id] : null; }
+function wp_insert_term(string $name, string $tax, array $args = [])
+{
+    $id = 500 + count($GLOBALS['thb_terms'][$tax] ?? []) + 100 * count($GLOBALS['thb_terms'] ?? []);
+    $slug = (string) ($args['slug'] ?? $name);
+    $GLOBALS['thb_terms'][$tax][$slug] = (object) ['term_id' => $id, 'slug' => $slug, 'name' => $name];
+    return ['term_id' => $id];
+}
+function get_term_meta(int $id, string $k = '', bool $single = false) { return $GLOBALS['thb_term_meta'][$id][$k] ?? ''; }
+function update_term_meta(int $id, string $k, $v) { $GLOBALS['thb_term_meta'][$id][$k] = $v; return true; }
+function get_the_author_meta(string $field, int $id = 0) { return $GLOBALS['thb_authors'][$id][$field] ?? ''; }
+function get_avatar_url($id, array $args = []) { return 'https://secure.gravatar.com/avatar/' . md5((string) $id) . '?s=96'; }
+function wpautop(string $t): string { return implode('', array_map(static fn($p) => '<p>' . trim($p) . "</p>\n", array_filter(preg_split('/\n\s*\n/', trim($t)) ?: [], static fn($p) => trim($p) !== ''))); }
+function wp_kses_post($t) { return (string) $t; }
+function sanitize_textarea_field(string $s): string { return trim(strip_tags($s)); }
+function wp_verify_nonce($n, $a = -1) { return 1; }
+function status_header(int $code): void { $GLOBALS['thb_status'] = $code; }
+function nocache_headers(): void {}
+function is_preview(): bool { return false; }
+function shortcode_atts(array $pairs, array $atts, string $sc = ''): array { $out = []; foreach ($pairs as $k => $d) { $out[$k] = array_key_exists($k, $atts) ? $atts[$k] : $d; } return $out; }
+function add_shortcode(string $tag, callable $cb): void { $GLOBALS['thb_shortcodes'][$tag] = $cb; }
+function do_shortcode(string $content): string
+{
+    return (string) preg_replace_callback('#\[(thb_[a-z]+)([^\]]*)\](?:(.*?)\[/\1\])?#su', static function ($m) {
+        $cb = $GLOBALS['thb_shortcodes'][$m[1]] ?? null;
+        if (!$cb) { return $m[0]; }
+        preg_match_all('#(\w+)="([^"]*)"#', $m[2], $am, PREG_SET_ORDER);
+        $atts = [];
+        foreach ($am as $x) { $atts[$x[1]] = $x[2]; }
+        return $cb($atts, $m[3] ?? null);
+    }, $content);
+}
+function register_block_type(string $name, array $args = []) { $GLOBALS['thb_blocks'][$name] = $args; return true; }
+function wp_register_script(...$a): bool { return true; }
+function do_blocks(string $content): string
+{
+    return (string) preg_replace_callback('#<!--\s+wp:(thb/[a-z]+)(?:\s+(\{.*?\}))?\s+/-->#s', static function ($m) {
+        $b = $GLOBALS['thb_blocks'][$m[1]] ?? null;
+        return $b ? (string) ($b['render_callback'])((array) json_decode($m[2] ?? '{}', true)) : '';
+    }, $content);
+}
 function get_page_by_path(string $p, $out = null, $type = '') { return $GLOBALS['thb_pages'][$p] ?? null; }
 function update_post_meta($id, $k, $v, $prev = '') { $GLOBALS['thb_coin_fields'][$id][$k] = $v; return true; }
 function get_the_title($p = 0): string { return is_object($p) ? ($p->post_title ?? '') : 'اتریوم'; }
-function get_permalink($p = 0): string { return 'https://thehybit.com/post/' . (is_object($p) ? $p->ID : $p); }
+function get_permalink($p = 0): string
+{
+    $id = is_object($p) ? (int) $p->ID : (int) $p;
+    if (isset($GLOBALS['thb_posts'][$id])) {   // 2.16.0: articles go through post_link like WordPress
+        $post = $GLOBALS['thb_posts'][$id];
+        return (string) apply_filters('post_link', 'https://thehybit.com/' . $post->post_name . '/', $post);
+    }
+    return 'https://thehybit.com/post/' . $id;
+}
 function get_post_time(string $f, bool $gmt = false, $p = null) { return '2026-08-10T09:00:00+00:00'; }
 function get_post_thumbnail_id($p = null): int { return 0; }
 function get_the_post_thumbnail_url($id = null, $size = 'thumbnail') { return false; }
@@ -572,6 +656,9 @@ function trailingslashit(string $s): string { return rtrim($s, '/\\') . '/'; }
 
 function get_term_by(string $field, $value, string $tax)
 {
+    if (str_starts_with($tax, 'thb_')) {   // 2.16.0: hub taxonomies are real fixtures
+        return $GLOBALS['thb_terms'][$tax][$value] ?? false;
+    }
     if (!empty($GLOBALS['thb_missing_terms'][$value])) {
         return false;
     }

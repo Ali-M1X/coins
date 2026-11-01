@@ -48,7 +48,7 @@ let failed = 0;
 const ok = (cond, msg) => { if (!cond) failed++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const BASE = `http://localhost:${PORT}`;
 
 /* The mock socket, installed before any page script runs. __wsMode maps a URL

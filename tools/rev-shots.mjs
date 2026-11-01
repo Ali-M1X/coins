@@ -30,7 +30,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(PORT, r));
 await mkdir(out, { recursive: true });
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 for (const slug of list) {
   for (const [label, width] of [['desktop', 1440], ['phone', 390]]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });

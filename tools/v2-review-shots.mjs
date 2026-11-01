@@ -23,7 +23,7 @@ const server = createServer(async (req, res) => {
   } catch { if (!res.headersSent) res.writeHead(404).end(); }
 });
 await new Promise((r) => server.listen(8126, r));
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
 /* [file, selector, how to find the card] — the card is the closest
    .v2-card around the element when `card` is set. */

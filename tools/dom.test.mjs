@@ -66,7 +66,7 @@ const section = (s) => console.log(`\n--- ${s} ${'-'.repeat(Math.max(0, 58 - s.l
    blocked by the egress policy. Pointing at the installed binary is the
    supported way round it; the env var lets CI override. */
 const CHROME = process.env.THB_CHROME
-  ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+  ?? '/opt/pw-browsers/chromium';
 const launchOptions = existsSync(CHROME) ? { executablePath: CHROME } : {};
 const browser = await chromium.launch(launchOptions);
 

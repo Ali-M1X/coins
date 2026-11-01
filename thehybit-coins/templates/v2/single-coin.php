@@ -81,6 +81,10 @@ get_header();
 
     <?php require $parts . 'overview.php'; ?>
 
+    <?php /* 2.16.0: the coin's content pillars that have something in them
+       (آموزش، تحلیل، اخبار …). Nothing is drawn when none has. */ ?>
+    <?= $plugin->blocks->pillars(['coin' => $coin->slug], 'hub') ?>
+
     <nav class="v2-tabs" aria-label="بخش‌های صفحه">
       <ul class="v2-tabs__list">
         <?php foreach ($nav as $id => $label) : if (!($v['sections'][$id]['show'] ?? true) || ($id === 'convert' && $conv === null)) { continue; } ?>

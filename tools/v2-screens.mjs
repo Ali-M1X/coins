@@ -28,7 +28,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(8125, r));
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
 const sections = ['overview', 'ecosystem', 'flow', 'story', 'dna', 'price-story', 'pulse', 'peers', 'supply'];
 

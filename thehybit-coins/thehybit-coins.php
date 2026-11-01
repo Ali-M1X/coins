@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TheHybit — Coins
  * Description: Coin configuration, provider collectors, caching, historical storage and the coin detail page pipeline.
- * Version:     2.15.0
+ * Version:     2.16.0
  * Requires PHP: 8.1
  * Author:      TheHybit
  *
@@ -20,7 +20,7 @@ defined('ABSPATH') || exit;
 define('THB_COINS_FILE', __FILE__);
 define('THB_COINS_DIR', plugin_dir_path(__FILE__));
 define('THB_COINS_URL', plugin_dir_url(__FILE__));
-define('THB_COINS_VERSION', '2.15.0');
+define('THB_COINS_VERSION', '2.16.0');
 
 require_once THB_COINS_DIR . 'includes/Coin.php';
 require_once THB_COINS_DIR . 'includes/Format.php';
@@ -58,6 +58,8 @@ require_once THB_COINS_DIR . 'includes/V2/View.php';
 require_once THB_COINS_DIR . 'includes/V2/Converter.php';
 require_once THB_COINS_DIR . 'includes/V2/Compare.php';
 require_once THB_COINS_DIR . 'includes/Tools.php';
+require_once THB_COINS_DIR . 'includes/Hub.php';      // 2.16.0: coin hub → pillars → articles
+require_once THB_COINS_DIR . 'includes/Blocks.php';   // 2.16.0: editor blocks + shortcodes
 require_once THB_COINS_DIR . 'includes/Collectors/Collector.php';
 require_once THB_COINS_DIR . 'includes/Collectors/CoinGecko.php';
 require_once THB_COINS_DIR . 'includes/Collectors/DefiLlama.php';
@@ -91,6 +93,8 @@ final class Plugin
     public News $news;
     public Pipeline $pipeline;
     public Listing $listing;
+    public Hub $hub;
+    public Blocks $blocks;
 
     public static function instance(): Plugin
     {
@@ -109,6 +113,8 @@ final class Plugin
         $this->news     = new News($this->config);
         $this->pipeline = new Pipeline($this->config, $this->cache, $this->history, $this->news);
         $this->listing  = new Listing($this->config, $this->cache, $this->pipeline, $this->coins);
+        $this->hub      = new Hub($this->coins);
+        $this->blocks   = new Blocks($this->config, $this->cache, $this->coins, $this->hub);
 
         foreach ([
             Collectors\CoinGecko::class,
@@ -184,6 +190,8 @@ final class Plugin
         $this->listing->register();
         (new Search($this->listing))->register();   // 2.9.0: the list's search index
         (new Tools())->register();                  // 2.10.0: /coins/convert/
+        $this->hub->register();                     // 2.16.0: /coins/<coin>/<pillar>/[<post>/]
+        $this->blocks->register();                  // 2.16.0: blocks and shortcodes
         (new Sitemap($this->cache, $this->coins))->register();
 
         (new Scheduler($this->config, $this->coins, $this->pipeline, $this->history, $this->listing))->register();
@@ -354,6 +362,7 @@ final class Plugin
     {
         $base = THB_COINS_URL . 'assets/v2';
         wp_enqueue_style('thb-v2', "$base/v2.css", [], THB_COINS_VERSION);
+        wp_enqueue_style('thb-blocks', "$base/blocks.css", ['thb-v2'], THB_COINS_VERSION);   // 2.16.0: the hub's pillar tabs
         wp_enqueue_script('thb-coin-v2', "$base/v2.js", [], THB_COINS_VERSION, true);
 
         $coin = $this->coins->find(get_the_ID());
@@ -397,6 +406,8 @@ add_action('plugins_loaded', static fn() => Plugin::instance()->boot());
 register_activation_hook(__FILE__, static function (): void {
     History::install();
     CoinRepository::registerPostType();
+    Hub::registerTaxonomies();                                   // 2.16.0
+    (new Hub(new CoinRepository()))->rules();
     Scheduler::activate(require THB_COINS_DIR . 'config/providers.php');
     flush_rewrite_rules();
 });
